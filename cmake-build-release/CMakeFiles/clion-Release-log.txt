@@ -1,4 +1,4 @@
-"D:\rj\CLion 2024.1\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=C:/mingw64/bin/mingw32-make.exe -DCMAKE_C_COMPILER=D:/rj/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe -DCMAKE_CXX_COMPILER=D:/rj/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-g++.exe -G "CodeBlocks - MinGW Makefiles" -S D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0 -B D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0\cmake-build-release
+"D:\rj\CLion 2024.1\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=C:/mingw64/bin/mingw32-make.exe -DCMAKE_C_COMPILER=D:/rj/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe -DCMAKE_CXX_COMPILER=D:/rj/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-g++.exe -G "CodeBlocks - MinGW Makefiles" -S D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6 -B D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6\cmake-build-release
 CMake Deprecation Warning:
   Support for "Extra Generators" like
 
@@ -23,6 +23,6 @@ CMake Deprecation Warning:
 -- Detecting CXX compile features
 -- Detecting CXX compile features - done
 -- Maximum optimization for speed
--- Configuring done (2.6s)
+-- Configuring done (3.2s)
 -- Generating done (0.1s)
--- Build files have been written to: D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6_V1.0/cmake-build-release
+-- Build files have been written to: D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6/cmake-build-release

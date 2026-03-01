@@ -7,7 +7,7 @@ set(CMAKE_DEPENDS_GENERATOR "MinGW Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6_V1.0/CMakeLists.txt"
+  "D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6/CMakeLists.txt"
   "CMakeFiles/3.28.1/CMakeASMCompiler.cmake"
   "CMakeFiles/3.28.1/CMakeCCompiler.cmake"
   "CMakeFiles/3.28.1/CMakeCXXCompiler.cmake"
@@ -129,5 +129,5 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
-  "CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/DependInfo.cmake"
+  "CMakeFiles/WL1_F411CEU6.elf.dir/DependInfo.cmake"
   )
