@@ -1,8 +1,8 @@
-# Install script for directory: D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6_V1.0
+# Install script for directory: D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/WL1_F411CEU6_V1.0")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/WL1_F411CEU6")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6_V1.0/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

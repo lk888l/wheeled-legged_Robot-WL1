@@ -56,10 +56,10 @@ RM = "D:\rj\CLion 2024.1\bin\cmake\win\x64\bin\cmake.exe" -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0
+CMAKE_SOURCE_DIR = D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0\cmake-build-release
+CMAKE_BINARY_DIR = D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6\cmake-build-release
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -86,9 +86,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0\cmake-build-release\CMakeFiles D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0\cmake-build-release\\CMakeFiles\progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6\cmake-build-release\CMakeFiles D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6\cmake-build-release\\CMakeFiles\progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6_V1.0\cmake-build-release\CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\kk\Robot_Project\wheeled-legged_Robot\WL1\SoftWare\WL1_F411CEU6\cmake-build-release\CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -116,24 +116,24 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named WL1_F411CEU6_V1.0.elf
+# Target rules for targets named WL1_F411CEU6.elf
 
 # Build rule for target.
-WL1_F411CEU6_V1.0.elf: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 WL1_F411CEU6_V1.0.elf
-.PHONY : WL1_F411CEU6_V1.0.elf
+WL1_F411CEU6.elf: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 WL1_F411CEU6.elf
+.PHONY : WL1_F411CEU6.elf
 
 # fast build rule for target.
-WL1_F411CEU6_V1.0.elf/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/build
-.PHONY : WL1_F411CEU6_V1.0.elf/fast
+WL1_F411CEU6.elf/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/build
+.PHONY : WL1_F411CEU6.elf/fast
 
 Component/HardWare/IMU/MPU6050.obj: Component/HardWare/IMU/MPU6050.cpp.obj
 .PHONY : Component/HardWare/IMU/MPU6050.obj
 
 # target to build an object file
 Component/HardWare/IMU/MPU6050.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/MPU6050.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/MPU6050.cpp.obj
 .PHONY : Component/HardWare/IMU/MPU6050.cpp.obj
 
 Component/HardWare/IMU/MPU6050.i: Component/HardWare/IMU/MPU6050.cpp.i
@@ -141,7 +141,7 @@ Component/HardWare/IMU/MPU6050.i: Component/HardWare/IMU/MPU6050.cpp.i
 
 # target to preprocess a source file
 Component/HardWare/IMU/MPU6050.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/MPU6050.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/MPU6050.cpp.i
 .PHONY : Component/HardWare/IMU/MPU6050.cpp.i
 
 Component/HardWare/IMU/MPU6050.s: Component/HardWare/IMU/MPU6050.cpp.s
@@ -149,7 +149,7 @@ Component/HardWare/IMU/MPU6050.s: Component/HardWare/IMU/MPU6050.cpp.s
 
 # target to generate assembly for a file
 Component/HardWare/IMU/MPU6050.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/MPU6050.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/MPU6050.cpp.s
 .PHONY : Component/HardWare/IMU/MPU6050.cpp.s
 
 Component/HardWare/IMU/basicvqf.obj: Component/HardWare/IMU/basicvqf.cpp.obj
@@ -157,7 +157,7 @@ Component/HardWare/IMU/basicvqf.obj: Component/HardWare/IMU/basicvqf.cpp.obj
 
 # target to build an object file
 Component/HardWare/IMU/basicvqf.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/basicvqf.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.obj
 .PHONY : Component/HardWare/IMU/basicvqf.cpp.obj
 
 Component/HardWare/IMU/basicvqf.i: Component/HardWare/IMU/basicvqf.cpp.i
@@ -165,7 +165,7 @@ Component/HardWare/IMU/basicvqf.i: Component/HardWare/IMU/basicvqf.cpp.i
 
 # target to preprocess a source file
 Component/HardWare/IMU/basicvqf.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/basicvqf.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.i
 .PHONY : Component/HardWare/IMU/basicvqf.cpp.i
 
 Component/HardWare/IMU/basicvqf.s: Component/HardWare/IMU/basicvqf.cpp.s
@@ -173,7 +173,7 @@ Component/HardWare/IMU/basicvqf.s: Component/HardWare/IMU/basicvqf.cpp.s
 
 # target to generate assembly for a file
 Component/HardWare/IMU/basicvqf.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/basicvqf.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.s
 .PHONY : Component/HardWare/IMU/basicvqf.cpp.s
 
 Component/HardWare/IMU/vqf.obj: Component/HardWare/IMU/vqf.cpp.obj
@@ -181,7 +181,7 @@ Component/HardWare/IMU/vqf.obj: Component/HardWare/IMU/vqf.cpp.obj
 
 # target to build an object file
 Component/HardWare/IMU/vqf.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/vqf.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.obj
 .PHONY : Component/HardWare/IMU/vqf.cpp.obj
 
 Component/HardWare/IMU/vqf.i: Component/HardWare/IMU/vqf.cpp.i
@@ -189,7 +189,7 @@ Component/HardWare/IMU/vqf.i: Component/HardWare/IMU/vqf.cpp.i
 
 # target to preprocess a source file
 Component/HardWare/IMU/vqf.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/vqf.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.i
 .PHONY : Component/HardWare/IMU/vqf.cpp.i
 
 Component/HardWare/IMU/vqf.s: Component/HardWare/IMU/vqf.cpp.s
@@ -197,7 +197,7 @@ Component/HardWare/IMU/vqf.s: Component/HardWare/IMU/vqf.cpp.s
 
 # target to generate assembly for a file
 Component/HardWare/IMU/vqf.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/IMU/vqf.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.s
 .PHONY : Component/HardWare/IMU/vqf.cpp.s
 
 Component/HardWare/Motor/HallEncoder.obj: Component/HardWare/Motor/HallEncoder.cpp.obj
@@ -205,7 +205,7 @@ Component/HardWare/Motor/HallEncoder.obj: Component/HardWare/Motor/HallEncoder.c
 
 # target to build an object file
 Component/HardWare/Motor/HallEncoder.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.obj
 .PHONY : Component/HardWare/Motor/HallEncoder.cpp.obj
 
 Component/HardWare/Motor/HallEncoder.i: Component/HardWare/Motor/HallEncoder.cpp.i
@@ -213,7 +213,7 @@ Component/HardWare/Motor/HallEncoder.i: Component/HardWare/Motor/HallEncoder.cpp
 
 # target to preprocess a source file
 Component/HardWare/Motor/HallEncoder.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.i
 .PHONY : Component/HardWare/Motor/HallEncoder.cpp.i
 
 Component/HardWare/Motor/HallEncoder.s: Component/HardWare/Motor/HallEncoder.cpp.s
@@ -221,7 +221,7 @@ Component/HardWare/Motor/HallEncoder.s: Component/HardWare/Motor/HallEncoder.cpp
 
 # target to generate assembly for a file
 Component/HardWare/Motor/HallEncoder.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/HallEncoder.cpp.s
 .PHONY : Component/HardWare/Motor/HallEncoder.cpp.s
 
 Component/HardWare/Motor/TB6612.obj: Component/HardWare/Motor/TB6612.cpp.obj
@@ -229,7 +229,7 @@ Component/HardWare/Motor/TB6612.obj: Component/HardWare/Motor/TB6612.cpp.obj
 
 # target to build an object file
 Component/HardWare/Motor/TB6612.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/TB6612.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/TB6612.cpp.obj
 .PHONY : Component/HardWare/Motor/TB6612.cpp.obj
 
 Component/HardWare/Motor/TB6612.i: Component/HardWare/Motor/TB6612.cpp.i
@@ -237,7 +237,7 @@ Component/HardWare/Motor/TB6612.i: Component/HardWare/Motor/TB6612.cpp.i
 
 # target to preprocess a source file
 Component/HardWare/Motor/TB6612.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/TB6612.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/TB6612.cpp.i
 .PHONY : Component/HardWare/Motor/TB6612.cpp.i
 
 Component/HardWare/Motor/TB6612.s: Component/HardWare/Motor/TB6612.cpp.s
@@ -245,7 +245,7 @@ Component/HardWare/Motor/TB6612.s: Component/HardWare/Motor/TB6612.cpp.s
 
 # target to generate assembly for a file
 Component/HardWare/Motor/TB6612.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/Motor/TB6612.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/Motor/TB6612.cpp.s
 .PHONY : Component/HardWare/Motor/TB6612.cpp.s
 
 Component/HardWare/OLED/HAL_OLED.obj: Component/HardWare/OLED/HAL_OLED.c.obj
@@ -253,7 +253,7 @@ Component/HardWare/OLED/HAL_OLED.obj: Component/HardWare/OLED/HAL_OLED.c.obj
 
 # target to build an object file
 Component/HardWare/OLED/HAL_OLED.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/HAL_OLED.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/HAL_OLED.c.obj
 .PHONY : Component/HardWare/OLED/HAL_OLED.c.obj
 
 Component/HardWare/OLED/HAL_OLED.i: Component/HardWare/OLED/HAL_OLED.c.i
@@ -261,7 +261,7 @@ Component/HardWare/OLED/HAL_OLED.i: Component/HardWare/OLED/HAL_OLED.c.i
 
 # target to preprocess a source file
 Component/HardWare/OLED/HAL_OLED.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/HAL_OLED.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/HAL_OLED.c.i
 .PHONY : Component/HardWare/OLED/HAL_OLED.c.i
 
 Component/HardWare/OLED/HAL_OLED.s: Component/HardWare/OLED/HAL_OLED.c.s
@@ -269,7 +269,7 @@ Component/HardWare/OLED/HAL_OLED.s: Component/HardWare/OLED/HAL_OLED.c.s
 
 # target to generate assembly for a file
 Component/HardWare/OLED/HAL_OLED.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/HAL_OLED.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/HAL_OLED.c.s
 .PHONY : Component/HardWare/OLED/HAL_OLED.c.s
 
 Component/HardWare/OLED/OLED_Data.obj: Component/HardWare/OLED/OLED_Data.c.obj
@@ -277,7 +277,7 @@ Component/HardWare/OLED/OLED_Data.obj: Component/HardWare/OLED/OLED_Data.c.obj
 
 # target to build an object file
 Component/HardWare/OLED/OLED_Data.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/OLED_Data.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/OLED_Data.c.obj
 .PHONY : Component/HardWare/OLED/OLED_Data.c.obj
 
 Component/HardWare/OLED/OLED_Data.i: Component/HardWare/OLED/OLED_Data.c.i
@@ -285,7 +285,7 @@ Component/HardWare/OLED/OLED_Data.i: Component/HardWare/OLED/OLED_Data.c.i
 
 # target to preprocess a source file
 Component/HardWare/OLED/OLED_Data.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/OLED_Data.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/OLED_Data.c.i
 .PHONY : Component/HardWare/OLED/OLED_Data.c.i
 
 Component/HardWare/OLED/OLED_Data.s: Component/HardWare/OLED/OLED_Data.c.s
@@ -293,7 +293,7 @@ Component/HardWare/OLED/OLED_Data.s: Component/HardWare/OLED/OLED_Data.c.s
 
 # target to generate assembly for a file
 Component/HardWare/OLED/OLED_Data.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/HardWare/OLED/OLED_Data.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/OLED_Data.c.s
 .PHONY : Component/HardWare/OLED/OLED_Data.c.s
 
 Component/UserApp/main.obj: Component/UserApp/main.cpp.obj
@@ -301,7 +301,7 @@ Component/UserApp/main.obj: Component/UserApp/main.cpp.obj
 
 # target to build an object file
 Component/UserApp/main.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/UserApp/main.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/main.cpp.obj
 .PHONY : Component/UserApp/main.cpp.obj
 
 Component/UserApp/main.i: Component/UserApp/main.cpp.i
@@ -309,7 +309,7 @@ Component/UserApp/main.i: Component/UserApp/main.cpp.i
 
 # target to preprocess a source file
 Component/UserApp/main.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/UserApp/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/main.cpp.i
 .PHONY : Component/UserApp/main.cpp.i
 
 Component/UserApp/main.s: Component/UserApp/main.cpp.s
@@ -317,7 +317,7 @@ Component/UserApp/main.s: Component/UserApp/main.cpp.s
 
 # target to generate assembly for a file
 Component/UserApp/main.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Component/UserApp/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/main.cpp.s
 .PHONY : Component/UserApp/main.cpp.s
 
 Core/Src/freertos.obj: Core/Src/freertos.c.obj
@@ -325,7 +325,7 @@ Core/Src/freertos.obj: Core/Src/freertos.c.obj
 
 # target to build an object file
 Core/Src/freertos.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/freertos.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/freertos.c.obj
 .PHONY : Core/Src/freertos.c.obj
 
 Core/Src/freertos.i: Core/Src/freertos.c.i
@@ -333,7 +333,7 @@ Core/Src/freertos.i: Core/Src/freertos.c.i
 
 # target to preprocess a source file
 Core/Src/freertos.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/freertos.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/freertos.c.i
 .PHONY : Core/Src/freertos.c.i
 
 Core/Src/freertos.s: Core/Src/freertos.c.s
@@ -341,7 +341,7 @@ Core/Src/freertos.s: Core/Src/freertos.c.s
 
 # target to generate assembly for a file
 Core/Src/freertos.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/freertos.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/freertos.c.s
 .PHONY : Core/Src/freertos.c.s
 
 Core/Src/gpio.obj: Core/Src/gpio.c.obj
@@ -349,7 +349,7 @@ Core/Src/gpio.obj: Core/Src/gpio.c.obj
 
 # target to build an object file
 Core/Src/gpio.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/gpio.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/gpio.c.obj
 .PHONY : Core/Src/gpio.c.obj
 
 Core/Src/gpio.i: Core/Src/gpio.c.i
@@ -357,7 +357,7 @@ Core/Src/gpio.i: Core/Src/gpio.c.i
 
 # target to preprocess a source file
 Core/Src/gpio.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/gpio.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/gpio.c.i
 .PHONY : Core/Src/gpio.c.i
 
 Core/Src/gpio.s: Core/Src/gpio.c.s
@@ -365,7 +365,7 @@ Core/Src/gpio.s: Core/Src/gpio.c.s
 
 # target to generate assembly for a file
 Core/Src/gpio.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/gpio.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/gpio.c.s
 .PHONY : Core/Src/gpio.c.s
 
 Core/Src/i2c.obj: Core/Src/i2c.c.obj
@@ -373,7 +373,7 @@ Core/Src/i2c.obj: Core/Src/i2c.c.obj
 
 # target to build an object file
 Core/Src/i2c.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/i2c.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/i2c.c.obj
 .PHONY : Core/Src/i2c.c.obj
 
 Core/Src/i2c.i: Core/Src/i2c.c.i
@@ -381,7 +381,7 @@ Core/Src/i2c.i: Core/Src/i2c.c.i
 
 # target to preprocess a source file
 Core/Src/i2c.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/i2c.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/i2c.c.i
 .PHONY : Core/Src/i2c.c.i
 
 Core/Src/i2c.s: Core/Src/i2c.c.s
@@ -389,7 +389,7 @@ Core/Src/i2c.s: Core/Src/i2c.c.s
 
 # target to generate assembly for a file
 Core/Src/i2c.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/i2c.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/i2c.c.s
 .PHONY : Core/Src/i2c.c.s
 
 Core/Src/main.obj: Core/Src/main.c.obj
@@ -397,7 +397,7 @@ Core/Src/main.obj: Core/Src/main.c.obj
 
 # target to build an object file
 Core/Src/main.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/main.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/main.c.obj
 .PHONY : Core/Src/main.c.obj
 
 Core/Src/main.i: Core/Src/main.c.i
@@ -405,7 +405,7 @@ Core/Src/main.i: Core/Src/main.c.i
 
 # target to preprocess a source file
 Core/Src/main.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/main.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/main.c.i
 .PHONY : Core/Src/main.c.i
 
 Core/Src/main.s: Core/Src/main.c.s
@@ -413,7 +413,7 @@ Core/Src/main.s: Core/Src/main.c.s
 
 # target to generate assembly for a file
 Core/Src/main.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/main.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/main.c.s
 .PHONY : Core/Src/main.c.s
 
 Core/Src/rtc.obj: Core/Src/rtc.c.obj
@@ -421,7 +421,7 @@ Core/Src/rtc.obj: Core/Src/rtc.c.obj
 
 # target to build an object file
 Core/Src/rtc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/rtc.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/rtc.c.obj
 .PHONY : Core/Src/rtc.c.obj
 
 Core/Src/rtc.i: Core/Src/rtc.c.i
@@ -429,7 +429,7 @@ Core/Src/rtc.i: Core/Src/rtc.c.i
 
 # target to preprocess a source file
 Core/Src/rtc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/rtc.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/rtc.c.i
 .PHONY : Core/Src/rtc.c.i
 
 Core/Src/rtc.s: Core/Src/rtc.c.s
@@ -437,7 +437,7 @@ Core/Src/rtc.s: Core/Src/rtc.c.s
 
 # target to generate assembly for a file
 Core/Src/rtc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/rtc.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/rtc.c.s
 .PHONY : Core/Src/rtc.c.s
 
 Core/Src/spi.obj: Core/Src/spi.c.obj
@@ -445,7 +445,7 @@ Core/Src/spi.obj: Core/Src/spi.c.obj
 
 # target to build an object file
 Core/Src/spi.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/spi.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/spi.c.obj
 .PHONY : Core/Src/spi.c.obj
 
 Core/Src/spi.i: Core/Src/spi.c.i
@@ -453,7 +453,7 @@ Core/Src/spi.i: Core/Src/spi.c.i
 
 # target to preprocess a source file
 Core/Src/spi.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/spi.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/spi.c.i
 .PHONY : Core/Src/spi.c.i
 
 Core/Src/spi.s: Core/Src/spi.c.s
@@ -461,7 +461,7 @@ Core/Src/spi.s: Core/Src/spi.c.s
 
 # target to generate assembly for a file
 Core/Src/spi.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/spi.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/spi.c.s
 .PHONY : Core/Src/spi.c.s
 
 Core/Src/stm32f4xx_hal_msp.obj: Core/Src/stm32f4xx_hal_msp.c.obj
@@ -469,7 +469,7 @@ Core/Src/stm32f4xx_hal_msp.obj: Core/Src/stm32f4xx_hal_msp.c.obj
 
 # target to build an object file
 Core/Src/stm32f4xx_hal_msp.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_msp.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_msp.c.obj
 .PHONY : Core/Src/stm32f4xx_hal_msp.c.obj
 
 Core/Src/stm32f4xx_hal_msp.i: Core/Src/stm32f4xx_hal_msp.c.i
@@ -477,7 +477,7 @@ Core/Src/stm32f4xx_hal_msp.i: Core/Src/stm32f4xx_hal_msp.c.i
 
 # target to preprocess a source file
 Core/Src/stm32f4xx_hal_msp.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_msp.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_msp.c.i
 .PHONY : Core/Src/stm32f4xx_hal_msp.c.i
 
 Core/Src/stm32f4xx_hal_msp.s: Core/Src/stm32f4xx_hal_msp.c.s
@@ -485,7 +485,7 @@ Core/Src/stm32f4xx_hal_msp.s: Core/Src/stm32f4xx_hal_msp.c.s
 
 # target to generate assembly for a file
 Core/Src/stm32f4xx_hal_msp.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_msp.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_msp.c.s
 .PHONY : Core/Src/stm32f4xx_hal_msp.c.s
 
 Core/Src/stm32f4xx_hal_timebase_tim.obj: Core/Src/stm32f4xx_hal_timebase_tim.c.obj
@@ -493,7 +493,7 @@ Core/Src/stm32f4xx_hal_timebase_tim.obj: Core/Src/stm32f4xx_hal_timebase_tim.c.o
 
 # target to build an object file
 Core/Src/stm32f4xx_hal_timebase_tim.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.obj
 .PHONY : Core/Src/stm32f4xx_hal_timebase_tim.c.obj
 
 Core/Src/stm32f4xx_hal_timebase_tim.i: Core/Src/stm32f4xx_hal_timebase_tim.c.i
@@ -501,7 +501,7 @@ Core/Src/stm32f4xx_hal_timebase_tim.i: Core/Src/stm32f4xx_hal_timebase_tim.c.i
 
 # target to preprocess a source file
 Core/Src/stm32f4xx_hal_timebase_tim.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.i
 .PHONY : Core/Src/stm32f4xx_hal_timebase_tim.c.i
 
 Core/Src/stm32f4xx_hal_timebase_tim.s: Core/Src/stm32f4xx_hal_timebase_tim.c.s
@@ -509,7 +509,7 @@ Core/Src/stm32f4xx_hal_timebase_tim.s: Core/Src/stm32f4xx_hal_timebase_tim.c.s
 
 # target to generate assembly for a file
 Core/Src/stm32f4xx_hal_timebase_tim.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_hal_timebase_tim.c.s
 .PHONY : Core/Src/stm32f4xx_hal_timebase_tim.c.s
 
 Core/Src/stm32f4xx_it.obj: Core/Src/stm32f4xx_it.c.obj
@@ -517,7 +517,7 @@ Core/Src/stm32f4xx_it.obj: Core/Src/stm32f4xx_it.c.obj
 
 # target to build an object file
 Core/Src/stm32f4xx_it.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_it.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_it.c.obj
 .PHONY : Core/Src/stm32f4xx_it.c.obj
 
 Core/Src/stm32f4xx_it.i: Core/Src/stm32f4xx_it.c.i
@@ -525,7 +525,7 @@ Core/Src/stm32f4xx_it.i: Core/Src/stm32f4xx_it.c.i
 
 # target to preprocess a source file
 Core/Src/stm32f4xx_it.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_it.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_it.c.i
 .PHONY : Core/Src/stm32f4xx_it.c.i
 
 Core/Src/stm32f4xx_it.s: Core/Src/stm32f4xx_it.c.s
@@ -533,7 +533,7 @@ Core/Src/stm32f4xx_it.s: Core/Src/stm32f4xx_it.c.s
 
 # target to generate assembly for a file
 Core/Src/stm32f4xx_it.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/stm32f4xx_it.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/stm32f4xx_it.c.s
 .PHONY : Core/Src/stm32f4xx_it.c.s
 
 Core/Src/syscalls.obj: Core/Src/syscalls.c.obj
@@ -541,7 +541,7 @@ Core/Src/syscalls.obj: Core/Src/syscalls.c.obj
 
 # target to build an object file
 Core/Src/syscalls.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/syscalls.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/syscalls.c.obj
 .PHONY : Core/Src/syscalls.c.obj
 
 Core/Src/syscalls.i: Core/Src/syscalls.c.i
@@ -549,7 +549,7 @@ Core/Src/syscalls.i: Core/Src/syscalls.c.i
 
 # target to preprocess a source file
 Core/Src/syscalls.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/syscalls.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/syscalls.c.i
 .PHONY : Core/Src/syscalls.c.i
 
 Core/Src/syscalls.s: Core/Src/syscalls.c.s
@@ -557,7 +557,7 @@ Core/Src/syscalls.s: Core/Src/syscalls.c.s
 
 # target to generate assembly for a file
 Core/Src/syscalls.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/syscalls.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/syscalls.c.s
 .PHONY : Core/Src/syscalls.c.s
 
 Core/Src/sysmem.obj: Core/Src/sysmem.c.obj
@@ -565,7 +565,7 @@ Core/Src/sysmem.obj: Core/Src/sysmem.c.obj
 
 # target to build an object file
 Core/Src/sysmem.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/sysmem.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/sysmem.c.obj
 .PHONY : Core/Src/sysmem.c.obj
 
 Core/Src/sysmem.i: Core/Src/sysmem.c.i
@@ -573,7 +573,7 @@ Core/Src/sysmem.i: Core/Src/sysmem.c.i
 
 # target to preprocess a source file
 Core/Src/sysmem.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/sysmem.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/sysmem.c.i
 .PHONY : Core/Src/sysmem.c.i
 
 Core/Src/sysmem.s: Core/Src/sysmem.c.s
@@ -581,7 +581,7 @@ Core/Src/sysmem.s: Core/Src/sysmem.c.s
 
 # target to generate assembly for a file
 Core/Src/sysmem.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/sysmem.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/sysmem.c.s
 .PHONY : Core/Src/sysmem.c.s
 
 Core/Src/system_stm32f4xx.obj: Core/Src/system_stm32f4xx.c.obj
@@ -589,7 +589,7 @@ Core/Src/system_stm32f4xx.obj: Core/Src/system_stm32f4xx.c.obj
 
 # target to build an object file
 Core/Src/system_stm32f4xx.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/system_stm32f4xx.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/system_stm32f4xx.c.obj
 .PHONY : Core/Src/system_stm32f4xx.c.obj
 
 Core/Src/system_stm32f4xx.i: Core/Src/system_stm32f4xx.c.i
@@ -597,7 +597,7 @@ Core/Src/system_stm32f4xx.i: Core/Src/system_stm32f4xx.c.i
 
 # target to preprocess a source file
 Core/Src/system_stm32f4xx.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/system_stm32f4xx.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/system_stm32f4xx.c.i
 .PHONY : Core/Src/system_stm32f4xx.c.i
 
 Core/Src/system_stm32f4xx.s: Core/Src/system_stm32f4xx.c.s
@@ -605,7 +605,7 @@ Core/Src/system_stm32f4xx.s: Core/Src/system_stm32f4xx.c.s
 
 # target to generate assembly for a file
 Core/Src/system_stm32f4xx.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/system_stm32f4xx.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/system_stm32f4xx.c.s
 .PHONY : Core/Src/system_stm32f4xx.c.s
 
 Core/Src/tim.obj: Core/Src/tim.c.obj
@@ -613,7 +613,7 @@ Core/Src/tim.obj: Core/Src/tim.c.obj
 
 # target to build an object file
 Core/Src/tim.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/tim.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/tim.c.obj
 .PHONY : Core/Src/tim.c.obj
 
 Core/Src/tim.i: Core/Src/tim.c.i
@@ -621,7 +621,7 @@ Core/Src/tim.i: Core/Src/tim.c.i
 
 # target to preprocess a source file
 Core/Src/tim.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/tim.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/tim.c.i
 .PHONY : Core/Src/tim.c.i
 
 Core/Src/tim.s: Core/Src/tim.c.s
@@ -629,7 +629,7 @@ Core/Src/tim.s: Core/Src/tim.c.s
 
 # target to generate assembly for a file
 Core/Src/tim.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/tim.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/tim.c.s
 .PHONY : Core/Src/tim.c.s
 
 Core/Src/usart.obj: Core/Src/usart.c.obj
@@ -637,7 +637,7 @@ Core/Src/usart.obj: Core/Src/usart.c.obj
 
 # target to build an object file
 Core/Src/usart.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/usart.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/usart.c.obj
 .PHONY : Core/Src/usart.c.obj
 
 Core/Src/usart.i: Core/Src/usart.c.i
@@ -645,7 +645,7 @@ Core/Src/usart.i: Core/Src/usart.c.i
 
 # target to preprocess a source file
 Core/Src/usart.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/usart.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/usart.c.i
 .PHONY : Core/Src/usart.c.i
 
 Core/Src/usart.s: Core/Src/usart.c.s
@@ -653,7 +653,7 @@ Core/Src/usart.s: Core/Src/usart.c.s
 
 # target to generate assembly for a file
 Core/Src/usart.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Src/usart.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Src/usart.c.s
 .PHONY : Core/Src/usart.c.s
 
 Core/Startup/startup_stm32f411ceux.obj: Core/Startup/startup_stm32f411ceux.s.obj
@@ -661,7 +661,7 @@ Core/Startup/startup_stm32f411ceux.obj: Core/Startup/startup_stm32f411ceux.s.obj
 
 # target to build an object file
 Core/Startup/startup_stm32f411ceux.s.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Core/Startup/startup_stm32f411ceux.s.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Core/Startup/startup_stm32f411ceux.s.obj
 .PHONY : Core/Startup/startup_stm32f411ceux.s.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj
@@ -669,7 +669,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.obj: Drivers/STM32F4xx_HAL_Driver
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.i
@@ -677,7 +677,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.i: Drivers/STM32F4xx_HAL_Driver/S
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.s
@@ -685,7 +685,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.s: Drivers/STM32F4xx_HAL_Driver/S
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj
@@ -693,7 +693,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.i
@@ -701,7 +701,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.s
@@ -709,7 +709,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj
@@ -717,7 +717,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.i
@@ -725,7 +725,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.s
@@ -733,7 +733,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj
@@ -741,7 +741,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.i
@@ -749,7 +749,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.s
@@ -757,7 +757,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj
@@ -765,7 +765,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.obj: Drivers/STM32F4xx_HAL_D
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.i
@@ -773,7 +773,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.i: Drivers/STM32F4xx_HAL_Dri
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.s
@@ -781,7 +781,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.s: Drivers/STM32F4xx_HAL_Dri
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj
@@ -789,7 +789,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.obj: Drivers/STM32F4xx_HAL_
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.i
@@ -797,7 +797,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.i: Drivers/STM32F4xx_HAL_Dr
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.s
@@ -805,7 +805,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.s: Drivers/STM32F4xx_HAL_Dr
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj
@@ -813,7 +813,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.obj: Drivers/STM32F4xx_H
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.i
@@ -821,7 +821,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.i: Drivers/STM32F4xx_HAL
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.s
@@ -829,7 +829,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.s: Drivers/STM32F4xx_HAL
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj
@@ -837,7 +837,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.obj: Drivers/STM32F
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.i
@@ -845,7 +845,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.i: Drivers/STM32F4x
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.s
@@ -853,7 +853,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.s: Drivers/STM32F4x
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj
@@ -861,7 +861,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.obj: Drivers/STM32F4xx_HAL_D
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.i
@@ -869,7 +869,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.i: Drivers/STM32F4xx_HAL_Dri
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.s
@@ -877,7 +877,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.s: Drivers/STM32F4xx_HAL_Dri
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.obj
@@ -885,7 +885,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.i
@@ -893,7 +893,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.s
@@ -901,7 +901,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.obj
@@ -909,7 +909,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.i
@@ -917,7 +917,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.s
@@ -925,7 +925,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj
@@ -933,7 +933,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.i
@@ -941,7 +941,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.s
@@ -949,7 +949,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj
@@ -957,7 +957,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.i
@@ -965,7 +965,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.s
@@ -973,7 +973,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj
@@ -981,7 +981,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.i
@@ -989,7 +989,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.s
@@ -997,7 +997,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj
@@ -1005,7 +1005,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.i
@@ -1013,7 +1013,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.s
@@ -1021,7 +1021,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.obj
@@ -1029,7 +1029,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.i
@@ -1037,7 +1037,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.s
@@ -1045,7 +1045,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.obj
@@ -1053,7 +1053,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.i
@@ -1061,7 +1061,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.s
@@ -1069,7 +1069,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.obj
@@ -1077,7 +1077,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.i
@@ -1085,7 +1085,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.s
@@ -1093,7 +1093,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.obj
@@ -1101,7 +1101,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.obj: Drivers/STM32F4xx_HAL_Dr
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.i
@@ -1109,7 +1109,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.i: Drivers/STM32F4xx_HAL_Driv
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.s
@@ -1117,7 +1117,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.s: Drivers/STM32F4xx_HAL_Driv
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.obj
@@ -1125,7 +1125,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.obj: Drivers/STM32F4xx_HAL
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.i
@@ -1133,7 +1133,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.i: Drivers/STM32F4xx_HAL_D
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.s
@@ -1141,7 +1141,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.s: Drivers/STM32F4xx_HAL_D
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c.s
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.obj: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj
@@ -1149,7 +1149,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.obj: Drivers/STM32F4xx_HAL_D
 
 # target to build an object file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.i: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.i
@@ -1157,7 +1157,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.i: Drivers/STM32F4xx_HAL_Dri
 
 # target to preprocess a source file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.i
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.i
 
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.s: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.s
@@ -1165,7 +1165,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.s: Drivers/STM32F4xx_HAL_Dri
 
 # target to generate assembly for a file
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.s
 .PHONY : Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.obj: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.obj
@@ -1173,7 +1173,7 @@ Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.obj: Middlewares
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.i: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.i
@@ -1181,7 +1181,7 @@ Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.i: Middlewares/T
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.s: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.s
@@ -1189,7 +1189,7 @@ Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.s: Middlewares/T
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/croutine.obj: Middlewares/Third_Party/FreeRTOS/Source/croutine.c.obj
@@ -1197,7 +1197,7 @@ Middlewares/Third_Party/FreeRTOS/Source/croutine.obj: Middlewares/Third_Party/Fr
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/croutine.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/croutine.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/croutine.i: Middlewares/Third_Party/FreeRTOS/Source/croutine.c.i
@@ -1205,7 +1205,7 @@ Middlewares/Third_Party/FreeRTOS/Source/croutine.i: Middlewares/Third_Party/Free
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/croutine.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/croutine.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/croutine.s: Middlewares/Third_Party/FreeRTOS/Source/croutine.c.s
@@ -1213,7 +1213,7 @@ Middlewares/Third_Party/FreeRTOS/Source/croutine.s: Middlewares/Third_Party/Free
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/croutine.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/croutine.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/croutine.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.obj: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.obj
@@ -1221,7 +1221,7 @@ Middlewares/Third_Party/FreeRTOS/Source/event_groups.obj: Middlewares/Third_Part
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.i: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.i
@@ -1229,7 +1229,7 @@ Middlewares/Third_Party/FreeRTOS/Source/event_groups.i: Middlewares/Third_Party/
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.s: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.s
@@ -1237,7 +1237,7 @@ Middlewares/Third_Party/FreeRTOS/Source/event_groups.s: Middlewares/Third_Party/
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/event_groups.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/list.obj: Middlewares/Third_Party/FreeRTOS/Source/list.c.obj
@@ -1245,7 +1245,7 @@ Middlewares/Third_Party/FreeRTOS/Source/list.obj: Middlewares/Third_Party/FreeRT
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/list.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/list.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/list.i: Middlewares/Third_Party/FreeRTOS/Source/list.c.i
@@ -1253,7 +1253,7 @@ Middlewares/Third_Party/FreeRTOS/Source/list.i: Middlewares/Third_Party/FreeRTOS
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/list.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/list.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/list.s: Middlewares/Third_Party/FreeRTOS/Source/list.c.s
@@ -1261,7 +1261,7 @@ Middlewares/Third_Party/FreeRTOS/Source/list.s: Middlewares/Third_Party/FreeRTOS
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/list.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/list.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/list.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.obj: Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.obj
@@ -1269,7 +1269,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.obj: Middlewa
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.i: Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.i
@@ -1277,7 +1277,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.i: Middleware
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.s: Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.s
@@ -1285,7 +1285,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.s: Middleware
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.obj: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.obj
@@ -1293,7 +1293,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.obj: Middlewares
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.i: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.i
@@ -1301,7 +1301,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.i: Middlewares/T
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.s: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.s
@@ -1309,7 +1309,7 @@ Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.s: Middlewares/T
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/queue.obj: Middlewares/Third_Party/FreeRTOS/Source/queue.c.obj
@@ -1317,7 +1317,7 @@ Middlewares/Third_Party/FreeRTOS/Source/queue.obj: Middlewares/Third_Party/FreeR
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/queue.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/queue.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/queue.i: Middlewares/Third_Party/FreeRTOS/Source/queue.c.i
@@ -1325,7 +1325,7 @@ Middlewares/Third_Party/FreeRTOS/Source/queue.i: Middlewares/Third_Party/FreeRTO
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/queue.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/queue.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/queue.s: Middlewares/Third_Party/FreeRTOS/Source/queue.c.s
@@ -1333,7 +1333,7 @@ Middlewares/Third_Party/FreeRTOS/Source/queue.s: Middlewares/Third_Party/FreeRTO
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/queue.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/queue.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/queue.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.obj: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.obj
@@ -1341,7 +1341,7 @@ Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.obj: Middlewares/Third_Par
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.i: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.i
@@ -1349,7 +1349,7 @@ Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.i: Middlewares/Third_Party
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.s: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.s
@@ -1357,7 +1357,7 @@ Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.s: Middlewares/Third_Party
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/tasks.obj: Middlewares/Third_Party/FreeRTOS/Source/tasks.c.obj
@@ -1365,7 +1365,7 @@ Middlewares/Third_Party/FreeRTOS/Source/tasks.obj: Middlewares/Third_Party/FreeR
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/tasks.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/tasks.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/tasks.i: Middlewares/Third_Party/FreeRTOS/Source/tasks.c.i
@@ -1373,7 +1373,7 @@ Middlewares/Third_Party/FreeRTOS/Source/tasks.i: Middlewares/Third_Party/FreeRTO
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/tasks.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/tasks.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/tasks.s: Middlewares/Third_Party/FreeRTOS/Source/tasks.c.s
@@ -1381,7 +1381,7 @@ Middlewares/Third_Party/FreeRTOS/Source/tasks.s: Middlewares/Third_Party/FreeRTO
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/tasks.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/tasks.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/tasks.c.s
 
 Middlewares/Third_Party/FreeRTOS/Source/timers.obj: Middlewares/Third_Party/FreeRTOS/Source/timers.c.obj
@@ -1389,7 +1389,7 @@ Middlewares/Third_Party/FreeRTOS/Source/timers.obj: Middlewares/Third_Party/Free
 
 # target to build an object file
 Middlewares/Third_Party/FreeRTOS/Source/timers.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.obj
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/timers.c.obj
 
 Middlewares/Third_Party/FreeRTOS/Source/timers.i: Middlewares/Third_Party/FreeRTOS/Source/timers.c.i
@@ -1397,7 +1397,7 @@ Middlewares/Third_Party/FreeRTOS/Source/timers.i: Middlewares/Third_Party/FreeRT
 
 # target to preprocess a source file
 Middlewares/Third_Party/FreeRTOS/Source/timers.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.i
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/timers.c.i
 
 Middlewares/Third_Party/FreeRTOS/Source/timers.s: Middlewares/Third_Party/FreeRTOS/Source/timers.c.s
@@ -1405,7 +1405,7 @@ Middlewares/Third_Party/FreeRTOS/Source/timers.s: Middlewares/Third_Party/FreeRT
 
 # target to generate assembly for a file
 Middlewares/Third_Party/FreeRTOS/Source/timers.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6_V1.0.elf.dir\build.make CMakeFiles/WL1_F411CEU6_V1.0.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Middlewares/Third_Party/FreeRTOS/Source/timers.c.s
 .PHONY : Middlewares/Third_Party/FreeRTOS/Source/timers.c.s
 
 # Help Target
@@ -1416,7 +1416,7 @@ help:
 	@echo ... depend
 	@echo ... edit_cache
 	@echo ... rebuild_cache
-	@echo ... WL1_F411CEU6_V1.0.elf
+	@echo ... WL1_F411CEU6.elf
 	@echo ... Component/HardWare/IMU/MPU6050.obj
 	@echo ... Component/HardWare/IMU/MPU6050.i
 	@echo ... Component/HardWare/IMU/MPU6050.s
