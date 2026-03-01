@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+D:/kk/Robot_Project/wheeled-legged_Robot/WL1/SoftWare/WL1_F411CEU6_V1.0/Core/Startup/startup_stm32f411ceux.s
+
