@@ -16,10 +16,10 @@ class HallEncoder {
 public:
     ///
     typedef struct{
-        uint8_t EncoderLine;   /*  */
-        uint8_t ReductionRatio;
-        uint8_t EdgeCnt;
-        uint8_t Samplerate;
+        uint8_t EncoderLine;        // PPR
+        uint8_t ReductionRatio;     //
+        uint8_t EdgeCnt;            //
+        uint8_t Samplerate;         //
     }InitConfig_t;
 
 private:
@@ -30,7 +30,7 @@ public:
     HallEncoder(TIM_HandleTypeDef* _htim, InitConfig_t _cfg);
     ///
     int32_t getCounter();
-    double getRealRPM();
+    double getRPM();
     static int32_t TurnNum_toCnt(const HallEncoder& thisEncoder, float _num);
     static int32_t Rpm_toCnt(const HallEncoder& thisEncoder, float _rpm);
     static float Cnt_toTurnNum(const HallEncoder& thisEncoder, int32_t _num);

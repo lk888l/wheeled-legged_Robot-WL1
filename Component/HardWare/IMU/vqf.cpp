@@ -999,3 +999,13 @@ void VQF::setup()
 
     resetState();
 }
+
+/**
+ * @brief
+ * @param _roll
+ * @param pitch
+ * @param yaw
+ */
+void VQF::getAngle(double &_roll, double &pitch, double &yaw) {
+
+}

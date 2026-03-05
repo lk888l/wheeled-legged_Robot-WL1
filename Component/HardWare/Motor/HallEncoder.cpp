@@ -25,7 +25,7 @@ int32_t HallEncoder::getCounter() {
     return val;
 }
 
-double HallEncoder::getRealRPM() {
+double HallEncoder::getRPM() {
     return ((getCounter() / 1.0 / Hall_Cfg.EdgeCnt / Hall_Cfg.EncoderLine / Hall_Cfg.ReductionRatio) * (1000/Hall_Cfg.Samplerate)*60);
 }
 

@@ -7,6 +7,8 @@
   *******************************************************************************/
 
 
+#include <utility>
+#include <cmath>
 #include "MPU6050.h"
 
 MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
@@ -15,11 +17,18 @@ MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
 
 }
 
+MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c, MPU6050::InitConfig_t _cfg)
+    : Hi2c(_hi2c)
+    , M650_cfg(_cfg)
+{
+
+}
+
 bool MPU6050::Init() {
     uint8_t check{};
     uint8_t Data{};
 
-    HAL_I2C_Mem_Read(Hi2c,MPU6050_ADDR, MPU6050_RA_WHO_AM_I, 1, &check, 1, MPU6050_TIME_OUT);
+    HAL_I2C_Mem_Read(Hi2c,MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, MPU6050_TIME_OUT);
     if(check == 0x68)
     {
 
@@ -29,10 +38,14 @@ bool MPU6050::Init() {
         Data = 0x00;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1, MPU6050_TIME_OUT);
 
-        // Set DATA RATE of 1KHz by writing SMPLRT_DIV register
-        //  if(rate>1000)rate=1000;
-        //  if(rate<4)rate=4;
-        //  data=1000/rate-1;
+        // Set DATA RATE of 4 - 1000Hz by writing SMPLRT_DIV register
+        if(M650_cfg.SampleRate>1000)
+        {M650_cfg.SampleRate=1000;}
+        else if(M650_cfg.SampleRate<4)
+        {M650_cfg.SampleRate=4;}
+        Data = 1000/M650_cfg.SampleRate - 1;
+        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+
         //  MPU_CFG_REG
         /*
         * <pre>
@@ -49,10 +62,20 @@ bool MPU6050::Init() {
         * 7        |   -- Reserved --   |   -- Reserved --   | Reserved
         * </pre>
         */
-        Data = 0x09;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1, MPU6050_TIME_OUT);
-//        Data = 0x02;
-//        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (M650_cfg.SampleRate >= 500) {
+            Data = 0x01; // 184Hz Bandwidth
+        } else if (M650_cfg.SampleRate >= 200) {
+            Data = 0x02; // 94Hz Bandwidth
+        } else if (M650_cfg.SampleRate >= 100) {
+            Data = 0x03; // 44Hz Bandwidth
+        } else if (M650_cfg.SampleRate >= 50) {
+            Data = 0x04; // 21Hz Bandwidth
+        } else if (M650_cfg.SampleRate >= 25) {
+            Data = 0x05; // 10Hz Bandwidth
+        } else {
+            Data = 0x06; // 5Hz Bandwidth
+        }
+        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
 
         // Set accelerometer configuration in ACCEL_CONFIG Register
         /**
@@ -66,9 +89,16 @@ bool MPU6050::Init() {
          * |      3        |      16g     |
          * +------------------------+--------------------------+
          */
-        Data = 0x01<<3;
+        Data = (static_cast<uint8_t>(M650_cfg.AccRange))<<3;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
-
+        if(M650_cfg.AccRange == AccRange_t::A2)
+        {AccCoefficient = 32768 / 2.0;}
+        else if(M650_cfg.AccRange == AccRange_t::A4)
+        {AccCoefficient = 32768 / 4.0;}
+        else if(M650_cfg.AccRange == AccRange_t::A8)
+        {AccCoefficient = 32768 / 8.0;}
+        else if(M650_cfg.AccRange == AccRange_t::A16)
+        {AccCoefficient = 32768 / 16.0;}
         // Set Gyroscopic configuration in GYRO_CONFIG Register
         // XG_ST=0,YG_ST=0,ZG_ST=0, FS_SEL=0 ->  250 /s
         /**
@@ -82,9 +112,16 @@ bool MPU6050::Init() {
          * |      3        |  ± 2000 °/s  |
          * +------------------------+--------------------------+
          */
-        Data = 0x02<<3;
+        Data = (static_cast<uint8_t>(M650_cfg.GyroRange))<<3;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
-
+        if(M650_cfg.GyroRange == GyroRange_t::G250)
+        {GyroCoefficient = 32768 / 250.0;}
+        else if(M650_cfg.GyroRange == GyroRange_t::G500)
+        { GyroCoefficient = 32768 / 500.0;}
+        else if(M650_cfg.GyroRange == GyroRange_t::G1000)
+        { GyroCoefficient = 30768 / 1000.0;}
+        else if(M650_cfg.GyroRange == GyroRange_t::G2000)
+        { GyroCoefficient = 32768 / 2000.0;}
         //set MPU INT PIN Config
         Data = 0x80;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_INTBP_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
@@ -93,12 +130,12 @@ bool MPU6050::Init() {
     return false;
 }
 
-bool MPU6050::getGyro(double& _xgyro, double& _ygyro, double& _zgyro)
+bool MPU6050::getGyro(double _gyro[3])
 {
     uint8_t Rec_Data[6];
 
     // Read 6 BYTES of data starting from GYRO_XOUT_H register
-    HAL_StatusTypeDef Hal_bool{};
+    HAL_StatusTypeDef Hal_bool;
     Hal_bool = HAL_I2C_Mem_Read(Hi2c, MPU6050_ADDR, GYRO_XOUT_H_REG, 1, Rec_Data, 6, MPU6050_TIME_OUT);
     if(Hal_bool != HAL_OK){
         return false;
@@ -108,13 +145,13 @@ bool MPU6050::getGyro(double& _xgyro, double& _ygyro, double& _zgyro)
     int16_t Gyro_Z_RAW = (int16_t)(Rec_Data[4] << 8 | Rec_Data[5]);
 
     // 32768 / (1000)
-    _xgyro = Gyro_X_RAW / 30.768;
-    _ygyro = Gyro_Y_RAW / 30.768;
-    _zgyro = Gyro_Z_RAW / 30.768;
+    _gyro[0] = (Gyro_X_RAW / GyroCoefficient) + M650_cfg.GyroOffset[0];
+    _gyro[1] = (Gyro_Y_RAW / GyroCoefficient) + M650_cfg.GyroOffset[1];
+    _gyro[2] = (Gyro_Z_RAW / GyroCoefficient) + M650_cfg.GyroOffset[2];
     return true;
 }
 
-bool MPU6050::getAccel(double & _xacc, double& _yacc, double& _zacc)
+bool MPU6050::getAccel(double _acc[3])
 {
 
     uint8_t Rec_Data[6];
@@ -130,9 +167,9 @@ bool MPU6050::getAccel(double & _xacc, double& _yacc, double& _zacc)
     int16_t Accel_Z_RAW = (int16_t)(Rec_Data[4] << 8 | Rec_Data[5]);
 
     //32768 / (2.0)
-    _xacc = Accel_X_RAW / 8192.0;
-    _yacc = Accel_Y_RAW / 8192.0;
-    _zacc = Accel_Z_RAW / 8192.0;
+    _acc[0] = Accel_X_RAW / 8192.0;
+    _acc[1] = Accel_Y_RAW / 8192.0;
+    _acc[2] = Accel_Z_RAW / 8192.0;
     return true;
 }
 
@@ -151,3 +188,14 @@ bool MPU6050::getTemperature(float& _temp)
     _temp = (float)((int16_t)temp / (float)340.0 + (float)36.53);
     return true;
 }
+
+void MPU6050::setGyroOffset(double &&_xg, double &&_yg, double &&_zg) {
+    M650_cfg.GyroOffset[0] = _xg;
+    M650_cfg.GyroOffset[1] = _yg;
+    M650_cfg.GyroOffset[2] = _zg;
+}
+
+void MPU6050::setGyroOffset(double _offnum[3]) {
+    setGyroOffset(std::forward<double>(_offnum[0]),std::forward<double>(_offnum[1]),std::forward<double>(_offnum[2]));
+}
+

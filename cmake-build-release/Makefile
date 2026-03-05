@@ -152,30 +152,6 @@ Component/HardWare/IMU/MPU6050.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/MPU6050.cpp.s
 .PHONY : Component/HardWare/IMU/MPU6050.cpp.s
 
-Component/HardWare/IMU/basicvqf.obj: Component/HardWare/IMU/basicvqf.cpp.obj
-.PHONY : Component/HardWare/IMU/basicvqf.obj
-
-# target to build an object file
-Component/HardWare/IMU/basicvqf.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.obj
-.PHONY : Component/HardWare/IMU/basicvqf.cpp.obj
-
-Component/HardWare/IMU/basicvqf.i: Component/HardWare/IMU/basicvqf.cpp.i
-.PHONY : Component/HardWare/IMU/basicvqf.i
-
-# target to preprocess a source file
-Component/HardWare/IMU/basicvqf.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.i
-.PHONY : Component/HardWare/IMU/basicvqf.cpp.i
-
-Component/HardWare/IMU/basicvqf.s: Component/HardWare/IMU/basicvqf.cpp.s
-.PHONY : Component/HardWare/IMU/basicvqf.s
-
-# target to generate assembly for a file
-Component/HardWare/IMU/basicvqf.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.s
-.PHONY : Component/HardWare/IMU/basicvqf.cpp.s
-
 Component/HardWare/IMU/vqf.obj: Component/HardWare/IMU/vqf.cpp.obj
 .PHONY : Component/HardWare/IMU/vqf.obj
 
@@ -295,6 +271,30 @@ Component/HardWare/OLED/OLED_Data.s: Component/HardWare/OLED/OLED_Data.c.s
 Component/HardWare/OLED/OLED_Data.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/OLED/OLED_Data.c.s
 .PHONY : Component/HardWare/OLED/OLED_Data.c.s
+
+Component/Peripheral/LkUart.obj: Component/Peripheral/LkUart.cpp.obj
+.PHONY : Component/Peripheral/LkUart.obj
+
+# target to build an object file
+Component/Peripheral/LkUart.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/Peripheral/LkUart.cpp.obj
+.PHONY : Component/Peripheral/LkUart.cpp.obj
+
+Component/Peripheral/LkUart.i: Component/Peripheral/LkUart.cpp.i
+.PHONY : Component/Peripheral/LkUart.i
+
+# target to preprocess a source file
+Component/Peripheral/LkUart.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/Peripheral/LkUart.cpp.i
+.PHONY : Component/Peripheral/LkUart.cpp.i
+
+Component/Peripheral/LkUart.s: Component/Peripheral/LkUart.cpp.s
+.PHONY : Component/Peripheral/LkUart.s
+
+# target to generate assembly for a file
+Component/Peripheral/LkUart.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/Peripheral/LkUart.cpp.s
+.PHONY : Component/Peripheral/LkUart.cpp.s
 
 Component/UserApp/main.obj: Component/UserApp/main.cpp.obj
 .PHONY : Component/UserApp/main.obj
@@ -1420,9 +1420,6 @@ help:
 	@echo ... Component/HardWare/IMU/MPU6050.obj
 	@echo ... Component/HardWare/IMU/MPU6050.i
 	@echo ... Component/HardWare/IMU/MPU6050.s
-	@echo ... Component/HardWare/IMU/basicvqf.obj
-	@echo ... Component/HardWare/IMU/basicvqf.i
-	@echo ... Component/HardWare/IMU/basicvqf.s
 	@echo ... Component/HardWare/IMU/vqf.obj
 	@echo ... Component/HardWare/IMU/vqf.i
 	@echo ... Component/HardWare/IMU/vqf.s
@@ -1438,6 +1435,9 @@ help:
 	@echo ... Component/HardWare/OLED/OLED_Data.obj
 	@echo ... Component/HardWare/OLED/OLED_Data.i
 	@echo ... Component/HardWare/OLED/OLED_Data.s
+	@echo ... Component/Peripheral/LkUart.obj
+	@echo ... Component/Peripheral/LkUart.i
+	@echo ... Component/Peripheral/LkUart.s
 	@echo ... Component/UserApp/main.obj
 	@echo ... Component/UserApp/main.i
 	@echo ... Component/UserApp/main.s

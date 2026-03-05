@@ -1062,6 +1062,9 @@ protected:
      * See #getCoeffs.
      */
     VQFCoefficients coeffs;
+
+public:
+    void getAngle(double& _roll,double& pitch,double& yaw);
 };
 
 #endif // VQF_HPP

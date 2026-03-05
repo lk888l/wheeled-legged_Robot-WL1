@@ -14,13 +14,14 @@
 /// cpp standard library include
 #include <memory>
 #include <cmath>
+#include <print>
+#include <format>
 /// user library include
 #include "cpp_Interface.h"
 #include "main.h"
 #include "i2c.h"
 #include "TB6612.h"
 #include "MPU6050.h"
-#include "basicvqf.hpp"
 #include "vqf.hpp"
 
 #define PI 3.14159265358979323846
@@ -42,9 +43,17 @@ TaskFunction_t LEDBlinkFunc(){
 /*---------------------  define task function begin  ---------------------*/
 
 TaskFunction_t MotionControlFunc(){
+    //  FreeRtos variable
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 10;
+    //  c++ variable
     std::unique_ptr<TB6612> pTB6_wheel;
     std::unique_ptr<MPU6050> pM6050_Imu;
     std::unique_ptr<VQF> basicVqf;
+    double GyroValue[3]{};
+    double AccValue[3]{};
+    MPU6050::EulerAngle MAngle;
+    vqf_real_t quat[4]{}; // output array for quaternion
     {
         TB6612::InitConfig_t TB6_temcfg = {
                                 .Htim =         &htim4,
@@ -63,44 +72,30 @@ TaskFunction_t MotionControlFunc(){
         pM6050_Imu = std::make_unique<MPU6050>(&hi2c1);
         basicVqf = std::make_unique<VQF>(0.01,0.005);
     }
-    pTB6_wheel->Init();
-    pTB6_wheel->setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::B), TB6612::Direction::Negative);
-    pTB6_wheel->setAVel_raw(500);
-    pTB6_wheel->setBVel_raw(500);
-
+//    pTB6_wheel->Init();
+//    pTB6_wheel->setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::B), TB6612::Direction::Negative);
+//    pTB6_wheel->setAVel_raw(500);
+//    pTB6_wheel->setBVel_raw(500);
+    pM6050_Imu->setGyroOffset(2.5,0.7,0.9);
     if(pM6050_Imu->Init()){
         SendDataToUART1("MPU: success\n");
     }
     else{
         SendDataToUART1("MPU: fail\n");
     }
+    xLastWakeTime = xTaskGetTickCount();        //get now system tick to delay a period
     for(;;){
-        double xg,yg,zg,xa,ya,za;
-        vTaskDelay(7);
-        pM6050_Imu->getGyro(xg,yg,zg);
-        pM6050_Imu->getAccel(xa,ya,za);
-//        SendDataToUART1("xg: %lf\tyg: %lf\tzg: %lf\txa: %lf\tya: %lf\tza: %lf\t\n",xg,yg,zg,xa,ya,za);
-        xg = (xg + 2.5) * PI / 180;
-        yg = (yg + 0.7) * PI / 180;
-        zg = (zg + 0.9) * PI / 180;
-        xa = (xa) * 9.81;
-        ya = (ya) * 9.81;
-        za = (za) * 9.81;
-        vqf_real_t gyr[3] = {xg,yg,zg};
-        vqf_real_t acc[3] = {xa,ya,za};
-        vqf_real_t quat[4] = {0, 0, 0, 0}; // output array for quaternion
-        vqf_real_t bias[3];
-        basicVqf->update(gyr,acc);
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        pM6050_Imu->getGyro(GyroValue);
+        pM6050_Imu->getAccel(AccValue);
+//        SendDataToUART1("xg: %lf\tyg: %lf\tzg: %lf\txa: %lf\tya: %lf\tza: %lf\t\n",GyroValue[0],GyroValue[1],GyroValue[2],AccValue[0],AccValue[1],AccValue[2]);
+        MPU6050::DegTorad(GyroValue);
+        MPU6050::GToMS2(AccValue);
+        basicVqf->update(GyroValue,AccValue);
         basicVqf->getQuat6D(quat);
-        auto q0 = quat[0];
-        auto q1 = quat[1];
-        auto q2 = quat[2];
-        auto q3 = quat[3];
-        auto roll = atan2(2 * (q0 * q1 + q2 * q3), q0*q0 - q1*q1 - q2*q2 + q3*q3)* 57.295773;
-        auto pitch = -asin(2 * (q1 * q3 - q0 * q2))*57.295773;
-        auto yaw = atan2(2 * (q0 * q3 + q1 * q2), q0*q0 + q1*q1 - q2*q2 - q3*q3)*57.295773;
-//        SendDataToUART1("%f,%f,%f,%f\n",quat[0],quat[1],quat[2],quat[3]);
-        SendDataToUART1("%f,%f,%f\n",roll,pitch,yaw);
+        MPU6050::QuatToEuler(quat,MAngle);
+        SendDataToUART1("%lf,%lf,%lf\n",MAngle.Roll,MAngle.Pitch,MAngle.Yaw);
+
     }
 }
 
@@ -117,9 +112,9 @@ void CPP_Main()
                           (TaskHandle_t*)&Handle_LEDBlinkFunc);
     xReturn |= xTaskCreate((TaskFunction_t)MotionControlFunc,
                            (const char*)"MotionControl",
-                           (uint16_t)1000,
+                           (uint16_t)2000,
                            (void*)NULL,
-                           (UBaseType_t)28,
+                           (UBaseType_t)29,
                            (TaskHandle_t*)&Handle_MotionControlFunc);
     if(pdPASS == xReturn){
 //        SendDataToUART1("success\n");
