@@ -152,29 +152,29 @@ Component/HardWare/IMU/MPU6050.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/MPU6050.cpp.s
 .PHONY : Component/HardWare/IMU/MPU6050.cpp.s
 
-Component/HardWare/IMU/vqf.obj: Component/HardWare/IMU/vqf.cpp.obj
-.PHONY : Component/HardWare/IMU/vqf.obj
+Component/HardWare/IMU/basicvqf.obj: Component/HardWare/IMU/basicvqf.cpp.obj
+.PHONY : Component/HardWare/IMU/basicvqf.obj
 
 # target to build an object file
-Component/HardWare/IMU/vqf.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.obj
-.PHONY : Component/HardWare/IMU/vqf.cpp.obj
+Component/HardWare/IMU/basicvqf.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.obj
+.PHONY : Component/HardWare/IMU/basicvqf.cpp.obj
 
-Component/HardWare/IMU/vqf.i: Component/HardWare/IMU/vqf.cpp.i
-.PHONY : Component/HardWare/IMU/vqf.i
+Component/HardWare/IMU/basicvqf.i: Component/HardWare/IMU/basicvqf.cpp.i
+.PHONY : Component/HardWare/IMU/basicvqf.i
 
 # target to preprocess a source file
-Component/HardWare/IMU/vqf.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.i
-.PHONY : Component/HardWare/IMU/vqf.cpp.i
+Component/HardWare/IMU/basicvqf.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.i
+.PHONY : Component/HardWare/IMU/basicvqf.cpp.i
 
-Component/HardWare/IMU/vqf.s: Component/HardWare/IMU/vqf.cpp.s
-.PHONY : Component/HardWare/IMU/vqf.s
+Component/HardWare/IMU/basicvqf.s: Component/HardWare/IMU/basicvqf.cpp.s
+.PHONY : Component/HardWare/IMU/basicvqf.s
 
 # target to generate assembly for a file
-Component/HardWare/IMU/vqf.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/vqf.cpp.s
-.PHONY : Component/HardWare/IMU/vqf.cpp.s
+Component/HardWare/IMU/basicvqf.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/HardWare/IMU/basicvqf.cpp.s
+.PHONY : Component/HardWare/IMU/basicvqf.cpp.s
 
 Component/HardWare/Motor/HallEncoder.obj: Component/HardWare/Motor/HallEncoder.cpp.obj
 .PHONY : Component/HardWare/Motor/HallEncoder.obj
@@ -295,6 +295,54 @@ Component/Peripheral/LkUart.s: Component/Peripheral/LkUart.cpp.s
 Component/Peripheral/LkUart.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/Peripheral/LkUart.cpp.s
 .PHONY : Component/Peripheral/LkUart.cpp.s
+
+Component/UserApp/CtrlAlgorithm/LQR.obj: Component/UserApp/CtrlAlgorithm/LQR.cpp.obj
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.obj
+
+# target to build an object file
+Component/UserApp/CtrlAlgorithm/LQR.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/CtrlAlgorithm/LQR.cpp.obj
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.cpp.obj
+
+Component/UserApp/CtrlAlgorithm/LQR.i: Component/UserApp/CtrlAlgorithm/LQR.cpp.i
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.i
+
+# target to preprocess a source file
+Component/UserApp/CtrlAlgorithm/LQR.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/CtrlAlgorithm/LQR.cpp.i
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.cpp.i
+
+Component/UserApp/CtrlAlgorithm/LQR.s: Component/UserApp/CtrlAlgorithm/LQR.cpp.s
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.s
+
+# target to generate assembly for a file
+Component/UserApp/CtrlAlgorithm/LQR.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/CtrlAlgorithm/LQR.cpp.s
+.PHONY : Component/UserApp/CtrlAlgorithm/LQR.cpp.s
+
+Component/UserApp/MainControl.obj: Component/UserApp/MainControl.cpp.obj
+.PHONY : Component/UserApp/MainControl.obj
+
+# target to build an object file
+Component/UserApp/MainControl.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/MainControl.cpp.obj
+.PHONY : Component/UserApp/MainControl.cpp.obj
+
+Component/UserApp/MainControl.i: Component/UserApp/MainControl.cpp.i
+.PHONY : Component/UserApp/MainControl.i
+
+# target to preprocess a source file
+Component/UserApp/MainControl.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/MainControl.cpp.i
+.PHONY : Component/UserApp/MainControl.cpp.i
+
+Component/UserApp/MainControl.s: Component/UserApp/MainControl.cpp.s
+.PHONY : Component/UserApp/MainControl.s
+
+# target to generate assembly for a file
+Component/UserApp/MainControl.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\WL1_F411CEU6.elf.dir\build.make CMakeFiles/WL1_F411CEU6.elf.dir/Component/UserApp/MainControl.cpp.s
+.PHONY : Component/UserApp/MainControl.cpp.s
 
 Component/UserApp/main.obj: Component/UserApp/main.cpp.obj
 .PHONY : Component/UserApp/main.obj
@@ -1420,9 +1468,9 @@ help:
 	@echo ... Component/HardWare/IMU/MPU6050.obj
 	@echo ... Component/HardWare/IMU/MPU6050.i
 	@echo ... Component/HardWare/IMU/MPU6050.s
-	@echo ... Component/HardWare/IMU/vqf.obj
-	@echo ... Component/HardWare/IMU/vqf.i
-	@echo ... Component/HardWare/IMU/vqf.s
+	@echo ... Component/HardWare/IMU/basicvqf.obj
+	@echo ... Component/HardWare/IMU/basicvqf.i
+	@echo ... Component/HardWare/IMU/basicvqf.s
 	@echo ... Component/HardWare/Motor/HallEncoder.obj
 	@echo ... Component/HardWare/Motor/HallEncoder.i
 	@echo ... Component/HardWare/Motor/HallEncoder.s
@@ -1438,6 +1486,12 @@ help:
 	@echo ... Component/Peripheral/LkUart.obj
 	@echo ... Component/Peripheral/LkUart.i
 	@echo ... Component/Peripheral/LkUart.s
+	@echo ... Component/UserApp/CtrlAlgorithm/LQR.obj
+	@echo ... Component/UserApp/CtrlAlgorithm/LQR.i
+	@echo ... Component/UserApp/CtrlAlgorithm/LQR.s
+	@echo ... Component/UserApp/MainControl.obj
+	@echo ... Component/UserApp/MainControl.i
+	@echo ... Component/UserApp/MainControl.s
 	@echo ... Component/UserApp/main.obj
 	@echo ... Component/UserApp/main.i
 	@echo ... Component/UserApp/main.s

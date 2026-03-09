@@ -12,6 +12,8 @@
 
 
 #include "main.h"
+#include "basicvqf.hpp"
+#include <memory>
 
 
 class MPU6050 {
@@ -61,6 +63,7 @@ public:
 private:
     I2C_HandleTypeDef* Hi2c = nullptr;
     InitConfig_t M650_cfg;
+    BasicVQF vqf;
     double GyroCoefficient{};
     double AccCoefficient{};
 
@@ -71,8 +74,16 @@ public:
     bool getGyro(double _gyro[3]);
     bool getAccel(double _acc[3]);
     bool getTemperature(float& _temp);
+    bool getEulerAngle(EulerAngle& _angle);
+    bool getEulerAngleACC(EulerAngle& _angle, double _acc[3]);
+    bool getEulerAngleGyro(EulerAngle& _angle, double _gyro[3]);
     void setGyroOffset(double&& _xg, double&& _yg, double&& _zg);
     void setGyroOffset(double _offnum[3]);
+
+    static inline double DegTorad(double _rad)
+    {
+        return _rad * DEG_TO_RAD_COE;
+    }
 
     static inline void DegTorad(double rad[3]){
         rad[0] *= DEG_TO_RAD_COE;
