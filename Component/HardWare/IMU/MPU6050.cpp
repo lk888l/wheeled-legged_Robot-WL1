@@ -13,6 +13,7 @@
 
 MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
     : Hi2c(_hi2c)
+    ,vqf((1.0/M650_cfg.SampleRate))
 {
 
 }
@@ -20,6 +21,7 @@ MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
 MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c, MPU6050::InitConfig_t _cfg)
     : Hi2c(_hi2c)
     , M650_cfg(_cfg)
+    ,vqf((1.0/M650_cfg.SampleRate))
 {
 
 }
@@ -125,6 +127,9 @@ bool MPU6050::Init() {
         //set MPU INT PIN Config
         Data = 0x80;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_INTBP_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+
+        // Init VQF ---- Attitude calculation algorithm
+//        vqf = VQF((1.0/M650_cfg.SampleRate));
         return true;
     }
     return false;
@@ -197,5 +202,61 @@ void MPU6050::setGyroOffset(double &&_xg, double &&_yg, double &&_zg) {
 
 void MPU6050::setGyroOffset(double _offnum[3]) {
     setGyroOffset(std::forward<double>(_offnum[0]),std::forward<double>(_offnum[1]),std::forward<double>(_offnum[2]));
+}
+
+/**
+ * @brief
+ * @param _angle
+ * @return
+ */
+bool MPU6050::getEulerAngle(MPU6050::EulerAngle &_angle) {
+    double acc[3],gyro[3];
+    vqf_real_t quat[4]{}; // output array for quaternion
+    if((getGyro(gyro) && getAccel(acc)))
+    {
+        MPU6050::DegTorad(gyro);
+        MPU6050::GToMS2(acc);
+        vqf.update(gyro,acc);
+        vqf.getQuat6D(quat);
+        QuatToEuler(quat,_angle);
+        return true;
+    }
+    return false;
+}
+
+bool MPU6050::getEulerAngleGyro(MPU6050::EulerAngle &_angle, double *_gyro) {
+    double acc[3],gyro[3];
+    vqf_real_t quat[4]{}; // output array for quaternion
+    if((getGyro(gyro) && getAccel(acc)))
+    {
+        MPU6050::DegTorad(gyro);
+        MPU6050::GToMS2(acc);
+        vqf.update(gyro,acc);
+        vqf.getQuat6D(quat);
+        QuatToEuler(quat,_angle);
+        _gyro[0] = gyro[0];
+        _gyro[1] = gyro[1];
+        _gyro[2] = gyro[2];
+        return true;
+    }
+    return false;
+}
+
+bool MPU6050::getEulerAngleACC(MPU6050::EulerAngle &_angle, double *_acc) {
+    double acc[3],gyro[3];
+    vqf_real_t quat[4]{}; // output array for quaternion
+    if((getGyro(gyro) && getAccel(acc)))
+    {
+        MPU6050::DegTorad(gyro);
+        MPU6050::GToMS2(acc);
+        vqf.update(gyro,acc);
+        vqf.getQuat6D(quat);
+        QuatToEuler(quat,_angle);
+        _acc[0] = acc[0];
+        _acc[1] = acc[1];
+        _acc[2] = acc[2];
+        return true;
+    }
+    return false;
 }
 
