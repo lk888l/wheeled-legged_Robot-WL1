@@ -23,7 +23,7 @@ public:
     static constexpr double WheelRadius = 0.022;            //m
 //    static constexpr double Rated_Torque = 0.4;             //kg.cm
     static constexpr double Rated_Torque = 0.4*9.8*0.01;    //N.m
-    static constexpr double Rated_Torque_PWMValue = 1000;
+    static constexpr double Rated_Torque_PWMValue = 800;
     static constexpr double TorqueToPWM_Coefficient = (WheelRadius/(Rated_Torque * 2)) * Rated_Torque_PWMValue;
 
     void setHight(double _highvalue);

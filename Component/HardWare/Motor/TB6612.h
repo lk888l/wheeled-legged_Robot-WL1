@@ -52,6 +52,8 @@ private:
     InitConfig_t TB6_Cfg{};
     char ADIR_Mask{1};
     char BDIR_Mask{1};
+    uint16_t ADeadZone{};
+    uint16_t BDeadZone{};
     /// private member function
     void setADirection(uint8_t _dir);
     void setBDirection(uint8_t _dir);
@@ -66,6 +68,8 @@ public:
     void setAPWM(uint16_t _value);
     void setBPWM(uint16_t _value);
     void setDirection_Cfg(uint8_t target, Direction dirParam);
+    void setA_DeadZone(uint16_t _value);
+    void setB_DeadZone(uint16_t _value);
     void setAVel_raw(int16_t _value);
     void setBVel_raw(int16_t _value);
 

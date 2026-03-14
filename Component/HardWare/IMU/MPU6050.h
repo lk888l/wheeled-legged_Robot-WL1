@@ -12,7 +12,7 @@
 
 
 #include "main.h"
-#include "basicvqf.hpp"
+#include "vqf.hpp"
 #include <memory>
 
 
@@ -63,7 +63,7 @@ public:
 private:
     I2C_HandleTypeDef* Hi2c = nullptr;
     InitConfig_t M650_cfg;
-    BasicVQF vqf;
+    VQF vqf;
     double GyroCoefficient{};
     double AccCoefficient{};
 
@@ -79,6 +79,32 @@ public:
     bool getEulerAngleGyro(EulerAngle& _angle, double _gyro[3]);
     void setGyroOffset(double&& _xg, double&& _yg, double&& _zg);
     void setGyroOffset(double _offnum[3]);
+
+    /**
+ * @brief
+ * @param frequency_hz
+ * @return
+ */
+    static inline double HZ_toms(double frequency_hz) {
+        // 防除零错误：频率不能为0或负数
+//        if (frequency_hz <= 0) {
+//            return 0;
+//        }
+        return 1000.0 / frequency_hz;
+    }
+
+    /**
+     * @brief
+     * @param period_ms
+     * @return
+     */
+    static inline double ms_toHZ(double period_ms) {
+        // 防除零错误：周期不能为0或负数（无意义）
+//        if (period_ms <= 0) {
+//            return 0;
+//        }
+        return 1000.0 / period_ms;
+    }
 
     static inline double DegTorad(double _rad)
     {

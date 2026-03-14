@@ -14,24 +14,25 @@
 #include <format>
 // stm-Hal library include
 #include "main.h"
+// freeRTOS library include
+#include "FreeRTOS.h"
+#include "semphr.h"
 
 class LkUart {
-    static constexpr uint16_t SEND_BUF_SIZE = 128;
+    static constexpr uint16_t BUF_SIZE = 128;
 private:
     UART_HandleTypeDef* HUart;
 public:
     explicit LkUart(UART_HandleTypeDef* _huart);
     inline void UART_SendString(const char* str, size_t len);
     //
-//    template <typename... Args>
-//    void print(const std::format_string<Args...> fmt, Args&&... args){
-//        char buf[SEND_BUF_SIZE]; // 根据需求调整大小
-//        auto res = std::format_to_n(buf, sizeof(buf) - 1, fmt, std::forward<Args>(args)...);
-//        *res.out = '\0';
-//        UART_SendString(buf, res.size);
-//    }
-    //
-
+    template <typename... Args>
+    void print(const std::format_string<Args...> fmt, Args&&... args){
+        char buf[BUF_SIZE]; // 根据需求调整大小
+        auto res = std::format_to_n(buf, sizeof(buf) - 1, fmt, std::forward<Args>(args)...);
+        *res.out = '\0';
+        UART_SendString(buf, res.size);
+    }
 };
 
 
