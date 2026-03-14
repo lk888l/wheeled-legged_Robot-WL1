@@ -30,7 +30,7 @@ void LQR::setHight(double _highvalue) {
  * @return
  */
 double LQR::Calculate_LQR(const double &angle, const double &angularspeed, const double &position, const double &velocity) {
-    return (-(K[0]*angle + K[1]*angularspeed + K[2]*position + K[3]*velocity));
+    return -(K[0]*angle + K[1]*angularspeed + K[2]*position + K[3]*velocity);
 }
 
 

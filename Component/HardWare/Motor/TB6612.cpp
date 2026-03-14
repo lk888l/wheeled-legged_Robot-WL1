@@ -50,6 +50,18 @@ void TB6612::setDirection_Cfg(uint8_t target, TB6612::Direction dirParam)
 }
 
 /**
+ * @brief
+ * @param _value
+ */
+void TB6612::setA_DeadZone(uint16_t _value) {
+    ADeadZone = _value;
+}
+
+void TB6612::setB_DeadZone(uint16_t _value) {
+    BDeadZone = _value;
+}
+
+/**
  * @brief set
  * @param _dir
  */
@@ -96,24 +108,38 @@ void TB6612::setBPWM(uint16_t _value) {
 }
 
 void TB6612::setAVel_raw(int16_t _value) {
-    if(_value>=0) {
+    if(_value>0) {
+//        _value += ADeadZone;
         setADirection(1);
     }
-    else {
+    else if(_value<0){
+//        _value -= ADeadZone;
         setADirection(0);
     }
+    else{
+        //stop
+    }
     _value = std::abs(_value);
+    if(_value < ADeadZone)
+    {_value = ADeadZone;}
     setAPWM(_value);
 }
 
 void TB6612::setBVel_raw(int16_t _value) {
-    if(_value>=0) {
+    if(_value>0) {
+//        _value += BDeadZone;
         setBDirection(1);
     }
-    else {
+    else if(_value<0){
+//        _value -= BDeadZone;
         setBDirection(0);
     }
+    else{
+        //stop
+    }
     _value = std::abs(_value);
+    if(_value < BDeadZone)
+    {_value = BDeadZone;}
     setBPWM(_value);
 }
 
@@ -122,5 +148,7 @@ TB6612::~TB6612()
     HAL_TIM_PWM_Stop(TB6_Cfg.Htim,TB6_Cfg.AChannel);
     HAL_TIM_PWM_Stop(TB6_Cfg.Htim,TB6_Cfg.BChannel);
 }
+
+
 
 
