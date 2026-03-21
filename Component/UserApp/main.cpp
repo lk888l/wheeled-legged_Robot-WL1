@@ -12,10 +12,7 @@
 */
 
 /// cpp standard library include
-#include <memory>
 #include <cmath>
-#include <print>
-#include <format>
 /// cpp etl include
 //#include "etl/memory.h"
 //#include "etl/pool.h"
@@ -23,25 +20,45 @@
 #include "cpp_Interface.h"
 #include "main.h"
 #include "i2c.h"
+#include "usart.h"
 ///cpp User library include
 #include "TB6612.h"
 #include "HallEncoder.h"
 #include "MPU6050.h"
 #include "LkUart.hpp"
 #include "CtrlAlgorithm/LQR.hpp"
+//
+#include "FreeRTOS.h"
+#include "task.h"
 
 
 
-/* My variables BEGIN */
-
-/* My variables END */
+/* My variables define BEGIN */
+LkUart<> Uart1(&huart1);
+/* My variables define END */
+// freeRTOS variably define
+TaskHandle_t Handle_LEDBlinkFunc = nullptr;
+TaskHandle_t Handle_MotionControlFunc = nullptr;
 
 /*---------------------  define task function begin  ---------------------*/
 
 TaskFunction_t LEDBlinkFunc(){
+    LkUart<>::RxMessage URxMes;
+
+    Uart1.Start_DMAIT_Receive();
+    Uart1.bindTask(Handle_LEDBlinkFunc);
     while(1) {
-        vTaskDelay(200);
-//        SendDataToUART1("hello\n");
+//        vTaskDelay(500);
+        if(ulTaskNotifyTake(pdFALSE,pdMS_TO_TICKS(500))){
+            while(Uart1.getReadRxBuf_empty()){
+                auto &myStr = Uart1.getReadRxBuffers();
+                Uart1.print("receive: {}\n",myStr);
+                Uart1.RxDisposeCallback([](etl::string<128> &rxmes){
+
+                });
+            }
+        }
+        Uart1.print("hello{}\n",123);
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     }
 }
@@ -107,32 +124,34 @@ TaskFunction_t MotionControlFunc(){
         NeededPWM_Right = TB6612::clamp(NeededPWM_Right,1000,-1000);
 //        SendDataToUART1("%d\n",NeededPWM_Right);
 //        SendDataToUART1("A: %f\tB: %f\n",RPM_Right,RPM_Left);
-        TB6_wheel.setAVel_raw(NeededPWM_Right);
-        TB6_wheel.setBVel_raw(NeededPWM_Left);
+//        TB6_wheel.setAVel_raw(NeededPWM_Right);
+//        TB6_wheel.setBVel_raw(NeededPWM_Left);
     }
 }
 
 void CPP_Main()
 {
-    TaskHandle_t Handle_LEDBlinkFunc = nullptr;
-    TaskHandle_t Handle_MotionControlFunc = nullptr;
+
     BaseType_t xReturn = pdPASS;
     xReturn = xTaskCreate((TaskFunction_t)LEDBlinkFunc,
                           (const char*)"LEDBlink",
-                          (uint16_t)128,
+                          (uint16_t)512,
                           (void*)NULL,
                           (UBaseType_t)28,
                           (TaskHandle_t*)&Handle_LEDBlinkFunc);
     xReturn |= xTaskCreate((TaskFunction_t)MotionControlFunc,
                            (const char*)"MotionControl",
-                           (uint16_t)2200,
+                           (uint16_t)2500,
                            (void*)NULL,
                            (UBaseType_t)29,
                            (TaskHandle_t*)&Handle_MotionControlFunc);
     if(pdPASS == xReturn){
 //        SendDataToUART1("success\n");
+        Uart1.print("CPPMain: success\n");
     }
     else {
-        SendDataToUART1("fail");
+//        SendDataToUART1("fail");
+        Uart1.print("CPPMain: fail\n");
     }
 }
+
