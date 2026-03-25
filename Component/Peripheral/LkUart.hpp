@@ -11,34 +11,27 @@
 #define __LKUART_HPP
 
 //c++ standard library include
-#include <format>
 #include "etl/format.h"
 // stm-Hal library include
 #include "main.h"
 // freeRTOS library include
-#include "FreeRTOS.h"
 #include "queue.h"
-#include "semphr.h"
 // LK Library include
 #include "SafeQueue.hpp"
+#include "BasicObject.hpp"
+
 
 template<size_t TX_BufferSize = 128, size_t TX_BufDepth = 10, size_t RX_BufferSize = 128, size_t RX_BufDepth = 10>
-class LkUart {
+class LkUart : BasicObject{
 public:
     //receive Message type
-    struct RxMessage {
-        uint8_t RxBuffer[RX_BufferSize] = {0};          //DMA receive Buffer
-        uint16_t length{};
-    };
     explicit LkUart(UART_HandleTypeDef* huart)
             : HUart(huart), dmaBusy_(false), curBufIndex_Tx(0),curBufIndex_Rx(0)
     {
         instance_ = this;
-        freeQueue_Tx = xQueueCreate(TX_BufDepth, sizeof(uint8_t));
-        readyQueue_Tx = xQueueCreate(TX_BufDepth, sizeof(TxMessage));
         //Put the indices of all buffers into the free queue
         for (uint8_t i = 0; i < TX_BufDepth; ++i) {
-            xQueueSend(freeQueue_Tx, &i, portMAX_DELAY);
+            freeQueue_Tx.push(i);
             freeQueue_Rx.push(i);
         }
     }
@@ -52,18 +45,18 @@ private:
     };
     // 静态内存池：注意，如果是 Cortex-M7 (如 H7/F7)，需放在 Non-Cacheable 区域
     alignas(32) etl::array<etl::array<char, TX_BufferSize>, TX_BufDepth> buffers_Tx;
-    QueueHandle_t freeQueue_Tx;
-    QueueHandle_t readyQueue_Tx;
+    SafeQueue<uint8_t, RX_BufDepth> freeQueue_Tx;
+    SafeQueue<TxMessage, RX_BufDepth> readyQueue_Tx;
     volatile bool dmaBusy_;
     uint8_t curBufIndex_Tx;
     static LkUart* instance_;   // 静态指针，用于将 C 语言的中断回调路由到 C++ 实例
     /*  receive port variable define */
     SafeQueue<uint8_t, RX_BufDepth> freeQueue_Rx;
     SafeQueue<uint8_t, RX_BufDepth> readQueue_Rx;
-    TaskHandle_t notifyTask_ = nullptr;             // 接收处理任务的句柄
-    RxMessage RxMes{};          //DMA receive Buffer
     alignas(32) etl::array<etl::string<RX_BufferSize>, RX_BufDepth> buffers_Rx;
     uint8_t curBufIndex_Rx{};
+    //signal config define
+    SignalContext RxReceive_cfg{};
 private:
     /**
      * @brief try to trigger uart TX lint DMA transfer
@@ -74,7 +67,7 @@ private:
         if (!dmaBusy_) {
             TxMessage msg;
             // 检查是否有等待发送的数据
-            if (xQueueReceive(readyQueue_Tx, &msg, 0) == pdTRUE) {
+            if (readyQueue_Tx.pop_normal(msg)) {
                 dmaBusy_ = true;
                 curBufIndex_Tx = msg.bufferIndex;
                 // 启动DMA传输
@@ -89,10 +82,10 @@ private:
     void handleTxCompleteISR() {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         // 发送完成，归还当前缓冲区给空闲队列
-        xQueueSendFromISR(freeQueue_Tx, &curBufIndex_Tx, &xHigherPriorityTaskWoken);
+        freeQueue_Tx.push_FromISR(curBufIndex_Tx);
         // Check if there are still any data in the queue.
         TxMessage msg;
-        if (xQueueReceiveFromISR(readyQueue_Tx, &msg, &xHigherPriorityTaskWoken) == pdTRUE) {
+        if (readyQueue_Tx.pop_FromISR(msg)) {
             curBufIndex_Tx = msg.bufferIndex;
             // 立即开启下一次DMA传输
             HAL_UART_Transmit_DMA(HUart,
@@ -106,8 +99,6 @@ private:
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 
-
-
 public:
     /**
      * @brief Print to Uart
@@ -119,7 +110,7 @@ public:
     void print(etl::format_string<Args...> fmt, Args&&... args) {
         uint8_t bufIdx;
         // 1. 获取一个空闲缓冲区 (可设置超时时间，这里设为0，即时获取,没有则跳过)
-        if (xQueueReceive(freeQueue_Tx, &bufIdx, 0) == pdTRUE) {
+        if (freeQueue_Tx.pop(bufIdx)) {
             auto &buf = buffers_Tx[bufIdx];
             auto result = etl::format_to_n(buf.data(), TX_BufferSize, fmt, etl::forward<Args>(args)...);
             auto len = static_cast<uint16_t>(result-buf.data());
@@ -128,27 +119,11 @@ public:
             // SCB_CleanDCache_by_Addr((uint32_t*)buf.data(), len);
             //Push the buffered data information with the data onto the ready queue
             TxMessage msg = {bufIdx, len};
-            xQueueSend(readyQueue_Tx, &msg, portMAX_DELAY);
+            readyQueue_Tx.push(msg);
             triggerTx();
         }
         else{
 
-        }
-    }
-
-    /**
-     * @brief 供外部中断回调调用的静态接口
-     * @param huart
-     */
-    static void isrTxComplete(UART_HandleTypeDef* huart) {
-        if (instance_ && instance_->HUart == huart) {
-            instance_->handleTxCompleteISR();
-        }
-    }
-
-    static void isRxComplete(UART_HandleTypeDef* huart,  uint16_t size) {
-        if (instance_ && instance_->HUart == huart) {
-            instance_->RxCpltCallback(size);
         }
     }
 
@@ -166,41 +141,62 @@ public:
 
     }
 
-    void bindTask(TaskHandle_t taskHandle) {
-        notifyTask_ = taskHandle;
+    /**
+     * @brief
+     * @param signal
+     */
+    template<typename SignalPtr>
+    bool bindReactor(SignalPtr signalFunc, TaskHandle_t task, uint32_t bitMask){
+        if constexpr (std::is_same_v<SignalPtr, decltype(&LkUart::signal_RxComplete)>) {
+            if (signalFunc == &LkUart::signal_RxComplete) {
+                RxReceive_cfg.task_h = task;
+                RxReceive_cfg.bitMask = bitMask;
+                return true;
+            }
+        }
+        return false;
     }
 
+    /**
+     * @brief
+     * @return
+     */
     bool getReadRxBuf_empty(){
         return readQueue_Rx.empty();
     }
 
     /**
-     * @brief
-     * @param str
-     * @return
+     * @brief 供外部中断回调调用的静态接口
+     * @param huart
      */
-    etl::string<RX_BufferSize> & getReadRxBuffers(){
-        uint8_t bufIdx;
-        readQueue_Rx.pop(bufIdx);
-        return buffers_Rx[bufIdx];
+    static void isrTxComplete(UART_HandleTypeDef* huart) {
+        if (instance_ && instance_->HUart == huart) {
+            instance_->handleTxCompleteISR();
+        }
     }
 
+    static void isRxComplete(UART_HandleTypeDef* huart,  uint16_t size) {
+        if (instance_ && instance_->HUart == huart) {
+            instance_->RxCpltCallback_InISR(size);
+        }
+    }
 
     /**
     * @brief 接收一个完整数据帧中断回调（在 HAL_UARTEx_RxEventCallback 中调用）
     * @param Size
     */
-    void RxCpltCallback(uint16_t size) {
+    void RxCpltCallback_InISR(uint16_t size) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     uint8_t bufIdx;
     // If freeQueue is empty this receiving will cover old index of RxBuffer.
-    if(freeQueue_Rx.pop(bufIdx)){
-        readQueue_Rx.push(curBufIndex_Rx);
+    if(freeQueue_Rx.pop_FromISR(bufIdx)){
+        readQueue_Rx.push_FromISR(curBufIndex_Rx);
         buffers_Rx[curBufIndex_Rx].uninitialized_resize(size);  //重新刷新大小
         curBufIndex_Rx = bufIdx;
-        if (notifyTask_ != nullptr) {
-            // 发送任务通知，唤醒处理任务
-            vTaskNotifyGiveFromISR(notifyTask_, &xHigherPriorityTaskWoken);
+        //emit
+//        emitFromISR(RxReceive_cfg,&xHigherPriorityTaskWoken);
+        if (RxReceive_cfg.task_h != nullptr && RxReceive_cfg.bitMask != 0) {
+            xTaskNotifyFromISR(RxReceive_cfg.task_h, RxReceive_cfg.bitMask, eSetBits, &xHigherPriorityTaskWoken);
         }
     }
     HAL_UARTEx_ReceiveToIdle_DMA(HUart, reinterpret_cast<uint8_t*>(buffers_Rx[curBufIndex_Rx].data()), RX_BufferSize); //start DMA receive
@@ -211,7 +207,7 @@ public:
      * @brief
      * @param slot
      */
-    void RxDisposeCallback(std::function<void(etl::string<RX_BufferSize>&)> slot){
+    void signal_RxComplete(std::function<void(etl::string<RX_BufferSize>&)> slot){
         while(!readQueue_Rx.empty()){
             uint8_t bufIdx;
             readQueue_Rx.pop(bufIdx);
@@ -219,8 +215,9 @@ public:
             freeQueue_Rx.push(bufIdx);
         }
     }
-
 };
+
+//using LUart = LkUart<>;
 
 // 静态成员初始化
 template<size_t TX_BufferSize, size_t TX_BufDepth, size_t RX_BufferSize, size_t RX_BufDepth>

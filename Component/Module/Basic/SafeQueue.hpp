@@ -31,7 +31,7 @@ public:
      * @param item
      * @return
      */
-    bool push_from_isr(const T& item) {
+    bool push_FromISR(const T& item) {
         // STM32 单核下，简单关闭中断即可保证绝对安全
         uint32_t mask = taskENTER_CRITICAL_FROM_ISR();
         if (queue.full()) {
@@ -43,14 +43,32 @@ public:
         return true;
     }
 
-    bool push(const T& item){
+    /**
+     * @brief this is safe push in task
+     * @param item
+     * @return
+     */
+    bool push(T& item){
         taskENTER_CRITICAL();
         if (queue.full()) {
-            taskENTER_CRITICAL();
+            taskEXIT_CRITICAL();
             return false;
         }
         queue.push(item);
-        taskENTER_CRITICAL();
+        taskEXIT_CRITICAL();
+        return true;
+    }
+
+    /**
+     * @brief normal push(isn't safe push)
+     * @param item
+     * @return
+     */
+    bool push_normal(const T& item){
+        if (queue.full()) {
+            return false;
+        }
+        queue.push(item);
         return true;
     }
 
@@ -71,11 +89,47 @@ public:
         return true;
     }
 
+    /**
+ * @brief 中断安全出队
+ * @param item
+ * @return
+ */
+    bool pop_FromISR(T& item) {
+        // STM32 单核下，简单关闭中断即可保证绝对安全
+        uint32_t mask = taskENTER_CRITICAL_FROM_ISR();
+        if (queue.empty()) {
+            taskEXIT_CRITICAL_FROM_ISR(mask);
+            return false;
+        }
+        item = queue.front();
+        queue.pop();
+        taskEXIT_CRITICAL_FROM_ISR(mask);
+        return true;
+    }
+
+    /**
+     * @brief normal pop(isn't safe push)
+     * @param item
+     * @return
+     */
+    bool pop_normal(T& item){
+        if (queue.empty()) {
+            return false;
+        }
+        item = queue.front();
+        queue.pop();
+        return true;
+    }
+
     bool empty(){
         taskENTER_CRITICAL();
         bool isempty = queue.empty();
         taskEXIT_CRITICAL();
         return isempty;
+    }
+
+    bool empty_normal(){
+        return queue.empty();
     }
 };
 
