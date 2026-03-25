@@ -29,7 +29,7 @@ class MPU6050 {
     static constexpr uint8_t GYRO_CONFIG_REG = 0x1B;
     static constexpr uint8_t GYRO_XOUT_H_REG = 0x43;
     static constexpr uint8_t MPU6050_ADDR = 0xD0;
-    static constexpr uint8_t MPU6050_TIME_OUT = 100;
+    static constexpr uint32_t MPU6050_TIME_OUT = 500;
     static constexpr double PI = 3.14159265358979323846;
     static constexpr double DEG_TO_RAD_COE = (PI / 180.0f);
     static constexpr double EULERANGLE_COE = 57.295779513082320876798154814105;

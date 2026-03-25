@@ -50,13 +50,14 @@ endif ()
 
 include_directories(${includes}
                     Component/UserApp Component/HardWare/OLED Component/HardWare/Motor Component/HardWare/IMU Component/Peripheral Component/Module/include
+                    Component/Module/Basic
 )
 
 add_definitions(${defines})
 
 file(GLOB_RECURSE SOURCES ${sources}
     "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*"
-    "Component/Peripheral/*.*" "Component/Module/include/etl/*.*"
+    "Component/Peripheral/*.*" "Component/Module/include/etl/*.*" "Component/Module/Basic/*.*"
     )
 
 set(LINKER_SCRIPT $${CMAKE_SOURCE_DIR}/${linkerScript})
