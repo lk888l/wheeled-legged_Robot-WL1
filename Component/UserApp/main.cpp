@@ -13,9 +13,11 @@
 
 /// cpp standard library include
 #include <cmath>
+#include "format"
 /// cpp etl include
 //#include "etl/memory.h"
 //#include "etl/pool.h"
+#include "etl/format.h"
 /// user library include
 #include "cpp_Interface.h"
 #include "main.h"
@@ -24,12 +26,12 @@
 ///cpp User library include
 #include "TB6612.h"
 #include "HallEncoder.h"
+#include "Servo.hpp"
 #include "MPU6050.h"
 #include "LkUart.hpp"
 #include "CtrlAlgorithm/LQR.hpp"
-#include "BasicObject.hpp"
 #include "TaskReactor.hpp"
-//
+//freeRTOS library include
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -37,10 +39,14 @@
 
 /* My variables define BEGIN */
 LkUart<> Uart1(&huart1);
+volatile bool isShowIMUData;
+volatile bool isShowMotorRAM;
 /* My variables define END */
 // freeRTOS variably define
 TaskHandle_t Handle_LEDBlinkFunc = nullptr;
+TaskHandle_t Handle_ServoControlFunc = nullptr;
 TaskHandle_t Handle_MotionControlFunc = nullptr;
+
 
 /*---------------------  define task function begin  ---------------------*/
 
@@ -49,18 +55,41 @@ TaskFunction_t LEDBlinkFunc(){
     Uart1.Start_DMAIT_Receive();
     t1.connect(&Uart1,&LkUart<>::signal_RxComplete,[](etl::string<128> &rxmes){
         Uart1.print("receive: {}\n",rxmes);
+        if(rxmes.starts_with("servo")){
+            uint16_t angle = 0, speed = 0;
+            const char* first = rxmes.data() + 6;
+            const char* last = rxmes.data() + rxmes.length();
+            auto res1 = std::from_chars(first, last, angle);
+            if (res1.ec == std::errc{}) {
+                // 3. 跳过空格解析第二个数字 (速度)
+                auto res2 = std::from_chars(res1.ptr + 1, last, speed);
+                if (res2.ec == std::errc{}) {
+                    // 4. 封装 32 位通知值并发送
+                    uint32_t notifyValue = ((angle & 0xFF) << 20) | (speed & 0xFFF);
+                    xTaskNotify(Handle_ServoControlFunc, notifyValue, eSetValueWithOverwrite);
+                }
+            }
+        } else if(rxmes.starts_with("showimuoff")){
+            isShowIMUData = false;
+        } else if (rxmes.starts_with("showimu")){
+            isShowIMUData = true;
+        } else if(rxmes.starts_with("showramoff")){
+            isShowMotorRAM = false;
+        } else if(rxmes.starts_with("showram")){
+            isShowMotorRAM = true;
+        }
     });
-    while (1){
-        t1.taskLoop();
-        Uart1.print("hello{}\n",123);
+
+    t1.taskLoop(pdMS_TO_TICKS(500),[](){
+//        Uart1.print("hello{}\n",123);
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    });
+    for(;;){
+
     }
-
 }
-/*---------------------  define task function begin  ---------------------*/
 
-
-
+/*---------------------  LQR task function begin  ---------------------*/
 TaskFunction_t MotionControlFunc(){
     ///  FreeRtos variable
     TickType_t xLastWakeTime;
@@ -94,11 +123,13 @@ TaskFunction_t MotionControlFunc(){
     double LQRPos_Left{};
     double LQRPos_Right{};
     xLastWakeTime = xTaskGetTickCount();        //get now system tick to delay a period
-    for(;;){
+    while(1){
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro);
 //        SendDataToUART1("%lf,%lf,%lf\n",IMU_Gyro[0],IMU_Gyro[1],IMU_Gyro[2]);
-//        SendDataToUART1("%lf,%lf,%lf\n",MAngle.Roll,MAngle.Pitch,MAngle.Yaw);
+        if(isShowIMUData) {
+            Uart1.print("{},{},{}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
+        }
         double LQR_Angle = MPU6050::DegTorad(MAngle.Pitch + 20.7);
         double LQR_Gyro = MPU6050::DegTorad(IMU_Gyro[2]);
         double RPM_Left = Enc_Left.getRPM();
@@ -118,9 +149,39 @@ TaskFunction_t MotionControlFunc(){
         NeededPWM_Left = TB6612::clamp(NeededPWM_Left,1000,-1000);
         NeededPWM_Right = TB6612::clamp(NeededPWM_Right,1000,-1000);
 //        SendDataToUART1("%d\n",NeededPWM_Right);
-//        SendDataToUART1("A: %f\tB: %f\n",RPM_Right,RPM_Left);
+        if(isShowMotorRAM){
+            Uart1.print("A: {}\tB: {}\n",RPM_Right,RPM_Left);
+        }
 //        TB6_wheel.setAVel_raw(NeededPWM_Right);
 //        TB6_wheel.setBVel_raw(NeededPWM_Left);
+    }
+}
+
+/*---------------------  Servo task function begin  ---------------------*/
+
+TaskFunction_t ServoControlFunc(){
+    Servo Ser_Lift(&htim9,TIM_CHANNEL_1,500,2500,180.0);
+    Servo Ser_Right(&htim9,TIM_CHANNEL_2,
+                    Servo::PhysicalToPulse(176.0f),
+                    Servo::PhysicalToPulse(4.0f),
+                    180.0);
+    Ser_Lift.Init();
+    Ser_Right.Init();
+    uint32_t notifiedValue = 0;
+    uint16_t targetAngle,moveSpeed;
+    while(1){
+        if(xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue, portMAX_DELAY ) == pdTRUE){
+            targetAngle = (uint16_t)((notifiedValue >> 20) & 0xFF); // 取高 8 位
+            moveSpeed = (uint16_t)(notifiedValue & 0xFFF);     // 取低 16 位
+            Uart1.print("servoTask: {}, {}\n",targetAngle,moveSpeed);
+            if(moveSpeed == 0){
+                Ser_Lift.setAngle_Immediate(static_cast<float>(targetAngle));
+                Ser_Right.setAngle_Immediate(static_cast<float>(targetAngle));
+            } else {
+                Ser_Lift.setAngle_Smooth(static_cast<float>(targetAngle),static_cast<float>(moveSpeed));
+                Ser_Right.setAngle_Smooth(static_cast<float>(targetAngle),static_cast<float>(moveSpeed));
+            }
+        }
     }
 }
 
@@ -130,10 +191,16 @@ void CPP_Main()
     BaseType_t xReturn = pdPASS;
     xReturn = xTaskCreate((TaskFunction_t)LEDBlinkFunc,
                            (const char*)"LEDBlink",
-                           (uint16_t)512,
+                           (uint16_t)1024,
                            (void*)NULL,
                            (UBaseType_t)28,
                            (TaskHandle_t*)&Handle_LEDBlinkFunc);
+    xReturn |= xTaskCreate((TaskFunction_t)ServoControlFunc,
+                          (const char*)"ServoControl",
+                          (uint16_t)256,
+                          (void*)NULL,
+                          (UBaseType_t)28,
+                          (TaskHandle_t*)&Handle_ServoControlFunc);
     xReturn |= xTaskCreate((TaskFunction_t)MotionControlFunc,
                            (const char*)"MotionControl",
                            (uint16_t)2500,

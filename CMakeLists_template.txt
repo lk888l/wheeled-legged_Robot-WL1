@@ -50,13 +50,13 @@ endif ()
 
 include_directories(${includes}
                     Component/UserApp Component/HardWare/OLED Component/HardWare/Motor Component/HardWare/IMU Component/Peripheral Component/Module/include
-                    Component/Module/Basic
+                    Component/Module/Basic Component/HardWare/Telecontrol
 )
 
 add_definitions(${defines})
 
 file(GLOB_RECURSE SOURCES ${sources}
-    "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*"
+    "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*" "Component/HardWare/Telecontrol/*.*"
     "Component/Peripheral/*.*" "Component/Module/include/etl/*.*" "Component/Module/Basic/*.*"
     )
 

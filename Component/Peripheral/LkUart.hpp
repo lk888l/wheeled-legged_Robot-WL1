@@ -4,6 +4,7 @@
   * @brief          : None
   * @attention      : None
   * @date           : 26-3-4
+  * @version        : v1.0
   *******************************************************************************/
 
 //#pragma once
@@ -15,7 +16,6 @@
 // stm-Hal library include
 #include "main.h"
 // freeRTOS library include
-#include "queue.h"
 // LK Library include
 #include "SafeQueue.hpp"
 #include "BasicObject.hpp"
@@ -194,10 +194,7 @@ public:
         buffers_Rx[curBufIndex_Rx].uninitialized_resize(size);  //重新刷新大小
         curBufIndex_Rx = bufIdx;
         //emit
-//        emitFromISR(RxReceive_cfg,&xHigherPriorityTaskWoken);
-        if (RxReceive_cfg.task_h != nullptr && RxReceive_cfg.bitMask != 0) {
-            xTaskNotifyFromISR(RxReceive_cfg.task_h, RxReceive_cfg.bitMask, eSetBits, &xHigherPriorityTaskWoken);
-        }
+        emitFromISR(RxReceive_cfg,&xHigherPriorityTaskWoken);
     }
     HAL_UARTEx_ReceiveToIdle_DMA(HUart, reinterpret_cast<uint8_t*>(buffers_Rx[curBufIndex_Rx].data()), RX_BufferSize); //start DMA receive
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);

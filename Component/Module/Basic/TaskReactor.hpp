@@ -78,11 +78,10 @@ public:
     /**
      * @brief
      */
-    inline void taskLoop() {
+    inline void taskLoop(TickType_t xTicksToWait =portMAX_DELAY, const std::function<void()>& func=nullptr) {
         uint32_t notifiedValue = 0;
-//        while (true) {
-            // portMAX_DELAY 意味着没有信号时任务完全挂起，不占用 CPU
-            if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue, pdMS_TO_TICKS(500)) == pdTRUE){
+        while (true) {
+            if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue, xTicksToWait) == pdTRUE){
                 for(uint8_t i=0;i<SlotGroup.size();i++){
                     if(notifiedValue & (1 << i)){
                         if (SlotGroup[i]) {
@@ -91,8 +90,9 @@ public:
                     }
                 }
             }
+            func();
         }
-//    }
+    }
 };
 
 
