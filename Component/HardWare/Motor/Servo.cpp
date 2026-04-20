@@ -48,6 +48,8 @@ void Servo::stop() {
 }
 
 bool Servo::setAngle_Immediate(float angle) {
+    if(Limit_Max_Angle!=0 && angle>Limit_Max_Angle)   angle = Limit_Max_Angle;
+    else if(angle<Limit_Min_Angle)  angle = Limit_Min_Angle;
     xTimerStop(xTimer, 0);          //stop soft timer to immediate execution
     setPWM_FromAngle(angle);
     CurrentAngle = TargetAngle = angle;
@@ -55,6 +57,11 @@ bool Servo::setAngle_Immediate(float angle) {
 }
 
 void Servo::setAngle_Smooth(float targetAngle, float speed) {
+    if(Limit_Max_Angle!=0 && targetAngle>Limit_Max_Angle)   targetAngle = Limit_Max_Angle;
+    else if(targetAngle<Limit_Min_Angle)  targetAngle = Limit_Min_Angle;
+    if(speed == 0){
+        setAngle_Immediate(targetAngle);
+    }
     TargetAngle = targetAngle;
     StepSize = speed * (UPDATE_PERIOD_MS / 1000.0f);
     xTimerStart(xTimer, 0);     // start soft timer

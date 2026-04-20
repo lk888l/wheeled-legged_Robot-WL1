@@ -64,19 +64,20 @@ bool MPU6050::Init() {
         * 7        |   -- Reserved --   |   -- Reserved --   | Reserved
         * </pre>
         */
-        if (M650_cfg.SampleRate >= 500) {
-            Data = 0x01; // 184Hz Bandwidth
-        } else if (M650_cfg.SampleRate >= 200) {
-            Data = 0x02; // 94Hz Bandwidth
-        } else if (M650_cfg.SampleRate >= 100) {
-            Data = 0x03; // 44Hz Bandwidth
-        } else if (M650_cfg.SampleRate >= 50) {
-            Data = 0x04; // 21Hz Bandwidth
-        } else if (M650_cfg.SampleRate >= 25) {
-            Data = 0x05; // 10Hz Bandwidth
-        } else {
-            Data = 0x06; // 5Hz Bandwidth
-        }
+//        if (M650_cfg.SampleRate >= 500) {
+//            Data = 0x01; // 184Hz Bandwidth
+//        } else if (M650_cfg.SampleRate >= 200) {
+//            Data = 0x02; // 94Hz Bandwidth
+//        } else if (M650_cfg.SampleRate >= 100) {
+//            Data = 0x03; // 44Hz Bandwidth
+//        } else if (M650_cfg.SampleRate >= 50) {
+//            Data = 0x04; // 21Hz Bandwidth
+//        } else if (M650_cfg.SampleRate >= 25) {
+//            Data = 0x05; // 10Hz Bandwidth
+//        } else {
+//            Data = 0x06; // 5Hz Bandwidth
+//        }
+        Data = 0x00;
         HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
 
         // Set accelerometer configuration in ACCEL_CONFIG Register
