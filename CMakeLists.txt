@@ -15,7 +15,7 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 # project settings
 project(WL1_F411CEU6 C CXX ASM)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 11)
 
 #Uncomment for hardware floating point
@@ -50,14 +50,15 @@ else ()
 endif ()
 
 include_directories(Core/Inc Drivers/STM32F4xx_HAL_Driver/Inc Drivers/STM32F4xx_HAL_Driver/Inc/Legacy Drivers/CMSIS/Device/ST/STM32F4xx/Include Drivers/CMSIS/Include Middlewares/Third_Party/FreeRTOS/Source/include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
-                    Component/UserApp Component/HardWare/OLED Component/HardWare/Motor Component/HardWare/IMU
+                    Component/UserApp Component/HardWare/OLED Component/HardWare/Motor Component/HardWare/IMU Component/Peripheral Component/Module/include
+                    Component/Module/Basic Component/HardWare/Telecontrol
 )
 
 add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F411xE)
 
 file(GLOB_RECURSE SOURCES "Core/*.*" "Middlewares/*.*" "Drivers/*.*"
-    "Component/UserApp/*.*" "Component/HardWare/OLED/*.*"
-    "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*"
+    "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*" "Component/HardWare/Telecontrol/*.*"
+    "Component/Peripheral/*.*" "Component/Module/include/etl/*.*" "Component/Module/Basic/*.*"
     )
 
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F411CEUX_FLASH.ld)

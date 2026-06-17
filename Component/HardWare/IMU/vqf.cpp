@@ -635,9 +635,9 @@ const VQFState& VQF::getState() const
     return state;
 }
 
-void VQF::setState(const VQFState& _state)
+void VQF::setState(const VQFState& state)
 {
-    this->state = _state;
+    this->state = state;
 }
 
 void VQF::resetState()

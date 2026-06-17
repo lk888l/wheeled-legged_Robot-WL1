@@ -52,8 +52,8 @@ static signed char pcWriteBuffer[500];
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 64 * 4,
+  .priority = (osPriority_t) osPriorityLow,
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,6 +122,8 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+    CPP_Main();
+//    vTaskDelete(defaultTaskHandle);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -141,13 +143,12 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
-    CPP_Main();
+//    CPP_Main();
     vTaskDelay(1000);
     vTaskDelete(defaultTaskHandle);
-  while(1){
-      vTaskDelay(300);
-  }
+    while(1){
 
+    }
   /* USER CODE END StartDefaultTask */
 }
 

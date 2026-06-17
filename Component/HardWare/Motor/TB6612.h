@@ -23,7 +23,7 @@ public:
     /**
      * @brief
      */
-    typedef struct{
+    struct InitConfig_t{
         TIM_HandleTypeDef*  Htim;          /*  PWM timer handle such as: &htim2*/
         uint32_t            AChannel;      /*  */
         uint32_t            BChannel;      /*  */
@@ -35,7 +35,7 @@ public:
         uint16_t            B1GPIO_Pin;   /*  */
         GPIO_TypeDef*       B2GPIO_Port;  /*  */
         uint16_t            B2GPIO_Pin;   /*  */
-    }InitConfig_t;
+    };
 
     enum class OutPort : uint8_t {
         A = 0x01,
@@ -52,6 +52,8 @@ private:
     InitConfig_t TB6_Cfg{};
     char ADIR_Mask{1};
     char BDIR_Mask{1};
+    uint16_t ADeadZone{};
+    uint16_t BDeadZone{};
     /// private member function
     void setADirection(uint8_t _dir);
     void setBDirection(uint8_t _dir);
@@ -66,8 +68,21 @@ public:
     void setAPWM(uint16_t _value);
     void setBPWM(uint16_t _value);
     void setDirection_Cfg(uint8_t target, Direction dirParam);
+    void setA_DeadZone(uint16_t _value);
+    void setB_DeadZone(uint16_t _value);
     void setAVel_raw(int16_t _value);
     void setBVel_raw(int16_t _value);
+
+    /*
+     * Limit value
+     */
+    template <typename T>
+    static inline T clamp(T& value,const T& max_val,const T& min_val) {
+        // 核心逻辑：先和最小值比（取大的），再和最大值比（取小的）
+        return (value < min_val) ? min_val : (value > max_val) ? max_val : value;
+    }
+
+
 
 #ifdef EN_SETVEL_PERCENT
     bool setAVel_percent(float _percent);

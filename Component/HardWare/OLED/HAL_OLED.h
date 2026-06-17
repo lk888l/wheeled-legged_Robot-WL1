@@ -1,6 +1,10 @@
 #ifndef __OLED_H
 #define __OLED_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+/*--------------------------------- c ----------------------------*/
 #include <stdint.h>
 #include "OLED_Data.h"
 
@@ -61,6 +65,12 @@ void OLED_DrawEllipse(uint8_t X, uint8_t Y, uint8_t A, uint8_t B, uint8_t IsFill
 void OLED_DrawArc(uint8_t X, uint8_t Y, uint8_t Radius, int16_t StartAngle, int16_t EndAngle, uint8_t IsFilled);
 
 /*********************函数声明*/
+
+#ifdef __cplusplus
+}
+/*------------------------------------ c++ ---------------------------*/
+//#include "button.h"		//demo function
+#endif //__cplusplus
 
 #endif
 
