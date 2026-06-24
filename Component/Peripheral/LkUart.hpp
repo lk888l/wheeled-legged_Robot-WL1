@@ -142,7 +142,7 @@ public:
     }
 
     /**
-     * @brief
+     * @brief 绑定订阅任务
      * @param signal
      */
     template<typename SignalPtr>
