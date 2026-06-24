@@ -50,7 +50,7 @@ volatile bool isShowMotorRAM;
 // angle-pid
 volatile float Angle_kp{70.0f};
 volatile float Angle_ki{};
-volatile float Angle_kd{51.0f};
+volatile float Angle_kd{60.0f};
 volatile float Angle_bias{12.6f};    //静态角度偏差（向前则减小）
 // velocity-pid
 volatile float Velocity_kp{0.05f};
@@ -283,6 +283,16 @@ TaskFunction_t LEDBlinkFunc(){
                     Velocity_Target = target_v;
                 }
             }},
+            {"R",[](etl::string_view args){
+                float target_v{},target_d{},target_h{},target_r{};
+                if(TaskReactor::parseStrArg(args,target_d) && TaskReactor::parseStrArg(args,target_v) &&
+                    TaskReactor::parseStrArg(args,target_r) && TaskReactor::parseStrArg(args,target_h)){
+                    Differ_Target = target_d;
+                    Velocity_Target = target_v;
+                    Roll_Target = target_r;
+                    Target_height = target_h;
+                }
+            }},
             {"anglebias",[](etl::string_view args){
                 float bias{};
                 if(TaskReactor::parseStrArg(args,bias)){
@@ -449,7 +459,7 @@ TaskFunction_t MotionControlFunc_PID(){
     //  PID
     PID Angle_PID(70.0f,0,51.0f,-1000,1000,-100,100);
     PID Velocity_PID(0.04,0.006,0,-10,10,-100,100);
-    PID Differ_PID(0,0,0,-200,200,-100,100);
+    PID Differ_PID(0,0,0,-500,500,-100,100);
     PID AdaptY_PID(0,0,0,-78,78,-100,100);
     float Differ_RPM, Angle_target{},DifferPWM{};
     //sensor
