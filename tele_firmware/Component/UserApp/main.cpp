@@ -13,7 +13,6 @@
 
 /// cpp standard library include
 #include <cmath>
-#include <atomic>
 /// cpp etl include
 //#include "etl/memory.h"
 //#include "etl/pool.h"
@@ -24,12 +23,14 @@
 #include "main.h"
 #include "usart.h"
 #include "spi.h"
-#include "HAL_OLED.h"
+#include "RemoteDisplay.hpp"
+#include "RemoteControlState.hpp"
 ///cpp User library include
 #include "TB6612.h"
 #include "NRF24L01P.hpp"
 #include "Joystick.hpp"
 #include "LkUart.hpp"
+#include "Button.hpp"
 #include "TaskReactor.hpp"
 #include "CtrlAlgorithm/LegKinematics.hpp"
 //freeRTOS library include
@@ -70,13 +71,9 @@ volatile float Target_height{44.5f};
 volatile float Roll_Target{};
 volatile float LWheel_x{};
 volatile float RWheel_x{};
-//
-volatile float joyv;
-volatile float joyd;
-volatile float joyh;
-volatile float joyr;
 /// telecontrol
 NRF24L01P nRF(&hspi2,GPIOA,GPIO_PIN_8,GPIOB,GPIO_PIN_12,GPIOA,GPIO_PIN_12);
+RemoteControlState RemoteCommands;
 volatile bool isNRF_print{};
 const volatile float* NRF_print[4]{reinterpret_cast<const volatile float *>(&EAngle_print[0]),
                                    reinterpret_cast<const volatile float *>(&EAngle_print[1]),
@@ -85,7 +82,7 @@ const volatile float* NRF_print[4]{reinterpret_cast<const volatile float *>(&EAn
 Joystick V_Joy(0,4095,2048,300,-100,100);
 Joystick D_Joy(0,4095,2048,300,-100,100);
 Joystick R_Joy(0,4095,2048,300,-18,18);
-Joystick H_Joy(0,4095,2048,300,10.5,78.5);
+Joystick H_Joy(0,4095,2048,300,44.5,78.5);
 /* My variables define END */
 
 // freeRTOS variably define
@@ -93,6 +90,7 @@ TaskHandle_t Handle_LEDBlinkFunc = nullptr;
 TaskHandle_t Handle_ServoControlFunc = nullptr;
 TaskHandle_t Handle_MotionControlFunc = nullptr;
 TaskHandle_t Handle_GPIOReadFunc = nullptr;
+TaskHandle_t Handle_RemoteDisplayFunc = nullptr;
 
 
 /*---------------------  define task function begin  ---------------------*/
@@ -340,11 +338,13 @@ TaskFunction_t LEDBlinkFunc(){
             Uart1.print("nRF: send fail\n");
         }
     });
-    t1.connect(&V_Joy,&Joystick::signal_complete,[&CMD_que]{
-        char buffer[32];
-        if(joyh<44.5){joyh=44.5;}
-        snprintf(buffer, sizeof(buffer), "nrfsend R %.1f %.1f %.1f %.1f", joyd, -joyv, joyr, joyh);
-        if(!CMD_que.full()) CMD_que.push(etl::string<32>(buffer));
+    t1.connect(&V_Joy,&Joystick::signal_complete,[&NRF_Tx_Num]{
+        char buffer[NRF24L01P::PACKET_WIDTH]{};
+        const auto command = RemoteCommands.snapshot();
+        snprintf(buffer, sizeof(buffer), "R %.1f %.1f %.1f %.1f",
+                 command.turn, -command.speed, command.roll_degrees, command.leg_height_mm);
+        NRF24L01P::str_touint8(etl::string_view(buffer), NRF_Tx_Num);
+        nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
     });
     t1.taskLoop(pdMS_TO_TICKS(100),[&CMD_que,&Uart_CMD,&cmdMap](){
         while(!CMD_que.empty()){
@@ -383,8 +383,7 @@ TaskFunction_t LEDBlinkFunc(){
 TaskFunction_t RemoteControlFunc(){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xFrequency = pdMS_TO_TICKS(50); //
-    uint16_t g_iAdcx[4];
-    OLED_Init();
+    uint16_t g_iAdcx[4]{};
     while(1){
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)g_iAdcx, sizeof(g_iAdcx) / sizeof(g_iAdcx[0]));
         float vlocity = V_Joy.get_converted_value(g_iAdcx[3]);
@@ -393,88 +392,72 @@ TaskFunction_t RemoteControlFunc(){
         float catroll = R_Joy.get_converted_value(g_iAdcx[0]);
         Uart1.print("{} {} {} {}\n",vlocity,differ,high,catroll);
 //        Uart1.print("{} {} {} {}\n",g_iAdcx[3],g_iAdcx[2],g_iAdcx[1],g_iAdcx[0]);
-        joyv = vlocity;
-        joyd = differ;
-        joyh = high;
-        joyr = catroll;
+        RemoteCommands.updateFromJoysticks(vlocity, differ, high, catroll);
         V_Joy.Complete_notify();
         //绝对延时，保证周期稳定
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
-TaskFunction_t GPIO_read(){
+void RemoteDisplayFunc(void*)
+{
+    RemoteDisplay display;
+    display.initialize();
 
-    while(1)
-    {
-        // 按键按下
-        if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
-        {
-            vTaskDelay(pdMS_TO_TICKS(20));  // 软件消抖
-            if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
-            {
-                // 等待松手
-                while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                }
-
-                /******** 按键单击处理 ********/
-                // 在这里写按键按下逻辑
-                Uart1.print("A0: click\n");
-            }
-        }
-        if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET)
-        {
-            vTaskDelay(pdMS_TO_TICKS(20));  // 软件消抖
-            if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET)
-            {
-                // 等待松手
-                while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                }
-
-                /******** 按键单击处理 ********/
-                // 在这里写按键按下逻辑
-                Uart1.print("B0: click\n");
-            }
-        }
-        if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET)
-        {
-            vTaskDelay(pdMS_TO_TICKS(20));  // 软件消抖
-            if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET)
-            {
-                // 等待松手
-                while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                }
-
-                /******** 按键单击处理 ********/
-                // 在这里写按键按下逻辑
-                Uart1.print("B1: click\n");
-            }
-        }
-//        if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET)
-//        {
-//            vTaskDelay(pdMS_TO_TICKS(20));  // 软件消抖
-//            if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET)
-//            {
-//                // 等待松手
-//                while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET)
-//                {
-//                    vTaskDelay(pdMS_TO_TICKS(10));
-//                }
-//
-//                /******** 按键单击处理 ********/
-//                // 在这里写按键按下逻辑
-//                Uart1.print("B2: click\n");
-//            }
-//        }
-        // 普通扫描间隔，降低CPU占用
-        vTaskDelay(pdMS_TO_TICKS(10));
+    TickType_t last_wake_time = xTaskGetTickCount();
+    constexpr TickType_t refresh_period = pdMS_TO_TICKS(100);
+    while (true) {
+        const auto command = RemoteCommands.snapshot();
+        const RemoteDisplayState state{
+            .speed = command.speed,
+            .turn = command.turn,
+            .leg_height_mm = command.leg_height_mm,
+            .roll_degrees = command.roll_degrees,
+            .leg_locked = command.leg_locked,
+            .roll_locked = command.roll_locked,
+        };
+        display.render(state);
+        vTaskDelayUntil(&last_wake_time, refresh_period);
     }
+}
+
+void GPIO_read(void*){
+    TaskReactor reactor;
+    Button legButton;
+    Button rollButton;
+
+    bool connected = true;
+    connected &= reactor.connect(&legButton, &Button::signal_click, [] {
+        if (RemoteCommands.toggleLegLock()) {
+            Uart1.print("LEG: LOCK\n");
+        } else {
+            Uart1.print("LEG: LIVE\n");
+        }
+    });
+    connected &= reactor.connect(&rollButton, &Button::signal_click, [] {
+        if (RemoteCommands.toggleRollLock()) {
+            Uart1.print("ROLL: LOCK\n");
+        } else {
+            Uart1.print("ROLL: LIVE\n");
+        }
+    });
+    connected &= reactor.connect(&legButton, &Button::signal_long_press, [] {
+        Uart1.print("PB0: long press, stack {} words\n", uxTaskGetStackHighWaterMark(nullptr));
+    });
+    connected &= reactor.connect(&rollButton, &Button::signal_long_press, [] {
+        Uart1.print("PB1: long press, stack {} words\n", uxTaskGetStackHighWaterMark(nullptr));
+    });
+
+    if (!connected) {
+        Uart1.print("Button reactor: connect failed\n");
+    }
+
+    reactor.taskLoop(pdMS_TO_TICKS(5), nullptr, [&legButton, &rollButton] {
+        const std::uint32_t portState = GPIOB->IDR;
+        const TickType_t now = xTaskGetTickCount();
+        legButton.sample((portState & GPIO_PIN_0) == 0U, now);
+        rollButton.sample((portState & GPIO_PIN_1) == 0U, now);
+    });
 }
 
 void CPP_Main()
@@ -487,18 +470,30 @@ void CPP_Main()
                            (void*)NULL,
                            (UBaseType_t)28,
                            (TaskHandle_t*)&Handle_LEDBlinkFunc);
-    xReturn |= xTaskCreate((TaskFunction_t)RemoteControlFunc,
-                           (const char*)"RemoteControl",
-                           (uint16_t)256,
-                           (void*)NULL,
-                           (UBaseType_t)28,
-                           (TaskHandle_t*)&Handle_ServoControlFunc);
-    xReturn |= xTaskCreate((TaskFunction_t)GPIO_read,
-                           (const char*)"GPIORead",
-                           (uint16_t)512,
-                           (void*)NULL,
-                           (UBaseType_t)25,
-                           (TaskHandle_t*)&Handle_GPIOReadFunc);
+    if (xTaskCreate((TaskFunction_t)RemoteControlFunc,
+                    (const char*)"RemoteControl",
+                    (uint16_t)256,
+                    (void*)NULL,
+                    (UBaseType_t)28,
+                    (TaskHandle_t*)&Handle_ServoControlFunc) != pdPASS) {
+        xReturn = pdFAIL;
+    }
+    if (xTaskCreate(GPIO_read,
+                    (const char*)"GPIORead",
+                    (uint16_t)512,
+                    (void*)NULL,
+                    (UBaseType_t)12,
+                    (TaskHandle_t*)&Handle_GPIOReadFunc) != pdPASS) {
+        xReturn = pdFAIL;
+    }
+    if (xTaskCreate(RemoteDisplayFunc,
+                    "RemoteDisplay",
+                    512,
+                    nullptr,
+                    10,
+                    &Handle_RemoteDisplayFunc) != pdPASS) {
+        xReturn = pdFAIL;
+    }
 
     if(pdPASS == xReturn){
         Uart1.print("CPPMain: success\n");

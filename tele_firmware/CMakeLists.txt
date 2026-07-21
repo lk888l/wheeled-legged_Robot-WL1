@@ -1,79 +1,75 @@
-#此文件从模板自动生成! 请勿更改!
-set(CMAKE_SYSTEM_NAME Generic)
-set(CMAKE_SYSTEM_VERSION 1)
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.22)
 
-# specify cross-compilers and tools
-set(CMAKE_C_COMPILER arm-none-eabi-gcc)
-set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
-set(CMAKE_ASM_COMPILER  arm-none-eabi-gcc)
-set(CMAKE_AR arm-none-eabi-ar)
-set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
-set(CMAKE_OBJDUMP arm-none-eabi-objdump)
-set(SIZE arm-none-eabi-size)
-set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-
-# project settings
-project(WL1_F411CEU6_Tele C CXX ASM)
-set(CMAKE_CXX_STANDARD 23)
+# This file is generated only once by STM32CubeMX and is intended to be edited.
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 
-#Uncomment for hardware floating point
-add_compile_definitions(ARM_MATH_CM4;ARM_MATH_MATRIX_CHECK;ARM_MATH_ROUNDING)
-add_compile_options(-mfloat-abi=hard -mfpu=fpv4-sp-d16)
-add_link_options(-mfloat-abi=hard -mfpu=fpv4-sp-d16)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
 
-#Uncomment for software floating point
-#add_compile_options(-mfloat-abi=soft)
+set(CMAKE_PROJECT_NAME WL1_F411CEU6_Tele)
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
-add_compile_options(-mcpu=cortex-m4 -mthumb -mthumb-interwork)
-add_compile_options(-ffunction-sections -fdata-sections -fno-common -fmessage-length=0)
+project(${CMAKE_PROJECT_NAME})
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-# uncomment to mitigate c++17 absolute addresses warnings
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-register")
+enable_language(C CXX ASM)
+add_executable(${CMAKE_PROJECT_NAME})
 
-# Enable assembler files preprocessing
-add_compile_options($<$<COMPILE_LANGUAGE:ASM>:-x$<SEMICOLON>assembler-with-cpp>)
+# STM32CubeMX generated sources, include paths, definitions and middleware.
+add_subdirectory(cmake/stm32cubemx)
 
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    message(STATUS "Maximum optimization for speed")
-    add_compile_options(-Ofast)
-elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-    message(STATUS "Maximum optimization for speed, debug info included")
-    add_compile_options(-Ofast -g)
-elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "MinSizeRel")
-    message(STATUS "Maximum optimization for size")
-    add_compile_options(-Os)
-else ()
-    message(STATUS "Minimal optimization, debug info included")
-    add_compile_options(-Og -g)
-endif ()
-
-include_directories(Core/Inc Drivers/STM32F4xx_HAL_Driver/Inc Drivers/STM32F4xx_HAL_Driver/Inc/Legacy Drivers/CMSIS/Device/ST/STM32F4xx/Include Drivers/CMSIS/Include Middlewares/Third_Party/FreeRTOS/Source/include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
-                    Component/UserApp Component/HardWare/OLED Component/HardWare/Motor Component/HardWare/IMU Component/Peripheral Component/Module/include
-                    Component/Module/Basic Component/HardWare/Telecontrol
+# Application and board-support code maintained outside the CubeMX generated tree.
+file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cxx"
 )
 
-add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F411xE)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
 
-file(GLOB_RECURSE SOURCES "Core/*.*" "Middlewares/*.*" "Drivers/*.*"
-    "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*" "Component/HardWare/Telecontrol/*.*"
-    "Component/Peripheral/*.*" "Component/Module/include/etl/*.*" "Component/Module/Basic/*.*"
-    )
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    Component/UserApp
+    Component/HardWare/OLED
+    Component/HardWare/Motor
+    Component/HardWare/Telecontrol
+    Component/Peripheral
+    Component/Module/include
+    Component/Module/Basic
+)
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F411CEUX_FLASH.ld)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    ARM_MATH_CM4
+    ARM_MATH_MATRIX_CHECK
+    ARM_MATH_ROUNDING
+)
 
-add_link_options(-Wl,-gc-sections,--print-memory-usage,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map)
-add_link_options(-mcpu=cortex-m4 -mthumb -mthumb-interwork)
-add_link_options(-T ${LINKER_SCRIPT})
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+    -fno-common
+    -fmessage-length=0
+)
 
-add_executable(${PROJECT_NAME}.elf ${SOURCES} ${LINKER_SCRIPT})
+add_subdirectory(ThirdParty/u8g2)
 
-set(HEX_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.hex)
-set(BIN_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.bin)
+# Remove an invalid implicit library that can be injected by some toolchains.
+list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 
-add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${PROJECT_NAME}.elf> ${HEX_FILE}
-        COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${PROJECT_NAME}.elf> ${BIN_FILE}
-        COMMENT "Building ${HEX_FILE}
-Building ${BIN_FILE}")
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    stm32cubemx
+    u8g2
+)
+
+set(HEX_FILE "${PROJECT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex")
+set(BIN_FILE "${PROJECT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin")
+
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${HEX_FILE}
+    COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${BIN_FILE}
+    COMMENT "Generating ${HEX_FILE} and ${BIN_FILE}"
+)
