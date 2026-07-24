@@ -100,7 +100,6 @@ TaskFunction_t LEDBlinkFunc(){
     TaskReactor::strCMD_t Uart_CMD;
     uint8_t NRF_Tx_Num[NRF24L01P::PACKET_WIDTH]{};
     uint8_t NRF_Rx_Num[NRF24L01P::PACKET_WIDTH]{};
-    etl::string_view NRF_TxStr = "NRF: 1\n";
     etl::string_view NRF_RxStr{};
     etl::unordered_map<etl::string_view,CommandHandler,25,57> cmdMap = {
 //            {"servo", [](etl::string_view args) {
@@ -304,8 +303,10 @@ TaskFunction_t LEDBlinkFunc(){
     };
     etl::queue<etl::string<32>,4> CMD_que;
     /// Init NRF
-    nRF.Init();
-    nRF.start_RxMode();
+    bool radioReady = nRF.Init() && nRF.start_RxMode();
+    if (!radioReady) {
+        Uart1.print("nRF: init failed, retrying\n");
+    }
     /// connect Uart1
     Uart1.Start_DMAIT_Receive();
     t1.connect(&Uart1,&LkUart<>::signal_RxComplete,[&Uart_CMD,&cmdMap,&CMD_que](etl::string<128> &rxmes){
@@ -338,15 +339,7 @@ TaskFunction_t LEDBlinkFunc(){
             Uart1.print("nRF: send fail\n");
         }
     });
-    t1.connect(&V_Joy,&Joystick::signal_complete,[&NRF_Tx_Num]{
-        char buffer[NRF24L01P::PACKET_WIDTH]{};
-        const auto command = RemoteCommands.snapshot();
-        snprintf(buffer, sizeof(buffer), "R %.1f %.1f %.1f %.1f",
-                 command.turn, -command.speed, command.roll_degrees, command.leg_height_mm);
-        NRF24L01P::str_touint8(etl::string_view(buffer), NRF_Tx_Num);
-        nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
-    });
-    t1.taskLoop(pdMS_TO_TICKS(100),[&CMD_que,&Uart_CMD,&cmdMap](){
+    t1.taskLoop(pdMS_TO_TICKS(50),[&CMD_que,&Uart_CMD,&cmdMap](){
         while(!CMD_que.empty()){
             auto cmd = CMD_que.front();
             CMD_que.pop();
@@ -364,14 +357,41 @@ TaskFunction_t LEDBlinkFunc(){
             }
         }
     },
-[&NRF_Tx_Num,&NRF_TxStr](){
-//        Uart1.print("hello{}\n",123);
+[&NRF_Tx_Num,&radioReady](){
+        static std::uint8_t recoveryTicks = 0U;
+        if (!radioReady) {
+            if (++recoveryTicks < 20U) {
+                return;
+            }
+            recoveryTicks = 0U;
+            radioReady = nRF.Init() && nRF.start_RxMode();
+            if (!radioReady) {
+                return;
+            }
+            Uart1.print("nRF: recovered\n");
+        }
+
         if(isNRF_print){
             NRF24L01P::args_touint8s(NRF_Tx_Num,NRF_print);
-            nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
+        } else {
+            char buffer[NRF24L01P::PACKET_WIDTH]{};
+            const auto command = RemoteCommands.snapshot();
+            const int length = snprintf(buffer, sizeof(buffer), "R %.1f %.1f %.1f %.1f",
+                                        command.turn, -command.speed,
+                                        command.roll_degrees, command.leg_height_mm);
+            if (length <= 0 || length >= static_cast<int>(sizeof(buffer))) {
+                Uart1.print("nRF: command format failed\n");
+                return;
+            }
+            NRF24L01P::str_touint8(
+                etl::string_view(buffer, static_cast<std::size_t>(length)), NRF_Tx_Num);
         }
-        NRF24L01P::args_touint8s(NRF_Tx_Num,NRF_print);
-//        etl::string_view debugargs(reinterpret_cast<const char*>(NRF_Tx_Num),32);
+
+        if (!nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH)) {
+            radioReady = false;
+            recoveryTicks = 0U;
+            Uart1.print("nRF: SPI send failed\n");
+        }
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     });
     for(;;){
@@ -393,7 +413,6 @@ TaskFunction_t RemoteControlFunc(){
         Uart1.print("{} {} {} {}\n",vlocity,differ,high,catroll);
 //        Uart1.print("{} {} {} {}\n",g_iAdcx[3],g_iAdcx[2],g_iAdcx[1],g_iAdcx[0]);
         RemoteCommands.updateFromJoysticks(vlocity, differ, high, catroll);
-        V_Joy.Complete_notify();
         //绝对延时，保证周期稳定
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }

@@ -278,6 +278,18 @@ bool NRF24L01P::start_TxMode() {
 }
 
 bool NRF24L01P::send(const uint8_t *data, uint8_t length) {
+    if (data == nullptr || length == 0U) {
+        return false;
+    }
+    if (length > PACKET_WIDTH) {
+        length = PACKET_WIDTH;
+    }
+
+    // Leave active RX before touching the TX FIFO. The previous code wrote
+    // W_TX_PAYLOAD while CE could still be high in PRX mode, which is timing
+    // sensitive once other RTOS tasks (OLED/GPIO) are running.
+    write_ce(0U);
+
     bool isSuccess;
     uint8_t command = CMD_W_TX_PAYLOAD;
     csLow();
