@@ -1,220 +1,92 @@
-/********************************************************************************
-  * @file           : NRF24L01P.hpp
-  * @author         : Luka
-  * @brief          : None
-  * @attention      : None
-  * @date           : 26-3-27
-  *******************************************************************************/
-
-#ifdef __GNUC__
 #pragma once
-#endif //__GNUC__
-#ifndef __NRF24L01P_HPP
-#define __NRF24L01P_HPP
 
-//stm-hal library include
-#include <string_view>
+#include <array>
+#include <cstdint>
+
 #include "main.h"
-//User-lk library include
-#include "BasicObject.hpp"
-#include "etl/string_view.h"
-//freeRTOS variable define
+#include "FreeRTOS.h"
 #include "semphr.h"
 
+class NRF24L01P final {
+public:
+    static constexpr std::uint8_t packet_width = 32U;
 
-class NRF24L01P : BasicObject{
-public:
-    // SPI Commands [cite: 704, 705, 707, 709, 711]
-    static constexpr int CMD_R_REGISTER   =       0x00;
-    static constexpr int CMD_W_REGISTER   =       0x20;
-    static constexpr int CMD_R_RX_PAYLOAD =       0x61;
-    static constexpr int CMD_W_TX_PAYLOAD =       0xA0;
-    static constexpr int CMD_FLUSH_TX     =       0xE1;
-    static constexpr int CMD_FLUSH_RX     =       0xE2;
-    static constexpr int CMD_REUSE_TX_PL  =       0xE3;
-    static constexpr int CMD_R_RX_PL_WID  =       0x60;
-    static constexpr int CMD_NOP          =       0xFF;
-    // Register Map [cite: 770, 772, 774, 775, 781, 783, 799, 807, 809, 817]
-    static constexpr int REG_CONFIG      =        0x00;
-    static constexpr int REG_EN_AA       =        0x01;
-    static constexpr int REG_EN_RXADDR   =        0x02;
-    static constexpr int REG_SETUP_AW    =        0x03;
-    static constexpr int REG_SETUP_RETR  =        0x04;
-    static constexpr int REG_RF_CH       =        0x05;
-    static constexpr int REG_RF_SETUP    =        0x06;
-    static constexpr int REG_STATUS      =        0x07;
-    static constexpr int REG_OBSERVE_TX  =        0x08;
-    static constexpr int REG_RPD         =        0x09;
-    static constexpr int REG_RX_ADDR_P0  =        0x0A;
-    static constexpr int REG_RX_ADDR_P1  =        0x0B;
-    static constexpr int REG_RX_ADDR_P2  =        0x0C;
-    static constexpr int REG_RX_ADDR_P3  =        0x0D;
-    static constexpr int REG_RX_ADDR_P4  =        0x0E;
-    static constexpr int REG_RX_ADDR_P5  =        0x0F;
-    static constexpr int REG_TX_ADDR     =        0x10;
-    static constexpr int REG_RX_PW_P0    =        0x11;
-    static constexpr int REG_RX_PW_P1    =        0x12;
-    static constexpr int REG_RX_PW_P2    =        0x13;
-    static constexpr int REG_RX_PW_P3    =        0x14;
-    static constexpr int REG_RX_PW_P4    =        0x15;
-    static constexpr int REG_RX_PW_P5    =        0x16;
-    static constexpr int REG_FIFO_STATUS =        0x17;
-    static constexpr int REG_DYNPD       =        0x1C;
-    static constexpr int REG_FEATURE     =        0x1D;
-    /// User define
-    static constexpr uint8_t PACKET_WIDTH =       32;
-public:
-    /**
-     * @brief nRF24L01+ STATUS (0x07) 寄存器结构体
-     * 使用位域直接映射 8-bit 寄存器内容
-     */
-    struct Status_t{
-        uint8_t TX_FULL {};  // [位0] TX FIFO 满标志。1: 已满；0: 尚有空间。
-        uint8_t RX_P_NO {};  // [位1-3] 接收数据通道号。000-101 表示通道0-5；110 未使用；111 表示 RX FIFO 为空。
-        uint8_t MAX_RT  {};  // [位4] 达到最大重发次数中断。若此位为1，必须手动清除才能继续通信。
-        uint8_t TX_DS   {};  // [位5] 数据发送完成中断（收到 ACK 后置位）。
-        uint8_t RX_DR   {};  // [位6] 收到有效数据中断。
+    struct Status {
+        bool tx_fifo_full = false;
+        std::uint8_t rx_pipe = 7U;
+        bool max_retries = false;
+        bool tx_sent = false;
+        bool rx_ready = false;
     };
 
-    NRF24L01P(SPI_HandleTypeDef* hspi,
-              GPIO_TypeDef* csPort, uint16_t csPin,
-              GPIO_TypeDef* cePort, uint16_t cePin,
-              GPIO_TypeDef* irqPort, uint16_t irqPin);
-    // Initialization and Configuration
-    bool Init();
-    SPI_HandleTypeDef* getSPIHandle();
-    uint16_t getIRQGPIOPort();
-    bool setChannel(uint8_t channel);
-    bool setPALevel(uint8_t level);
-    bool setDataRate(uint8_t rate);
-    bool setRX_Addr(uint8_t pipeNum,uint8_t address[5]);
-    bool setRX_PW(uint8_t pipeNum, uint8_t size);
-    bool setTX_Addr(uint8_t address[5]);
+    NRF24L01P(
+        SPI_HandleTypeDef* spi,
+        GPIO_TypeDef* chip_select_port,
+        std::uint16_t chip_select_pin,
+        GPIO_TypeDef* chip_enable_port,
+        std::uint16_t chip_enable_pin,
+        GPIO_TypeDef* irq_port,
+        std::uint16_t irq_pin) noexcept;
 
-    // Operating Modes [cite: 320, 354, 342]
-//    void startListening();
-//    void stopListening();
-    // Communication
-    bool openReadingPipe(uint8_t pipe, uint8_t* address);
-    bool PowerDown();
-    bool standbyI();
-    bool start_RxMode();
-    bool start_TxMode();
-    bool send(const uint8_t* data, uint8_t length);
-    bool getStatus(Status_t &status);
-    bool setStatus(uint8_t data);
-    bool tryReceive(uint8_t* data, uint8_t length = PACKET_WIDTH);
-    bool flushRx();
-    bool flushTx();
+    [[nodiscard]] bool initialize();
+    [[nodiscard]] bool startReceive();
+    [[nodiscard]] bool send(const std::uint8_t* data, std::uint8_t length);
+    [[nodiscard]] bool receive(std::uint8_t* data, std::uint8_t length = packet_width);
+    [[nodiscard]] bool handleIrq(Status& status);
 
-    //signal bindReactor
-    template<typename SignalPtr>
-    bool bindReactor(SignalPtr signalFunc, TaskHandle_t task, uint32_t bitMask) {
-        if constexpr (std::is_same_v<SignalPtr, decltype(&NRF24L01P::signal_IRQEvent)>) {
-            if (signalFunc == &NRF24L01P::signal_IRQEvent) {
-                IRQEvent_cfg.task_h = task;
-                IRQEvent_cfg.bitMask = bitMask;
-                return true;
-            }
-        }
-        return false;
-    }
-    /**
-     * @brief 供外部 EXTI 中断回调调用的函数
-     */
-    void isrExtiHandler();
-    /**
-     * @brief 供外部 SPI DMA 完成中断调用的函数
-     */
-    void isrSpiDmaCompleteHandler();
-    /* signal function define */
-    void signal_IRQEvent(std::function<void(Status_t &curStatus)> slot);
+    [[nodiscard]] SPI_HandleTypeDef* spiHandle() const noexcept { return spi_; }
+    [[nodiscard]] std::uint16_t irqPin() const noexcept { return irq_pin_; }
 
-    /**
-     * @brief 将字符串数据填充到uint8_t数组
-     * @param sv
-     * @param NRF_Tx_Text
-     */
-    static inline void str_touint8(const etl::string_view &sv, uint8_t *NRF_Text) {
-        if (NRF_Text == nullptr) return;
-        const size_t copy_len = std::min(sv.size(), size_t(PACKET_WIDTH - 1U));
-        memset(NRF_Text, 0, PACKET_WIDTH);
-        std::copy(sv.begin(), sv.begin() + copy_len, NRF_Text);
-    }
-    /**
-     * @brief 将uint8_t数组填充到字符串
-     * @param sv
-     * @param NRF_Text
-     */
-    static inline void uint8_tostr(etl::string_view &sv, uint8_t *NRF_Text){
-        const char* data_ptr = reinterpret_cast<const char*>(NRF_Text);
-        size_t actual_len = 0;
-        while (actual_len < 32 && NRF_Text[actual_len] != '\0') {
-            actual_len++;
-        }
-        sv = etl::string_view(data_ptr, actual_len);
-    }
-
-    /**
-     * @brief
-     * @param buffer
-     * @param args
-     */
-    static void args_touint8s(uint8_t *buffer, const volatile float* args[4]){
-        char* ptr = reinterpret_cast<char*>(buffer);
-        char* const last = reinterpret_cast<char*>(buffer) + 32; // 缓冲区绝对终点
-
-        for (uint8_t i=0; i<4; i++){
-            if (ptr + 8 >= last) break;
-            *ptr++ = ' ';
-            float val{};
-            if(args[i] != nullptr) {val = *args[i];}
-            if (val < 0) {
-                *ptr++ = '-';
-                val = -val;
-            }
-            uint32_t total_dec = static_cast<uint32_t>(val * 10.0f + 0.5f);
-            uint32_t integer_part = total_dec / 10;
-            uint32_t fractional_part = total_dec % 10;
-            auto res = std::to_chars(ptr, reinterpret_cast<char *>(buffer - 4), integer_part);
-            if (res.ec == std::errc()) {
-                ptr = res.ptr;
-                *ptr++ = '.';
-                *ptr++ = static_cast<char>('0' + fractional_part);
-            }else {
-                // 空间不足，在此可做异常处理
-                return;
-            }
-        }
-        *++ptr = '\0';
-    }
+    void onSpiTransferCompleteFromIsr() noexcept;
 
 private:
-    SPI_HandleTypeDef*  HSpi;
-    GPIO_TypeDef*       csPort;
-    uint16_t            csPin;
-    GPIO_TypeDef*       cePort;
-    uint16_t            cePin;
-    GPIO_TypeDef*       irqPort;
-    uint16_t            irqPin;
-    uint8_t             RxAddress_P0[5] = {0x11,0x52,0x01,0x31,0x41};
-    uint8_t             TxAddress[5] = {0x11,0x52,0x01,0x31,0x41};
-    //freeRTOS variable define
-    SemaphoreHandle_t   spiDmaSemaphore = nullptr;
-    /* signal config define */
-    SignalContext IRQEvent_cfg{};
-    // Low-level SPI and Pin operations
-    void csLow();
-    void csHigh();
-    void write_ce(uint8_t gpio_status);
-    inline bool spiSend(const uint8_t *pData, uint16_t size);
-    inline bool spiReceive(uint8_t *pData, uint16_t size);
-    inline bool spiTransfer(const uint8_t *pTxData, uint8_t *pRxData, uint16_t Size);
-    // Register operations [cite: 704, 705]
-    bool readRegister(uint8_t reg, uint8_t* buf, uint8_t len);
-    bool writeRegister(uint8_t reg, const uint8_t* buf, uint8_t len);
+    static constexpr std::uint8_t command_read_register = 0x00U;
+    static constexpr std::uint8_t command_write_register = 0x20U;
+    static constexpr std::uint8_t command_read_rx_payload = 0x61U;
+    static constexpr std::uint8_t command_write_tx_payload = 0xA0U;
+    static constexpr std::uint8_t command_flush_tx = 0xE1U;
+    static constexpr std::uint8_t command_flush_rx = 0xE2U;
 
+    static constexpr std::uint8_t register_config = 0x00U;
+    static constexpr std::uint8_t register_enable_auto_ack = 0x01U;
+    static constexpr std::uint8_t register_enable_rx_address = 0x02U;
+    static constexpr std::uint8_t register_address_width = 0x03U;
+    static constexpr std::uint8_t register_retransmit = 0x04U;
+    static constexpr std::uint8_t register_rf_channel = 0x05U;
+    static constexpr std::uint8_t register_rf_setup = 0x06U;
+    static constexpr std::uint8_t register_status = 0x07U;
+    static constexpr std::uint8_t register_rx_address_pipe0 = 0x0AU;
+    static constexpr std::uint8_t register_tx_address = 0x10U;
+    static constexpr std::uint8_t register_rx_width_pipe0 = 0x11U;
+
+    static constexpr TickType_t spi_timeout = pdMS_TO_TICKS(10U);
+    static constexpr std::array<std::uint8_t, 5U> radio_address{
+        0x11U, 0x52U, 0x01U, 0x31U, 0x41U};
+
+    [[nodiscard]] bool ensureSemaphore();
+    [[nodiscard]] bool spiSend(const std::uint8_t* data, std::uint16_t size);
+    [[nodiscard]] bool spiReceive(std::uint8_t* data, std::uint16_t size);
+    [[nodiscard]] bool readRegister(
+        std::uint8_t reg, std::uint8_t* data, std::uint8_t length);
+    [[nodiscard]] bool writeRegister(
+        std::uint8_t reg, const std::uint8_t* data, std::uint8_t length);
+    [[nodiscard]] bool command(std::uint8_t value);
+    [[nodiscard]] bool flushTx();
+    [[nodiscard]] bool flushRx();
+    [[nodiscard]] bool startTransmit();
+    [[nodiscard]] bool readStatus(Status& status);
+    [[nodiscard]] bool clearStatus();
+
+    void setChipSelect(bool active) noexcept;
+    void setChipEnable(bool enabled) noexcept;
+
+    SPI_HandleTypeDef* spi_;
+    GPIO_TypeDef* chip_select_port_;
+    std::uint16_t chip_select_pin_;
+    GPIO_TypeDef* chip_enable_port_;
+    std::uint16_t chip_enable_pin_;
+    GPIO_TypeDef* irq_port_;
+    std::uint16_t irq_pin_;
+    StaticSemaphore_t spi_semaphore_storage_{};
+    SemaphoreHandle_t spi_semaphore_ = nullptr;
 };
-
-
-#endif //WL1_F411CEU6_NRF24L01P_HPP

@@ -6,14 +6,14 @@
 #include "task.h"
 
 namespace {
-float clamp(float value, float minimum, float maximum)
+float clamp(float value, float minimum, float maximum) noexcept
 {
-    return std::max(minimum, std::min(value, maximum));
+    return std::clamp(value, minimum, maximum);
 }
 } // namespace
 
 void RemoteControlState::updateFromJoysticks(
-    float speed, float turn, float legHeightMm, float rollDegrees)
+    float speed, float turn, float legHeightMm, float rollDegrees) noexcept
 {
     const float limited_speed = clamp(
         speed, RemoteControlLimits::speed_minimum, RemoteControlLimits::speed_maximum);
@@ -40,7 +40,7 @@ void RemoteControlState::updateFromJoysticks(
     taskEXIT_CRITICAL();
 }
 
-bool RemoteControlState::toggleLegLock()
+bool RemoteControlState::toggleLegLock() noexcept
 {
     taskENTER_CRITICAL();
     leg_locked_ = !leg_locked_;
@@ -50,7 +50,7 @@ bool RemoteControlState::toggleLegLock()
     return locked;
 }
 
-bool RemoteControlState::toggleRollLock()
+bool RemoteControlState::toggleRollLock() noexcept
 {
     taskENTER_CRITICAL();
     roll_locked_ = !roll_locked_;
@@ -60,7 +60,7 @@ bool RemoteControlState::toggleRollLock()
     return locked;
 }
 
-RemoteControlSnapshot RemoteControlState::snapshot() const
+RemoteControlSnapshot RemoteControlState::snapshot() const noexcept
 {
     taskENTER_CRITICAL();
     const RemoteControlSnapshot result{

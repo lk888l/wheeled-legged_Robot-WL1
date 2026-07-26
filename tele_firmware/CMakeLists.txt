@@ -25,23 +25,24 @@ add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/stm32cubemx)
 
 # Application and board-support code maintained outside the CubeMX generated tree.
-file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Component/*.cxx"
+# Keep this list explicit so obsolete or experimental sources are not linked silently.
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    Component/HardWare/OLED/U8g2Oled.cpp
+    Component/HardWare/Telecontrol/NRF24L01P.cpp
+    Component/Peripheral/Button.cpp
+    Component/Peripheral/LkUart.cpp
+    Component/UserApp/RemoteCommandCodec.cpp
+    Component/UserApp/RemoteControlState.cpp
+    Component/UserApp/RemoteDisplay.cpp
+    Component/UserApp/main.cpp
 )
-
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Component/UserApp
     Component/HardWare/OLED
-    Component/HardWare/Motor
     Component/HardWare/Telecontrol
     Component/Peripheral
     Component/Module/include
-    Component/Module/Basic
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
@@ -51,8 +52,17 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
     -fno-common
     -fmessage-length=0
+)
+
+# The remote-control packet is formatted with snprintf() and contains floats.
+# nano.specs omits floating-point printf support unless this symbol is forced in.
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    -u _printf_float
 )
 
 add_subdirectory(ThirdParty/u8g2)

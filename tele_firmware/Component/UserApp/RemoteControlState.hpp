@@ -26,10 +26,11 @@ struct RemoteControlSnapshot {
  */
 class RemoteControlState {
 public:
-    void updateFromJoysticks(float speed, float turn, float legHeightMm, float rollDegrees);
-    bool toggleLegLock();
-    bool toggleRollLock();
-    RemoteControlSnapshot snapshot() const;
+    void updateFromJoysticks(
+        float speed, float turn, float legHeightMm, float rollDegrees) noexcept;
+    [[nodiscard]] bool toggleLegLock() noexcept;
+    [[nodiscard]] bool toggleRollLock() noexcept;
+    [[nodiscard]] RemoteControlSnapshot snapshot() const noexcept;
 
 private:
     float speed_ = 0.0F;
