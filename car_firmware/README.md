@@ -1,5 +1,7 @@
 # WL1 小车端固件
 
+[中文](README.md) | [English](README_en.md) | [返回项目主页](../README.md)
+
 `car_firmware` 是 WL1 轮腿机器人的车体端固件，目标芯片为
 STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID 控制，
 驱动 TB6612 双路直流电机与两路腿部舵机，并通过 nRF24L01+ 接收遥控器命令。

@@ -1,5 +1,7 @@
 # WL1 遥控器固件
 
+[中文](README.md) | [English](README_en.md) | [返回项目主页](../README.md)
+
 `tele_firmware` 是 WL1 轮腿小车的手持遥控器固件，目标芯片为
 STM32F411CEU6。固件采集四路摇杆和两个按键，通过 nRF24L01+ 每 50 ms
 向同一仓库下的 `car_firmware` 发送控制命令，并在 SSD1306 OLED 上显示当前指令。

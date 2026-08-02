@@ -1,5 +1,9 @@
 # WL1 轮腿机器人
 
+[中文](README.md) | [English](README_en.md)
+
+固件文档：[小车端固件](car_firmware/README.md) | [遥控器固件](tele_firmware/README.md)
+
 WL1 是一套基于 STM32F411CEU6 的低成本轮腿机器人项目。仓库包含小车端与
 手持遥控器端固件、控制算法与腿部运动学仿真，以及用于在线调参的 VOFA+
 界面配置。
@@ -13,7 +17,8 @@ wheeled-legged_Robot-WL1/
 ├── simulation/            # LQR 与腿部运动学仿真
 ├── vofa_host_tools_cfg/   # VOFA+ 命令组和调参窗口配置
 ├── LICENSE
-└── README.md
+├── README.md
+└── README_en.md
 ```
 
 | 目录 | 主要内容 | 入口 |
