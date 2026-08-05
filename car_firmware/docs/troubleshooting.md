@@ -18,10 +18,10 @@
 
 | 日志 | 含义 |
 | --- | --- |
-| `CPPMain: success` | 任务创建状态检查通过，但当前 OR 累积逻辑不能证明三个任务都成功 |
+| `CPPMain: success` | 三个模块注册成功，且三个任务均创建成功 |
 | `CPPMain: fail` | 创建状态检查失败，优先检查 FreeRTOS heap 和任务栈 |
 | `MPU: success` | MPU6050 初始化事务成功 |
-| `MPU: fail` | I2C、地址、供电或器件身份检查失败 |
+| `MPU: fail` | I2C、地址、供电或器件身份检查失败；电机 PWM 保持为 0 |
 | `nRF: send success` | TX 完成且收到 ACK |
 | `nRF: send fail` | 达到最大自动重发次数 |
 | `receive: ...` | 收到无法匹配的文本命令 |
@@ -42,7 +42,7 @@
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
 | 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
 | 串口偶尔少日志 | UART 固定发送缓冲已满；高频日志会被丢弃 |
-| PC13 翻转不稳定 | Reactor 被高频事件唤醒、控制临界区过长 |
+| PC13 翻转不稳定 | Reactor 被高频事件持续唤醒、tick 异常或高优先级任务占用过久 |
 
 ## IMU 排查
 
@@ -59,7 +59,7 @@ showimu -y
 showimu -n
 ```
 
-当前陀螺零偏在 `MotionControlFunc_PID()` 中固定为：
+当前陀螺零偏在 `Component/AppModules/src/motion_control_module.cpp` 中固定为：
 
 ```text
 X = 2.5, Y = 0.7, Z = 0.9
@@ -89,8 +89,8 @@ showrpm -y
 应向前追赶重心；若相反，应先修正 IMU/PWM 方向，不能靠增大 PID 解决。
 
 `motor` 命令在当前 PID 路径中不会直接驱动电机，不能用它作为硬件点动测试。
-另外，TB6612 驱动当前会在零命令分支之后重新应用 50 counts 最小 PWM；
-如果需要可靠滑行/制动状态，应先修正零值处理并在支架上复验。
+TB6612 零命令应使 TIM1 compare 保持为 0；非零小命令才会应用 50 counts
+死区补偿。排查“零目标仍轻微驱动”时应直接观察 TIM1 compare 值。
 
 ## 舵机与腿部机构
 
@@ -226,5 +226,6 @@ Vref，不能仅凭“仍能识别芯片”忽略欠压。
 7. SPI/UART DMA 中断优先级仍为 5；
 8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
 9. I2C1 仍为 PB6/PB7、400 kHz；
-10. CMake 中的应用 include 和 source glob 仍完整；
+10. CubeMX 生成的 include/source 列表仍由顶层 CMake 传给 `cmake/firmware.cmake`，
+    各手写组件的显式源文件列表仍完整；
 11. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。

@@ -138,8 +138,7 @@ public:
     static inline void str_touint8(const etl::string_view &sv, uint8_t *NRF_Text) {
         if (NRF_Text == nullptr) return;
         size_t copy_len = std::min(sv.size(), size_t(PACKET_WIDTH-1));
-        if(copy_len != 31)  {memset(&NRF_Text[copy_len], 0, PACKET_WIDTH-copy_len);}
-        else {NRF_Text[PACKET_WIDTH] = 0;}
+        memset(NRF_Text, 0, PACKET_WIDTH);
         std::copy(sv.begin(), sv.begin() + copy_len, NRF_Text);
     }
     /**
@@ -162,23 +161,26 @@ public:
      * @param args
      */
     static void args_touint8s(uint8_t *buffer, const volatile float* args[4]){
+        if (buffer == nullptr || args == nullptr) return;
+        memset(buffer, 0, PACKET_WIDTH);
         char* ptr = reinterpret_cast<char*>(buffer);
-        char* const last = reinterpret_cast<char*>(buffer) + 32; // 缓冲区绝对终点
+        char* const last = reinterpret_cast<char*>(buffer) + PACKET_WIDTH;
 
         for (uint8_t i=0; i<4; i++){
-            if (ptr + 8 >= last) break;
+            if (ptr >= last) break;
             *ptr++ = ' ';
             float val{};
             if(args[i] != nullptr) {val = *args[i];}
             if (val < 0) {
+                if (ptr >= last) break;
                 *ptr++ = '-';
                 val = -val;
             }
             uint32_t total_dec = static_cast<uint32_t>(val * 10.0f + 0.5f);
             uint32_t integer_part = total_dec / 10;
             uint32_t fractional_part = total_dec % 10;
-            auto res = std::to_chars(ptr, reinterpret_cast<char *>(buffer - 4), integer_part);
-            if (res.ec == std::errc()) {
+            auto res = std::to_chars(ptr, last, integer_part);
+            if (res.ec == std::errc() && last - res.ptr >= 2) {
                 ptr = res.ptr;
                 *ptr++ = '.';
                 *ptr++ = static_cast<char>('0' + fractional_part);
@@ -187,7 +189,7 @@ public:
                 return;
             }
         }
-        *++ptr = '\0';
+        if (ptr < last) {*ptr = '\0';}
     }
 
 private:

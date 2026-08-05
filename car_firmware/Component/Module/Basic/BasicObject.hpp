@@ -1,64 +1,43 @@
-/********************************************************************************
-  * @file           : BasicObject.hpp
-  * @author         : Luka
-  * @brief          : Embedded object base class based on freeRTOS.
-  * @attention      : Only using the environment of FreeRTOS.
-  * @date           : 26-3-22
-  * @version        : V1.0
-  *******************************************************************************/
-
-
-#ifdef __GNUC__
 #pragma once
-#endif //__GNUC__
-#ifndef __BASICOJECT_HPP
-#define __BASICOJECT_HPP
 
-//c++ std library include
-#include <functional>
-#include <array>
-//freeRtos library include
+#include <cstdint>
+
 #include "FreeRTOS.h"
 #include "task.h"
 
-
-class BasicObject {
+class BasicObject
+{
 public:
     virtual ~BasicObject() = default;
-    struct SignalContext {
+
+    struct SignalContext
+    {
         TaskHandle_t task_h = nullptr;
-        uint32_t bitMask = 0;
+        std::uint32_t bitMask = 0;
     };
 
-//    /**
-//     * @brief
-//     * @param signal
-//     */
-//    template<typename SignalPtr>
-//    bool bindReactor(SignalPtr signalFunc, SignalContext signal){
-//        return false;
-//    }
+protected:
+    static bool emit(const SignalContext& signal)
+    {
+        if (signal.task_h == nullptr || signal.bitMask == 0)
+        {
+            return false;
+        }
 
-    /**
-     * @brief
-     * @param signal
-     * @param pxHigherPriorityTaskWoken
-     */
-    void emitFromISR(const SignalContext &signal, BaseType_t* pxHigherPriorityTaskWoken) {
-        if (signal.task_h != nullptr && signal.bitMask != 0) {
-            xTaskNotifyFromISR(signal.task_h, signal.bitMask, eSetBits, pxHigherPriorityTaskWoken);
-        }
+        return xTaskNotify(signal.task_h, signal.bitMask, eSetBits) == pdPASS;
     }
-    /**
-     * @brief
-     * @param signal
-     */
-    void emit(SignalContext signal){
-        if (signal.task_h != nullptr && signal.bitMask != 0){
-            xTaskNotify(signal.task_h, signal.bitMask, eSetBits);
+
+    static bool emitFromISR(const SignalContext& signal,
+                            BaseType_t* higher_priority_task_woken)
+    {
+        if (signal.task_h == nullptr || signal.bitMask == 0)
+        {
+            return false;
         }
+
+        return xTaskNotifyFromISR(signal.task_h,
+                                  signal.bitMask,
+                                  eSetBits,
+                                  higher_priority_task_woken) == pdPASS;
     }
 };
-
-
-#endif //__BASICOJECT_HPP

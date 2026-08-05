@@ -1,0 +1,6 @@
+add_subdirectory(Module)
+add_subdirectory(App)
+add_subdirectory(HardWare)
+add_subdirectory(Peripheral)
+add_subdirectory(UserApp)
+add_subdirectory(AppModules)

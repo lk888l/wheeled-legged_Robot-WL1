@@ -1,5 +1,6 @@
 .idea
 .vscode
+.settings
 cmake-build-debug
 cmake-build-release
 build/

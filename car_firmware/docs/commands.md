@@ -95,8 +95,7 @@ rollpid -p <value>
 rollpid -i <value>
 ```
 
-当前实现中两个选项都写入横滚 `Ki`，`Adapt_y_kp` 保持为 0。这是已知限制；
-修复代码前不要把 `rollpid -p` 当作比例参数接口。
+`rollpid -p` 写入横滚 `Kp`，`rollpid -i` 写入横滚 `Ki`。两者会持续到下次复位。
 
 ## 观测和诊断
 
@@ -125,8 +124,8 @@ nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发
 motor <left> <right>
 ```
 
-解析成功后会打印数值并通知 MotionControl。当前实际运行的
-`MotionControlFunc_PID()` 没有消费这条通知，因此该命令不会覆盖闭环 PWM；
+解析成功后会打印数值并通知 MotionControl。当前实际运行的 PID 控制任务没有
+消费这条通知，因此该命令不会覆盖闭环 PWM；
 它只保留用于旧的 LQR/手动电机实验。
 
 未知命令不会返回 `Unknown command`，而是按以下格式回显：
@@ -147,5 +146,5 @@ receive: <original text>
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
 当前参数只存在 RAM 中。确认参数后，应修改
-`Component/UserApp/main.cpp` 中的默认初始化值，重新构建并烧录。
+`Component/AppModules/src/runtime.hpp` 中的默认初始化值，重新构建并烧录。
 

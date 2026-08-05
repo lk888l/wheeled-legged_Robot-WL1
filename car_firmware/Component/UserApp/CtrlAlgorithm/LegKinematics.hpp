@@ -10,8 +10,8 @@
 #include <cmath>
 #include <cstdint>
 
-#ifndef __LEGKINEMATICS_HPP
-#define ___LEGKINEMATICS_HPP
+#ifndef WL1_LEG_KINEMATICS_HPP
+#define WL1_LEG_KINEMATICS_HPP
 
 
 class LegKinematics {
@@ -110,4 +110,4 @@ public:
 };
 
 
-#endif //__LEGKINEMATICS_HPP
+#endif // WL1_LEG_KINEMATICS_HPP

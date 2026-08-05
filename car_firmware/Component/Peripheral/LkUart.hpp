@@ -32,6 +32,8 @@ public:
         //Put the indices of all buffers into the free queue
         for (uint8_t i = 0; i < TX_BufDepth; ++i) {
             freeQueue_Tx.push(i);
+        }
+        for (uint8_t i = 0; i < RX_BufDepth; ++i) {
             freeQueue_Rx.push(i);
         }
     }
@@ -45,8 +47,8 @@ private:
     };
     // 静态内存池：注意，如果是 Cortex-M7 (如 H7/F7)，需放在 Non-Cacheable 区域
     alignas(32) etl::array<etl::array<char, TX_BufferSize>, TX_BufDepth> buffers_Tx;
-    SafeQueue<uint8_t, RX_BufDepth> freeQueue_Tx;
-    SafeQueue<TxMessage, RX_BufDepth> readyQueue_Tx;
+    SafeQueue<uint8_t, TX_BufDepth> freeQueue_Tx;
+    SafeQueue<TxMessage, TX_BufDepth> readyQueue_Tx;
     volatile bool dmaBusy_;
     uint8_t curBufIndex_Tx;
     static LkUart* instance_;   // 静态指针，用于将 C 语言的中断回调路由到 C++ 实例
@@ -206,8 +208,10 @@ public:
      */
     void signal_RxComplete(std::function<void(etl::string<RX_BufferSize>&)> slot){
         while(!readQueue_Rx.empty()){
-            uint8_t bufIdx;
-            readQueue_Rx.pop(bufIdx);
+            uint8_t bufIdx = 0;
+            if (!readQueue_Rx.pop(bufIdx)) {
+                break;
+            }
             slot(buffers_Rx[bufIdx]);
             freeQueue_Rx.push(bufIdx);
         }
@@ -220,12 +224,7 @@ public:
 template<size_t TX_BufferSize, size_t TX_BufDepth, size_t RX_BufferSize, size_t RX_BufDepth>
 LkUart<TX_BufferSize, TX_BufDepth,RX_BufferSize,RX_BufDepth>* LkUart<TX_BufferSize, TX_BufDepth,RX_BufferSize,RX_BufDepth>::instance_ = nullptr;
 
-extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-    LkUart<>::isrTxComplete(huart);
-}
-
-extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
-    LkUart<>::isRxComplete(huart, Size);
-}
+extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart);
+extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t size);
 
 #endif //__LKUART_HPP

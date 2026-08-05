@@ -24,8 +24,9 @@ flowchart LR
     Reactor --> UART
 ```
 
-命令接收和控制计算通过一组 `volatile` 全局目标值连接。当前实现没有统一的
-状态快照对象，因此扩展跨任务状态时必须考虑多字段更新的一致性。
+命令接收和控制计算通过 `AppModules` 内部的 `ControlState` 连接。字段保持
+`volatile` 以兼容原有 ISR/任务访问方式；扩展跨任务的多字段事务时，仍需增加
+快照或明确的同步机制，不能把 `volatile` 当作互斥量。
 
 ## 启动流程
 
@@ -35,6 +36,7 @@ sequenceDiagram
     participant C as Core/Src/main.c
     participant RTOS as FreeRTOS
     participant CPP as CPP_Main()
+    participant Manager as AppManager
     participant Tasks as Application tasks
 
     Reset->>C: startup_stm32f411ceux.s
@@ -43,14 +45,18 @@ sequenceDiagram
     C->>RTOS: osKernelInitialize()
     C->>RTOS: MX_FREERTOS_Init()
     RTOS->>CPP: create defaultTask, then call CPP_Main()
-    CPP->>Tasks: create Reactor, ServoControl, MotionControl
+    CPP->>Manager: register communication, servo, motion
+    Manager->>Tasks: create tasks in dependency order
+    alt any task creation fails
+        Manager->>Tasks: delete created tasks in reverse order
+    end
     C->>RTOS: osKernelStart()
     RTOS->>Tasks: schedule tasks
 ```
 
 `CPP_Main()` 在调度器启动前创建任务。默认 CMSIS-RTOS2 任务只等待 1 s 后
-删除自身，不参与控制。当前创建结果使用按位 OR 累积，因此
-`CPPMain: success` 不能严格证明三个任务都创建成功。
+删除自身，不参与控制。`CPPMain: success` 表示三个模块均完成注册且三个任务的
+`xTaskCreate()` 全部返回 `pdPASS`；失败时管理器按反序回滚已创建任务。
 
 ## 任务模型
 
@@ -68,12 +74,15 @@ FreeRTOS tick 为 1 kHz，`xTaskCreate()` 的栈深度单位是 32-bit word。
 
 ### MotionControl
 
-实际创建的是 `MotionControlFunc_PID()`。每 10 ms：
+实际运行的是 `AppModules` 中的 PID 控制任务。每 10 ms：
 
 1. 根据腿高重新计算俯仰静态偏置和姿态环 `Kp`；
 2. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw；
 3. 更新姿态 PID；
 4. 组合直行和差速 PWM，限幅后写入 TB6612。
+
+MPU6050 初始化失败时，控制任务把两个电机 PWM 保持为 0，并以 1 s 周期让出 CPU；
+不会在缺少姿态反馈时继续运行平衡控制，串口/无线诊断任务仍可调度。
 
 每累计 5 次，即每 50 ms：
 
@@ -152,9 +161,9 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` 为 5。调用 FreeRTOS ISR API
 的中断，NVIC 数值优先级不能小于 5。
 
-当前 MotionControl 将一次控制迭代包在 FreeRTOS 临界区中。临界区会推迟
-相关 DMA/EXTI 中断，因此不要在其中增加阻塞操作、大量格式化或慢速外设访问；
-若控制流程继续扩展，应先缩小临界区范围。
+周期等待、I2C 读取、格式化和 PWM 更新均不在 FreeRTOS 临界区中。尤其禁止把
+`vTaskDelayUntil()` 或其他阻塞 API 放进临界区，否则 tick/PendSV 无法调度，
+控制任务可能锁死系统。多字段共享状态若需要一致快照，应只在短临界区内复制。
 
 ## 内存模型
 
@@ -179,10 +188,12 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 | `NRF24L01P` | SPI 寄存器、收发状态机、IRQ 处理 |
 | `LkUart` | Receive-to-idle DMA 和异步格式化发送 |
 | `TaskReactor` | 通知 bit 到回调的分发、命令 token 解析 |
-| `Component/UserApp/main.cpp` | 任务装配、共享状态和当前业务流程 |
+| `Component/App` | 固定容量模块注册、生命周期、失败回滚 |
+| `Component/AppModules` | 通信、舵机、运动控制任务和私有运行状态 |
+| `Component/UserApp/main.cpp` | 只负责注册和启动应用模块 |
 
-`LQR` 是保留的实验控制器；当前构建会编译它，但 `CPP_Main()` 不创建
-`MotionControlFunc()`。`MainControl.*` 目前为空壳，不在运行路径中。
+`LQR` 是保留的实验控制器；当前构建会编译它，但应用模块不启动该路径。
+`MainControl.*` 目前为空壳，不在运行路径中。
 
 ## 已知实现约束
 
@@ -191,9 +202,9 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 - `Angle_kp` 和 `Angle_bias` 每 10 ms 根据腿高重算，在线写入只会短暂生效；
 - 当前平均腿高表达式实际为 `(Left_Legheight + Left_Legheight) / 2`，没有读取
   右腿高度；若依赖左右腿平均值，应先修正并重新标定；
-- `rollpid -p` 和 `rollpid -i` 当前都写入 `Adapt_y_ki`；
+- `rollpid -p` 与 `rollpid -i` 分别写入横滚 `Kp` 和 `Ki`；
 - `motor` 命令会发送任务通知，但 PID 控制路径没有消费该通知；
-- TB6612 的 `setAVel_raw(0)` / `setBVel_raw(0)` 先写 0，随后又应用 50 counts
-  最小值；零控制量不会保持 compare 为 0；
+- TB6612 的零速度命令保持 compare 为 0；只有非零且低于死区的命令才提升到
+  50 counts；
 - nRF 遥测命令会临时把车端从 RX 切到 TX，发送完成或失败后才恢复 RX；
 - 控制参数只保存在 RAM 中，复位后恢复编译时默认值。

@@ -18,6 +18,7 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 Further reading:
 
 - [Software architecture](docs/architecture.md): startup flow, tasks, control loops, and concurrency model;
+- [Development conventions](docs/development.md): component boundaries, CubeMX ownership, and validation gates;
 - [Command reference](docs/commands.md): serial/wireless commands, default parameters, and tuning sequence;
 - [Debugging and troubleshooting](docs/troubleshooting.md): power-on checks, common faults, and CubeMX regeneration checks.
 
@@ -152,9 +153,8 @@ range, and VQF for attitude fusion.
 
 The current PID path inverts the TB6612 B-channel direction and configures a
 minimum compare value of 50 counts for both PWM channels. The final PWM command
-is limited to `-1000..1000`. The current driver reapplies this minimum value at
-the end even for a zero command; see the
-[known implementation constraints in the architecture document](docs/architecture.md#已知实现约束).
+is limited to `-1000..1000`; a zero command keeps compare at 0 and does not apply
+dead-zone compensation.
 
 ### Leg Servos
 
@@ -236,6 +236,8 @@ The RF parameters and `R` command format must be changed in sync with
 ```text
 car_firmware/
 ├── Component/
+│   ├── App/                       # Module lifecycle, registry, and rollback
+│   ├── AppModules/                # Communication, servo, and control tasks
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 and VQF
 │   │   ├── Motor/                # Encoders, TB6612, and servos
@@ -247,10 +249,12 @@ car_firmware/
 │   ├── Peripheral/               # USART DMA wrapper
 │   └── UserApp/
 │       ├── CtrlAlgorithm/        # PID, LQR, and leg kinematics
-│       └── main.cpp              # Tasks, commands, and current control flow
+│       └── main.cpp              # Application module composition only
+├── cmake/                        # Firmware target and toolchain policy
 ├── Core/                         # STM32CubeMX-generated code
 ├── Drivers/                      # STM32 HAL / CMSIS
 ├── Middlewares/                  # FreeRTOS
+├── tests/                        # Host tests that need no development board
 ├── CMakeLists.txt
 ├── CMakeLists_template.txt
 ├── STlink.cfg
@@ -258,22 +262,31 @@ car_firmware/
 ```
 
 The C entry point is `Core/Src/main.c`. Before the scheduler starts,
-`MX_FREERTOS_Init()` calls `CPP_Main()`, which then creates the application tasks
-in `Component/UserApp/main.cpp`.
+`MX_FREERTOS_Init()` calls `CPP_Main()`. A fixed-capacity `AppManager` registers and
+starts the communication, servo, and motion-control modules in order. If any task
+creation fails, already-created tasks are rolled back in reverse order and startup
+reports `CPPMain: fail`.
 
-`MotionControlFunc_PID()` is the control task that is currently created. The LQR
-path in `MotionControlFunc()` remains available for experiments but does not
-currently run. `MainControl.*` and the OLED module are likewise not connected to
-the application path.
+PID is the active control path. The LQR path remains available for experiments but
+does not currently run. `MainControl.*` and the OLED module are likewise not
+connected to the application path.
 
 ## Development Guidelines
 
 - Add handwritten code to CubeMX files under `Core/` only inside `USER CODE` sections;
 - `CMakeLists.txt` is marked as a template-generated file, so persistent changes should also be applied to `CMakeLists_template.txt`;
-- Rerun CMake after adding source files under existing `GLOB_RECURSE` directories;
+- Explicitly list new component sources in that component's `CMakeLists.txt`, then rerun CMake;
 - Do not call regular FreeRTOS APIs from an ISR; use only the `...FromISR` variants;
 - Interrupts that call FreeRTOS ISR APIs must have an NVIC numerical priority of 5 or greater;
 - Avoid dynamic allocation, blocking I/O, and high-frequency UART output in control tasks;
 - After changing wheel direction, encoder direction, or attitude signs, raise the wheels off the ground and verify the closed-loop feedback direction;
 - When changing the wireless protocol, update `tele_firmware` and the documentation for both sides;
-- Before committing, complete at least Debug and Release builds and run `git diff --check`.
+- Before committing, complete Debug and Release builds, host tests, and `git diff --check`.
+
+Run the host tests with:
+
+```sh
+cmake -S tests -B build/host-tests -G "MinGW Makefiles"
+cmake --build build/host-tests --parallel
+ctest --test-dir build/host-tests --output-on-failure
+```

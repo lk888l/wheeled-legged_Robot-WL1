@@ -1,170 +1,236 @@
-/********************************************************************************
-  * @file           : TaskReactor.hpp
-  * @author         : Luka
-  * @brief          : None
-  * @attention      : None
-  * @date           : 26-3-19
-  *******************************************************************************/
+#pragma once
 
-//#pragma once
-#ifndef TASKREACTOR_HPP
-#define TASKREACTOR_HPP
-
-//c++ std library include
+#include <array>
+#include <atomic>
+#include <charconv>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
-//etl library include
-#include "etl/vector.h"
-#include "etl/string.h"
-//freeRTOS library include
+#include <string_view>
+#include <system_error>
+#include <utility>
+
 #include "FreeRTOS.h"
 #include "task.h"
-//user C++ library include
+
 #include "BasicObject.hpp"
-//stm-Hal library include
-#include "main.h"
+#include "etl/string_view.h"
 
-class TaskReactor : BasicObject {
-    using SlotCallback = std::function<void()>;
+class TaskReactor : public BasicObject
+{
 public:
-    TaskReactor()
-        :reactorTask_(xTaskGetCurrentTaskHandle()){
-        SlotGroup.assign(32, nullptr);
-        SlotGroup.uninitialized_resize(1);
-    }
+    using SlotCallback = std::function<void()>;
 
-    /**
-     * @brief
-     */
-    struct strCMD_t {
-        etl::string_view command;   // command
-        etl::string_view args;      // parameter
-//        bool hasArgs;               // 是否成功分离出了参数
+    struct strCMD_t
+    {
+        etl::string_view command;
+        etl::string_view args;
     };
 
-private:
-    std::array<SlotCallback, 32> slots; // 32个Bit对应32个槽
-    TaskHandle_t reactorTask_ = nullptr;
-    etl::vector<std::function<void()>, 32> SlotGroup{nullptr};
-protected:
+    explicit TaskReactor(TaskHandle_t task_handle = nullptr)
+        : reactor_task_(task_handle != nullptr ? task_handle : xTaskGetCurrentTaskHandle())
+    {
+    }
 
-    /**
-     * @brief
-     * @return
-     */
-    uint32_t allocNotiftBit(){
-        for(uint8_t i = 0; i < 32; ++i) {
-            if(!SlotGroup[i]) { // 检查 std::function 是否为空
-                return (1UL << i);
+    void bindToCurrentTask()
+    {
+        reactor_task_ = xTaskGetCurrentTaskHandle();
+    }
+
+    [[nodiscard]] TaskHandle_t taskHandle() const
+    {
+        return reactor_task_;
+    }
+
+    void stop()
+    {
+        stop_requested_.store(true, std::memory_order_release);
+        if (reactor_task_ != nullptr)
+        {
+            xTaskNotify(reactor_task_, stop_bit_, eSetBits);
+        }
+    }
+
+    [[nodiscard]] bool stopped() const
+    {
+        return stop_requested_.load(std::memory_order_acquire);
+    }
+
+    bool setSlot(std::uint32_t bit_mask, SlotCallback callback)
+    {
+        if (bit_mask == 0 || (bit_mask & (bit_mask - 1U)) != 0)
+        {
+            return false;
+        }
+
+        const int index = __builtin_ctz(bit_mask);
+        if (index < 0 || index >= static_cast<int>(slots_.size() - 1))
+        {
+            return false;
+        }
+
+        slots_[static_cast<std::size_t>(index)] = std::move(callback);
+        return true;
+    }
+
+    template <typename Sender, typename SignalMethod, typename SlotLambda>
+    bool connect(Sender* sender, SignalMethod signal, SlotLambda slot)
+    {
+        if (sender == nullptr)
+        {
+            return false;
+        }
+
+        const std::uint32_t bit_mask = allocateNotifyBit();
+        if (bit_mask == 0)
+        {
+            return false;
+        }
+
+        if (!sender->bindReactor(signal, reactor_task_, bit_mask))
+        {
+            return false;
+        }
+
+        return setSlot(bit_mask, [sender, signal, slot]() { (sender->*signal)(slot); });
+    }
+
+    void taskLoop(TickType_t ticks_to_wait = portMAX_DELAY,
+                  const SlotCallback& after_notify = nullptr,
+                  const SlotCallback& on_timeout = nullptr)
+    {
+        bindToCurrentTask();
+        stop_requested_.store(false, std::memory_order_release);
+
+        std::uint32_t notified_value = 0;
+        TickType_t last_wake_time = xTaskGetTickCount();
+
+        while (!stop_requested_.load(std::memory_order_acquire))
+        {
+            TickType_t ticks_remaining = portMAX_DELAY;
+            if (on_timeout && ticks_to_wait != portMAX_DELAY)
+            {
+                const TickType_t elapsed = xTaskGetTickCount() - last_wake_time;
+                if (elapsed >= ticks_to_wait)
+                {
+                    on_timeout();
+                    last_wake_time = xTaskGetTickCount();
+                    ticks_remaining = ticks_to_wait;
+                }
+                else
+                {
+                    ticks_remaining = ticks_to_wait - elapsed;
+                }
+            }
+
+            if (xTaskNotifyWait(0, 0xFFFFFFFFU, &notified_value, ticks_remaining) == pdTRUE)
+            {
+                if ((notified_value & stop_bit_) != 0)
+                {
+                    stop_requested_.store(true, std::memory_order_release);
+                }
+                dispatch(notified_value & ~stop_bit_);
+                if (after_notify)
+                {
+                    after_notify();
+                }
+            }
+        }
+    }
+
+    static bool parseStrCMD(etl::string_view input, strCMD_t& command)
+    {
+        const std::size_t start = input.find_first_not_of(' ');
+        if (start == etl::string_view::npos)
+        {
+            command = {};
+            return false;
+        }
+        input.remove_prefix(start);
+
+        const std::size_t space_position = input.find(' ');
+        if (space_position == etl::string_view::npos)
+        {
+            command.command = input;
+            command.args = {};
+            return true;
+        }
+
+        command.command = input.substr(0, space_position);
+        command.args = input.substr(space_position + 1);
+        const std::size_t first_argument = command.args.find_first_not_of(' ');
+        if (first_argument == etl::string_view::npos)
+        {
+            command.args = {};
+        }
+        else
+        {
+            command.args.remove_prefix(first_argument);
+        }
+        return true;
+    }
+
+    template <typename T>
+    static bool parseStrArg(etl::string_view& arguments, T& value)
+    {
+        const std::size_t first = arguments.find_first_not_of(' ');
+        if (first == etl::string_view::npos)
+        {
+            return false;
+        }
+        arguments.remove_prefix(first);
+
+        const std::size_t last = arguments.find(' ');
+        const etl::string_view token = arguments.substr(0, last);
+        const auto result = std::from_chars(token.data(), token.data() + token.size(), value);
+        if (result.ec != std::errc{} || result.ptr != token.data() + token.size())
+        {
+            return false;
+        }
+
+        if (last == etl::string_view::npos)
+        {
+            arguments = {};
+        }
+        else
+        {
+            arguments.remove_prefix(last + 1);
+        }
+        return true;
+    }
+
+private:
+    [[nodiscard]] std::uint32_t allocateNotifyBit() const
+    {
+        for (std::size_t index = 0; index < slots_.size() - 1; ++index)
+        {
+            if (!slots_[index])
+            {
+                return 1UL << index;
             }
         }
         return 0;
     }
 
-
-
-public:
-    /**
-     * @brief connect the signal of LKObject.
-     * @param sender
-     * @param signal
-     * @param slot
-     * @example     TaskReactor task1;
-     * /n           task1.connect();
-     */
-    template<typename Sender, typename SignalMethod, typename SlotLambda>
-    bool connect(Sender* sender, SignalMethod signal, SlotLambda slot) {
-        uint32_t bitMask = allocNotiftBit();
-        if (bitMask == 0) return false;                             // More than 32 signals failed.
-        sender->bindReactor(signal, reactorTask_, bitMask);      // execute LKObject bindReactorBit.
-        // Put the slot function into the container
-        int bitIndex = __builtin_ctz(bitMask);
-
-        SlotGroup[bitIndex]=[sender, signal, slot]() {
-            (sender->*signal)(slot);
-        };
-        return true;
-    }
-
-    /**
-     * @brief
-     */
-    inline void taskLoop(TickType_t xTicksToWait =portMAX_DELAY, const std::function<void()>& func1=nullptr, const std::function<void()>& func2=nullptr) {
-        uint32_t notifiedValue = 0;
-        TickType_t xLastWakeTime = xTaskGetTickCount();
-        while (true) {
-            TickType_t xTimeNow = xTaskGetTickCount();
-            TickType_t xTicksRemaining = portMAX_DELAY;
-            if (func2 && xTicksToWait != portMAX_DELAY) {
-                TickType_t elapsed = xTimeNow - xLastWakeTime;
-                if (elapsed >= xTicksToWait) {
-                    func2(); // 只有时间到了才执行
-                    xLastWakeTime = xTaskGetTickCount();
-                    elapsed = 0;
+    void dispatch(std::uint32_t notified_value)
+    {
+        for (std::size_t index = 0; notified_value != 0 && index < slots_.size() - 1; ++index)
+        {
+            const std::uint32_t bit = 1UL << index;
+            if ((notified_value & bit) != 0)
+            {
+                if (slots_[index])
+                {
+                    slots_[index]();
                 }
-                xTicksRemaining = xTicksToWait - elapsed;
-            }
-            if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue, xTicksRemaining) == pdTRUE){
-                for(uint8_t i = 0; notifiedValue > 0 && i < 32; i++) {
-                    if(notifiedValue & (1UL << i)) {
-                        if (SlotGroup[i]) {
-                            SlotGroup[i]();
-                        }
-                        notifiedValue &= ~(1UL << i); // 清除已处理的位
-                    }
-                }
-                if (func1)  func1();
+                notified_value &= ~bit;
             }
         }
     }
 
-    static bool parseStrCMD(etl::string_view input, strCMD_t &strCmd){
-        //Remove leading spaces
-        size_t start = input.find_first_not_of(" ");
-        if (start == std::string_view::npos) {
-            strCmd.command = "";
-            strCmd.args = "";
-            return false;
-        }
-        input.remove_prefix(start);
-        //Look for the first space.
-        size_t spacePos = input.find(' ');
-        if (spacePos != std::string_view::npos){
-            etl::string_view cmd = input.substr(0, spacePos);
-            etl::string_view args = input.substr(spacePos + 1);
-            size_t firstArg = args.find_first_not_of(" ");
-            if (firstArg != std::string_view::npos) {
-                strCmd.command = cmd;
-                strCmd.args    = args;
-                return true;
-            }
-            else{       // 有空格但空格后全是空格
-                strCmd.command = input;
-                strCmd.args = "";
-            }
-            return true;
-        }
-        else{           //纯命令，无参数
-            strCmd.command = input;
-            strCmd.args = "";
-            return true;
-        }
-    }
+    static constexpr std::uint32_t stop_bit_ = 1UL << 31;
 
-    template<typename T>
-    static bool parseStrArg(etl::string_view &str_arg,T& value){
-        // 1. 跳过前导空格
-//        size_t first = str_arg.find_first_not_of(' ');
-////        if (first == std::string_view::npos) return false;
-////        str_arg.remove_prefix(first);
-        size_t last = str_arg.find(' ');
-        etl::string_view token = str_arg.substr(0, last);
-        auto result = std::from_chars(token.data(), token.data() + token.size(), value);
-        if (last == std::string_view::npos) str_arg = "";
-        else str_arg.remove_prefix(last+1);
-        return result.ec == std::errc(); // 返回转换是否成功
-    }
+    TaskHandle_t reactor_task_ = nullptr;
+    std::array<SlotCallback, 32> slots_{};
+    std::atomic<bool> stop_requested_{false};
 };
-
-
-
-#endif //TASKREACTOR_HPP

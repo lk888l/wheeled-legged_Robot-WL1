@@ -25,7 +25,7 @@ public:
     */
     PID(float kp, float ki, float kd, float min_out, float max_out, float min_int, float max_int)
             : kp_(kp), ki_(ki), kd_(kd), min_out_(min_out), max_out_(max_out), min_int_(min_int),max_int_(max_int),
-              integral_(0.0f), prev_error_(0.0f), prevTWO_error_(0.0f) {}
+              integral_(0.0f), prev_error_(0.0f), prevTWO_error_(0.0f), prev_actual(0.0f) {}
 
     /**
     * @brief 计算 PID 输出

@@ -17,6 +17,7 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 进一步阅读：
 
 - [软件架构](docs/architecture.md)：启动流程、任务、控制环和并发模型；
+- [开发规范](docs/development.md)：组件边界、CubeMX 所有权和验证门槛；
 - [命令参考](docs/commands.md)：串口/无线命令、默认参数和调参顺序；
 - [调试与故障排查](docs/troubleshooting.md)：上电检查、常见故障和
   CubeMX 重新生成检查项。
@@ -145,8 +146,8 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 | 右编码器 A / B | PB4 / PB5 | TIM3_CH1 / CH2 |
 
 当前 PID 路径将 TB6612 B 通道方向反相，并给两路 PWM 都配置 50 counts
-最小比较值。PWM 命令最终限幅为 `-1000..1000`。当前驱动对零命令也会在
-末尾重新应用这个最小值，详见[架构说明的已知约束](docs/architecture.md#已知实现约束)。
+最小比较值。PWM 命令最终限幅为 `-1000..1000`；零命令会保持 compare 为 0，
+不会应用死区补偿。
 
 ### 腿部舵机
 
@@ -223,6 +224,8 @@ R 0.0 -0.0 0.0 61.5
 ```text
 car_firmware/
 ├── Component/
+│   ├── App/                       # 模块生命周期、注册、失败回滚
+│   ├── AppModules/                # 通信、舵机和运动控制任务
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 与 VQF
 │   │   ├── Motor/                # 编码器、TB6612、舵机
@@ -234,10 +237,12 @@ car_firmware/
 │   ├── Peripheral/               # USART DMA 封装
 │   └── UserApp/
 │       ├── CtrlAlgorithm/        # PID、LQR、腿部运动学
-│       └── main.cpp              # 任务、命令与当前控制流程
+│       └── main.cpp              # 只负责注册和启动应用模块
+├── cmake/                        # 固件目标、编译与链接策略
 ├── Core/                         # STM32CubeMX 生成代码
 ├── Drivers/                      # STM32 HAL / CMSIS
 ├── Middlewares/                  # FreeRTOS
+├── tests/                        # 不依赖开发板的主机单元测试
 ├── CMakeLists.txt
 ├── CMakeLists_template.txt
 ├── STlink.cfg
@@ -245,10 +250,11 @@ car_firmware/
 ```
 
 C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 在调度器启动前调用
-`CPP_Main()`，再由 `Component/UserApp/main.cpp` 创建应用任务。
+`CPP_Main()`；入口使用固定容量的 `AppManager` 按顺序注册并启动通信、舵机和
+运动控制模块。任一任务创建失败时，已创建任务会按反序回滚，启动日志会输出
+`CPPMain: fail`。
 
-`MotionControlFunc_PID()` 是当前被创建的控制任务。
-`MotionControlFunc()` 中的 LQR 路径仍保留作实验，但当前不会运行。
+PID 是当前运行的控制路径。LQR 路径仍保留作实验，但当前不会运行。
 `MainControl.*` 和 OLED 模块同样尚未接入应用路径。
 
 ## 开发约定
@@ -256,10 +262,18 @@ C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 在调度器启动前调用
 - `Core/` 中的 CubeMX 文件只在 `USER CODE` 区域添加手写代码；
 - `CMakeLists.txt` 标记为模板生成文件，持久修改应同步到
   `CMakeLists_template.txt`；
-- 在已有 `GLOB_RECURSE` 目录中添加源文件后需要重新运行 CMake；
+- 新增组件源文件时，在该组件的 `CMakeLists.txt` 中显式登记，并重新运行 CMake；
 - 不要在 ISR 中调用普通 FreeRTOS API，只使用 `...FromISR` 版本；
 - 会调用 FreeRTOS ISR API 的中断，其 NVIC 数值优先级不得小于 5；
 - 控制任务中避免动态分配、阻塞式 I/O 和高频 UART 输出；
 - 修改轮向、编码器方向或姿态符号后，必须架空验证闭环反馈方向；
 - 修改无线协议时同时更新 `tele_firmware` 和两端文档；
-- 提交前至少完成 Debug、Release 构建和 `git diff --check`。
+- 提交前至少完成 Debug、Release、主机测试和 `git diff --check`。
+
+主机测试命令：
+
+```sh
+cmake -S tests -B build/host-tests -G "MinGW Makefiles"
+cmake --build build/host-tests --parallel
+ctest --test-dir build/host-tests --output-on-failure
+```
