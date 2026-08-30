@@ -41,6 +41,10 @@ public:
     ///
     int32_t getCounter();
     double getRPM();
+    /** Calculate RPM using the caller-observed interval instead of the legacy
+     * fixed configuration period. The counter baseline is consumed exactly as
+     * in getRPM(). */
+    double getRPM(double samplePeriodMs);
     void clearCounter();
     int64_t getAccumCnt();
     static int32_t TurnNum_toCnt(const HallEncoder& thisEncoder, float _num);

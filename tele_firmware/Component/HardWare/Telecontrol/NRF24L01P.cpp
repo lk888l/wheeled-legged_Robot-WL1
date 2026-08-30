@@ -29,7 +29,42 @@ bool NRF24L01P::ensureSemaphore()
         return false;
     }
 
-    static_cast<void>(xSemaphoreTake(spi_semaphore_, 0U));
+    drainSpiSemaphore();
+    return true;
+}
+
+void NRF24L01P::drainSpiSemaphore() noexcept
+{
+    if (spi_semaphore_ == nullptr) {
+        return;
+    }
+
+    while (xSemaphoreTake(spi_semaphore_, 0U) == pdTRUE) {
+    }
+}
+
+bool NRF24L01P::recoverSpiFailure() noexcept
+{
+    // A failed DMA transaction may leave CSN asserted and the HAL handle BUSY.
+    // Terminate the nRF command first, then reset the peripheral/DMA state so a
+    // later radio reinitialization can make forward progress.
+    setChipSelect(false);
+    if (spi_ != nullptr) {
+        static_cast<void>(HAL_SPI_Abort(spi_));
+    }
+    drainSpiSemaphore();
+    return false;
+}
+
+bool NRF24L01P::waitForSpiCompletion()
+{
+    if (xSemaphoreTake(spi_semaphore_, spi_timeout) != pdTRUE) {
+        return recoverSpiFailure();
+    }
+    if (HAL_SPI_GetState(spi_) != HAL_SPI_STATE_READY ||
+        HAL_SPI_GetError(spi_) != HAL_SPI_ERROR_NONE) {
+        return recoverSpiFailure();
+    }
     return true;
 }
 
@@ -47,30 +82,34 @@ void NRF24L01P::setChipEnable(bool enabled) noexcept
 
 bool NRF24L01P::spiSend(const std::uint8_t* data, std::uint16_t size)
 {
-    if (spi_semaphore_ == nullptr || data == nullptr || size == 0U) {
-        return false;
+    if (spi_ == nullptr || spi_semaphore_ == nullptr || data == nullptr || size == 0U) {
+        return recoverSpiFailure();
     }
 
-    static_cast<void>(xSemaphoreTake(spi_semaphore_, 0U));
+    drainSpiSemaphore();
     if (HAL_SPI_Transmit_DMA(spi_, const_cast<std::uint8_t*>(data), size) != HAL_OK) {
-        return false;
+        return recoverSpiFailure();
     }
-    return xSemaphoreTake(spi_semaphore_, spi_timeout) == pdTRUE &&
-           HAL_SPI_GetError(spi_) == HAL_SPI_ERROR_NONE;
+    return waitForSpiCompletion();
 }
 
 bool NRF24L01P::spiReceive(std::uint8_t* data, std::uint16_t size)
 {
-    if (spi_semaphore_ == nullptr || data == nullptr || size == 0U) {
-        return false;
+    if (spi_ == nullptr || spi_semaphore_ == nullptr || data == nullptr || size == 0U) {
+        return recoverSpiFailure();
     }
 
-    static_cast<void>(xSemaphoreTake(spi_semaphore_, 0U));
+    drainSpiSemaphore();
     if (HAL_SPI_Receive_DMA(spi_, data, size) != HAL_OK) {
-        return false;
+        return recoverSpiFailure();
     }
-    return xSemaphoreTake(spi_semaphore_, spi_timeout) == pdTRUE &&
-           HAL_SPI_GetError(spi_) == HAL_SPI_ERROR_NONE;
+    return waitForSpiCompletion();
+}
+
+bool NRF24L01P::isIrqAsserted() const noexcept
+{
+    return irq_port_ != nullptr && irq_pin_ != 0U &&
+           HAL_GPIO_ReadPin(irq_port_, irq_pin_) == GPIO_PIN_RESET;
 }
 
 bool NRF24L01P::readRegister(

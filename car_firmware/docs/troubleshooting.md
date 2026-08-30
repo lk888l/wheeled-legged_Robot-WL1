@@ -24,15 +24,17 @@
 | `MPU: fail` | I2C、地址、供电或器件身份检查失败；电机 PWM 保持为 0 |
 | `nRF: send success` | TX 完成且收到 ACK |
 | `nRF: send fail` | 达到最大自动重发次数 |
+| `nRF init success` | SPI 寄存器回读正确并已进入 RX |
+| `nRF init failed, retrying` | 初始化失败；保持安全目标并每 1 s 自动重试 |
 | `receive: ...` | 收到无法匹配的文本命令 |
 
-当前 nRF 初始化返回值没有启动日志，因此“没有 nRF 日志”不能证明初始化成功。
+执行 `nrfstatus` 可查看初始化次数、补轮询、有效收包、SPI 错误和队列丢包。
 
 ## 常见现象
 
 | 现象 | 优先检查 |
 | --- | --- |
-| 无任何日志、LED 不翻转 | 供电、BOOT0、复位、时钟、HardFault、镜像地址 |
+| 无任何日志、LED 无任何图案 | 供电、BOOT0、复位、时钟、HardFault、镜像地址 |
 | `CPPMain: fail` | 32 KiB FreeRTOS heap、任务栈、重复创建对象 |
 | `MPU: fail` | PB6/PB7、0x68 地址、上拉、电源和共地 |
 | IMU 值跳变或缓慢漂移 | 安装方向、振动、陀螺零偏、采样周期 |
@@ -42,7 +44,19 @@
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
 | 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
 | 串口偶尔少日志 | UART 固定发送缓冲已满；高频日志会被丢弃 |
-| PC13 翻转不稳定 | Reactor 被高频事件持续唤醒、tick 异常或高优先级任务占用过久 |
+| PC13 图案停顿或错乱 | Reactor/SPI 长时间阻塞、tick 异常或高优先级任务占用过久 |
+
+PC13 为低电平点亮，每个字符表示 100 ms，图案每 2 秒重复：
+
+| 图案 | 状态 |
+| --- | --- |
+| `██..................` | 正常，单次慢心跳 |
+| `█████.....█████.....` | nRF 已就绪，但 250 ms 内没有有效无线 `R` 帧 |
+| `██..██..............` | 跳跃已武装 |
+| `██..██..██..........` | nRF 初始化或 SPI 故障，正在重试 |
+| `██..██..██..██......` | 跳跃 Fault 已锁存，等待明确解除武装 |
+| `██..██..██..██..██..` | IMU 无效或控制正在恢复 |
+| `████████████████████` | 跳跃动作阶段（默认构建仍是 dry-run） |
 
 ## IMU 排查
 
@@ -59,14 +73,29 @@ showimu -y
 showimu -n
 ```
 
-当前陀螺零偏在 `Component/AppModules/src/motion_control_module.cpp` 中固定为：
+当前 MPU6050 使用 ±2000 °/s、±8 g、100 Hz 和 2 ms I2C 超时。每次只做一次
+14 字节 burst；连续三次姿态无效会把两个轮电机 PWM 置零。`controlstatus` 可查看
+I2C 失败和原始饱和计数。
+
+陀螺零偏在 `Component/AppModules/src/motion_control_module.cpp` 中固定为：
 
 ```text
 X = 2.5, Y = 0.7, Z = 0.9
 ```
 
 更换 MPU6050 或机械安装后应重新标定。控制代码还会根据腿高动态计算
-`Angle_bias`；不要只通过 `anglebias` 命令判断持久偏置。
+`Angle_bias`；`anglebias auto` 可从手动覆盖恢复自动值。
+
+大动作后回正慢时同时观察 `a=...` 和 `ok=...`：加速度先要求模长在
+`0.8..1.2 g`、接近已学习静止模长，还会与陀螺预测的重力方向比较。方向误差
+超过 12° 时拒绝，回到 6° 内才重新接纳，因此“水平 0.5 g + 竖直 1 g”不会被
+误当成倾角。若陀螺预测曾丢失，只有轮速不超过 5 rpm、遥控目标居中、非跳跃动作，
+且静止重力方向/模长稳定 300 ms，才允许硬重捕获；首次静止模长窗口为
+`0.90..1.10 g`，之后使用 `max(0.03 g, 3%)` 容差。去除已学习零偏后的陀螺
+模长还需不超过 5°/s。`ok=0` 时未饱和的陀螺预测仍继续。正常可信重力修正的
+VQF 倾角时间常数为 0.5 s；建议台架验收为静止后 1.5 s 内
+Roll/Pitch 回到 2° 内。出现饱和计数则说明该段已接近约 1900 °/s 或 7.6 g，
+不应继续依赖该段姿态完成动作。
 
 ## 编码器和电机排查
 
@@ -137,16 +166,39 @@ legheight 60
 R 0.0 -0.0 0.0 61.5
 ```
 
+先执行：
+
+```text
+nrfstatus
+controlstatus
+```
+
+正常接收时 `ready=1` 且 `rx` 持续增加。车端先上电、遥控器先上电、遥控持续
+发送时复位车端三种顺序都应恢复；IRQ 在绑定前已经拉低时，任务会主动补服务，
+SPI 故障则会退出 ready 并在约 1 s 内重新初始化。关闭遥控器超过 250 ms 后，
+`controlstatus` 的 `remote` 应变为 0，速度/转向/横滚归零。
+
 若遥控器持续报告 `radio: no ACK`：
 
 - 检查小车是否已经上电并进入 RX；
 - 检查 nRF 3.3 V 在发射瞬间是否跌落；
 - 检查 CE、CSN 和 IRQ 是否接反；
 - 在 `NRF24L01P::signal_IRQEvent()` 设置断点，确认 RX_DR；
-- 检查 SPI DMA 信号量能否在 100 tick 超时前释放。
+- 检查 SPI DMA 信号量能否在 10 ms 超时前释放。
 
 `nrfsend` 和 `nrfshow` 会让小车临时进入 TX。排查正常遥控接收时先执行
 `nrfshow -nn`，并避免主动发送测试帧。
+
+## 跳跃状态机（默认 dry-run）
+
+先保持电机线断开、腿部机构架空，依次执行 `jump arm`、等待车体稳定、再执行
+`jump trigger`，用 `jump status` 或 `controlstatus` 观察状态。默认构建不会改变
+舵机目标。舵机 API 中的当前角度只是软件命令估计，不是物理位置反馈；启用
+`WL1_ENABLE_EXPERIMENTAL_JUMP=ON` 前必须单独完成机械限位、阶段时序、落地冲击和
+失联/IMU 故障测试。实验构建还要求舵机任务 ready 且心跳不超过 200 ms；待跳
+稳定门要求最新目标序号已消费、舵机软件平滑完成，且控制档位和原始 PID/偏置
+渐变均已结束。动作及 Fault 中原始参数保持冻结。动作中任务失联或控制周期超过
+30 ms 会进入 Fault；解除武装后仍需 abort 目标的软件确认和 200 ms 保持才复位。
 
 ## 构建问题
 
@@ -223,9 +275,10 @@ Vref，不能仅凭“仍能识别芯片”忽略欠压。
 4. USART1 仍映射 PA15/PA10，RX/TX DMA 分别为 Stream 5/7；
 5. SPI2 仍映射 PB13/PB14/PB15，DMA 分别为 Stream 3/4；
 6. PA12 仍为下降沿 EXTI，优先级为 6；
-7. SPI/UART DMA 中断优先级仍为 5；
-8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
-9. I2C1 仍为 PB6/PB7、400 kHz；
-10. CubeMX 生成的 include/source 列表仍由顶层 CMake 传给 `cmake/firmware.cmake`，
+7. PA4 / SPI2_CSN 的初始输出电平仍为 High，PB12 / CE 初始为 Low；
+8. SPI/UART DMA 中断优先级仍为 5；
+9. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
+10. I2C1 仍为 PB6/PB7、400 kHz；
+11. CubeMX 生成的 include/source 列表仍由顶层 CMake 传给 `cmake/firmware.cmake`，
     各手写组件的显式源文件列表仍完整；
-11. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。
+12. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。

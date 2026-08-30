@@ -36,6 +36,7 @@ public:
 
     [[nodiscard]] SPI_HandleTypeDef* spiHandle() const noexcept { return spi_; }
     [[nodiscard]] std::uint16_t irqPin() const noexcept { return irq_pin_; }
+    [[nodiscard]] bool isIrqAsserted() const noexcept;
 
     void onSpiTransferCompleteFromIsr() noexcept;
 
@@ -64,6 +65,9 @@ private:
         0x11U, 0x52U, 0x01U, 0x31U, 0x41U};
 
     [[nodiscard]] bool ensureSemaphore();
+    void drainSpiSemaphore() noexcept;
+    [[nodiscard]] bool recoverSpiFailure() noexcept;
+    [[nodiscard]] bool waitForSpiCompletion();
     [[nodiscard]] bool spiSend(const std::uint8_t* data, std::uint16_t size);
     [[nodiscard]] bool spiReceive(std::uint8_t* data, std::uint16_t size);
     [[nodiscard]] bool readRegister(

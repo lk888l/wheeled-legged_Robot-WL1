@@ -8,6 +8,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(WL1_ENABLE_EXPERIMENTAL_JUMP
+    "Allow the jump state machine to override real servo targets"
+    OFF
+)
+
+option(WL1_REQUIRE_UPRIGHT_STARTUP
+    "Require a near-upright, low-motion pose before enabling wheel control"
+    OFF
+)
+
 add_library(wl1_project_options INTERFACE)
 target_compile_options(wl1_project_options INTERFACE
     -mcpu=cortex-m4
@@ -25,6 +35,8 @@ target_compile_definitions(wl1_project_options INTERFACE
     ARM_MATH_CM4
     ARM_MATH_MATRIX_CHECK
     ARM_MATH_ROUNDING
+    WL1_ENABLE_EXPERIMENTAL_JUMP=$<BOOL:${WL1_ENABLE_EXPERIMENTAL_JUMP}>
+    WL1_REQUIRE_UPRIGHT_STARTUP=$<BOOL:${WL1_REQUIRE_UPRIGHT_STARTUP}>
 )
 
 add_library(wl1_strict_warnings INTERFACE)
@@ -34,9 +46,10 @@ target_compile_options(wl1_strict_warnings INTERFACE
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    target_compile_options(wl1_project_options INTERFACE -Ofast)
+    # Preserve IEEE-754 NaN/Inf checks in sensor and control safety paths.
+    target_compile_options(wl1_project_options INTERFACE -O2)
 elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    target_compile_options(wl1_project_options INTERFACE -Ofast -g)
+    target_compile_options(wl1_project_options INTERFACE -O2 -g)
 elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     target_compile_options(wl1_project_options INTERFACE -Os)
 else()

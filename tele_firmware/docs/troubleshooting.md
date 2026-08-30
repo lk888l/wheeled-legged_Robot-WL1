@@ -75,6 +75,21 @@ R 0.0 -0.0 0.0 61.5
 若小车能动作但仍报告 no ACK，重点检查小车端 EN_AA、RX_ADDR_P0 和 IRQ
 处理；这说明上行 payload 可能到达，但自动应答链路不完整。
 
+反过来，若小车向遥控器发送探测包时能收到 ACK，但小车始终收不到 `R` 帧，
+只能说明遥控器上的 nRF 仍在 PRX 模式并由硬件自动应答，不能证明遥控器 MCU、
+Radio 任务或 SPI DMA 正常运行。此时按下面顺序检查：
+
+1. PC13 是否持续随 50 ms 发送周期翻转；
+2. Radio 任务是否仍在运行，保存的 PC 是否位于 `radioTask()` 循环；
+3. `hspi2.State` 是否长期为 BUSY，DMA1 Stream 3/4 的 NDTR 是否停止变化；
+4. PA12 IRQ 是否持续为低，以及 nRF 的 `STATUS`、`FIFO_STATUS`；
+5. 板上 Flash 是否确实是当前构建的遥控器镜像。
+
+当前驱动会在 SPI DMA 启动失败、超时或 HAL 状态异常时拉高 CSN、执行
+`HAL_SPI_Abort()` 并清理完成信号量；Radio 任务也会在每个发送周期补查 IRQ
+低电平，避免只依赖下降沿通知而永久丢失中断。若仍卡在 BUSY，应继续检查 DMA
+中断、HardFault 和供电，而不是仅反复重试 nRF 初始化。
+
 ## ADC 排查
 
 ADC DMA 缓冲顺序固定为：

@@ -74,7 +74,10 @@ public:
      * @brief
      * @return
      */
+    // Commanded-angle estimate only. This class has no physical position feedback.
     float getCurrentAngle() const;
+    /** True when the software commanded-angle estimate reached its target. */
+    bool isCommandComplete(float tolerance_degrees = 0.5F) const;
 
     void setLimit(float min, float max){
         Limit_Min_Angle = min;

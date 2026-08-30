@@ -48,12 +48,15 @@ int32_t HallEncoder::getCounter() {
  * @return
  */
 double HallEncoder::getRPM() {
+    return getRPM(static_cast<double>(Hall_Cfg.Samplerate));
+}
+
+double HallEncoder::getRPM(double samplePeriodMs) {
     int32_t delta = getCounter();
-    // 增加分母检查，防止除零
     double perTurnCnt = static_cast<double>(Hall_Cfg.EdgeCnt) * Hall_Cfg.EncoderLine * Hall_Cfg.ReductionRatio;
-//    if (perTurnCnt == 0) return 0;
+    if (perTurnCnt <= 0.0 || samplePeriodMs <= 0.0) return 0.0;
     // 计算公式：(增量 / 每圈脉冲数) * (60s / 采样周期s)
-    return (delta / perTurnCnt) * (60000.0 / Hall_Cfg.Samplerate);
+    return (delta / perTurnCnt) * (60000.0 / samplePeriodMs);
 }
 
 void HallEncoder::clearCounter() {

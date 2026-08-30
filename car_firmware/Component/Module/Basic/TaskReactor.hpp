@@ -92,7 +92,9 @@ public:
             return false;
         }
 
-        return setSlot(bit_mask, [sender, signal, slot]() { (sender->*signal)(slot); });
+        return setSlot(bit_mask, [sender, signal, slot]() {
+            static_cast<void>((sender->*signal)(slot));
+        });
     }
 
     void taskLoop(TickType_t ticks_to_wait = portMAX_DELAY,
@@ -114,6 +116,13 @@ public:
                 if (elapsed >= ticks_to_wait)
                 {
                     on_timeout();
+                    // A timeout callback may synchronously produce work (for
+                    // example, polling a level-held peripheral IRQ). Process
+                    // that work before blocking for another timeout period.
+                    if (after_notify)
+                    {
+                        after_notify();
+                    }
                     last_wake_time = xTaskGetTickCount();
                     ticks_remaining = ticks_to_wait;
                 }

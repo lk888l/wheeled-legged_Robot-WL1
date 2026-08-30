@@ -1,4 +1,5 @@
 add_library(wl1_control OBJECT
+    CtrlAlgorithm/JumpController.cpp
     CtrlAlgorithm/LegKinematics.cpp
     CtrlAlgorithm/LQR.cpp
     CtrlAlgorithm/PID.cpp

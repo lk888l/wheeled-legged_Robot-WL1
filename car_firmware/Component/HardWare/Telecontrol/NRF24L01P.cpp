@@ -19,10 +19,10 @@ NRF24L01P::NRF24L01P(SPI_HandleTypeDef *hspi,
                      GPIO_TypeDef* irqPort, uint16_t irqPin)
     : HSpi(hspi), csPort(csPort), csPin(csPin), cePort(cePort), cePin(cePin),irqPort(irqPort), irqPin(irqPin)
 {
-// 创建用于 SPI DMA 同步的二值信号量
-    spiDmaSemaphore = xSemaphoreCreateBinary();
-    // 确保初始状态是空的
-    xSemaphoreTake(spiDmaSemaphore, 0);
+    // GPIO is initialized before the C++ runtime is created. Restore the nRF's
+    // inactive bus state immediately and keep it safe across generated-code changes.
+    write_ce(0);
+    csHigh();
 }
 
 /**
@@ -37,6 +37,10 @@ uint16_t NRF24L01P::getIRQGPIOPort(){
     return irqPin;
 }
 
+bool NRF24L01P::isIRQAsserted() const {
+    return HAL_GPIO_ReadPin(irqPort, irqPin) == GPIO_PIN_RESET;
+}
+
 void NRF24L01P::csLow() {
     HAL_GPIO_WritePin(csPort, csPin, GPIO_PIN_RESET);
 }
@@ -49,81 +53,143 @@ void NRF24L01P::write_ce(uint8_t gpio_status) {
     HAL_GPIO_WritePin(cePort, cePin, static_cast<GPIO_PinState>(gpio_status));
 }
 
+bool NRF24L01P::ensureSemaphore() {
+    if (spiDmaSemaphore == nullptr) {
+        spiDmaSemaphore = xSemaphoreCreateBinaryStatic(&spiDmaSemaphoreStorage);
+    }
+    if (spiDmaSemaphore == nullptr) {
+        return false;
+    }
+    while (xSemaphoreTake(spiDmaSemaphore, 0) == pdTRUE) {
+    }
+    return true;
+}
+
 bool NRF24L01P::spiSend(const uint8_t *pData, uint16_t size) {
-//    return static_cast<bool>(HAL_SPI_Transmit(HSpi, pData, size, HAL_MAX_DELAY));
-    if (HAL_SPI_Transmit_DMA(HSpi, (uint8_t*)pData, size) != HAL_OK) return false;
-    // 挂起任务，等待 DMA 完成中断释放信号量。最大等待 100 滴答 (根据你的SPI速率调整)
-    return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
+    if (pData == nullptr || size == 0 || !ensureSemaphore()) {
+        return false;
+    }
+    if (HAL_SPI_Transmit_DMA(HSpi, const_cast<uint8_t*>(pData), size) != HAL_OK) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (xSemaphoreTake(spiDmaSemaphore, SPI_DMA_TIMEOUT) != pdTRUE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (HAL_SPI_GetState(HSpi) != HAL_SPI_STATE_READY
+        || HAL_SPI_GetError(HSpi) != HAL_SPI_ERROR_NONE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    return true;
 }
 
 bool NRF24L01P::spiReceive(uint8_t *pData, uint16_t size) {
-//    return static_cast<bool>(HAL_SPI_Receive(HSpi, pData, size, HAL_MAX_DELAY));
-    if (HAL_SPI_Receive_DMA(HSpi, pData, size) != HAL_OK) return false;
-    return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
+    if (pData == nullptr || size == 0 || !ensureSemaphore()) {
+        return false;
+    }
+    if (HAL_SPI_Receive_DMA(HSpi, pData, size) != HAL_OK) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (xSemaphoreTake(spiDmaSemaphore, SPI_DMA_TIMEOUT) != pdTRUE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (HAL_SPI_GetState(HSpi) != HAL_SPI_STATE_READY
+        || HAL_SPI_GetError(HSpi) != HAL_SPI_ERROR_NONE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    return true;
 }
 
 bool NRF24L01P::spiTransfer(const uint8_t *pTxData, uint8_t *pRxData, uint16_t size) {
-//    return static_cast<bool>(HAL_SPI_TransmitReceive(HSpi, pTxData, pRxData, size, HAL_MAX_DELAY));
-    if (HAL_SPI_TransmitReceive_DMA(HSpi, (uint8_t*)pTxData, pRxData, size) != HAL_OK) return false;
-    return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
+    if (pTxData == nullptr || pRxData == nullptr || size == 0 || !ensureSemaphore()) {
+        return false;
+    }
+    if (HAL_SPI_TransmitReceive_DMA(
+            HSpi, const_cast<uint8_t*>(pTxData), pRxData, size) != HAL_OK) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (xSemaphoreTake(spiDmaSemaphore, SPI_DMA_TIMEOUT) != pdTRUE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    if (HAL_SPI_GetState(HSpi) != HAL_SPI_STATE_READY
+        || HAL_SPI_GetError(HSpi) != HAL_SPI_ERROR_NONE) {
+        HAL_SPI_Abort(HSpi);
+        return false;
+    }
+    return true;
 }
 
 bool NRF24L01P::readRegister(uint8_t reg, uint8_t *buf, uint8_t len) {
+    if (buf == nullptr || len == 0 || len > PACKET_WIDTH) {
+        return false;
+    }
+    std::array<uint8_t, PACKET_WIDTH + 1> tx{};
+    std::array<uint8_t, PACKET_WIDTH + 1> rx{};
+    tx[0] = static_cast<uint8_t>(CMD_R_REGISTER | reg);
     csLow();
-    bool isSuccess= true;
-    uint8_t regAddress = CMD_R_REGISTER | reg;
-    isSuccess &= spiSend(&regAddress,1);
-    isSuccess &= spiReceive(buf,len);
+    const bool isSuccess = spiTransfer(tx.data(), rx.data(), len + 1U);
     csHigh();
+    if (isSuccess) {
+        std::copy_n(rx.begin() + 1, len, buf);
+    }
     return isSuccess;
 }
 
 bool NRF24L01P::writeRegister(uint8_t reg, const uint8_t* buf, uint8_t len){
+    if (buf == nullptr || len == 0 || len > PACKET_WIDTH) {
+        return false;
+    }
+    std::array<uint8_t, PACKET_WIDTH + 1> tx{};
+    tx[0] = static_cast<uint8_t>(CMD_W_REGISTER | reg);
+    std::copy_n(buf, len, tx.begin() + 1);
     csLow();
-    bool isSuccess= true;
-    uint8_t regAddress = CMD_W_REGISTER | reg;
-    isSuccess &= spiSend(&regAddress,1);
-    isSuccess &= spiSend(buf,len);
+    const bool isSuccess = spiSend(tx.data(), len + 1U);
     csHigh();
     return isSuccess;
+}
+
+bool NRF24L01P::sendCommand(uint8_t command) {
+    csLow();
+    const bool success = spiSend(&command, 1);
+    csHigh();
+    return success;
 }
 
 bool NRF24L01P::flushTx() {
-    csLow();
-    bool isSuccess;
-    uint8_t command = CMD_FLUSH_TX;
-    isSuccess = spiSend(&command,1);  // Flush RX FIFO, used in RX mode [cite: 711]
-    csHigh();
-    return isSuccess;
+    return sendCommand(CMD_FLUSH_TX);
 }
 
 bool NRF24L01P::flushRx() {
-    csLow();
-    bool isSuccess;
-    uint8_t command = CMD_FLUSH_RX;
-    isSuccess = spiSend(&command,1);  // Flush RX FIFO, used in RX mode [cite: 711]
-    csHigh();
-    return isSuccess;
+    return sendCommand(CMD_FLUSH_RX);
 }
 
 /**
  * @brief
  */
 bool NRF24L01P::Init() {
-//    ceLow();
-//    csHigh();
-//    HAL_Delay(100); // Wait for Power on reset
+    if (!ensureSemaphore()) {
+        return false;
+    }
+    write_ce(0);
+    csHigh();
 
     bool isSuccess = true;
     uint8_t command;
-    // Set configuration: Enable 2 byte CRC, Power Up, PTX mode [cite: 770, 772]
+    // Enable one-byte CRC while remaining powered down in PTX mode. start_RxMode()
+    // performs the power-up transition after all registers have been verified.
     command = 0x08;
-    isSuccess &= writeRegister(REG_CONFIG, &command,1); // EN_CRC=1, CRCO=0 (1 byte), PWR_UP=1, PRIM_RX=0
-    //Set EN_AA auto-answer number of channels (open all)
-    command = 0x3F;
+    isSuccess = writeRegister(REG_CONFIG, &command,1) && isSuccess;
+    // Auto ACK and RX are only needed on pipe 0.
+    command = 0x01;
     isSuccess &= writeRegister(REG_EN_AA,&command,1);
-    //Set Receive channel(open all)
-    command = 0x03;
+    command = 0x01;
     isSuccess &= writeRegister(REG_EN_RXADDR,&command,1);
     //Set Address Widths
     command = 0x03;
@@ -141,10 +207,21 @@ bool NRF24L01P::Init() {
     isSuccess &= setRX_Addr(0,RxAddress_P0);
     isSuccess &= setRX_PW(0,PACKET_WIDTH);
     isSuccess &= setTX_Addr(TxAddress);
-    flushRx();
-    flushTx();
+    isSuccess = flushRx() && isSuccess;
+    isSuccess = flushTx() && isSuccess;
     command = 0x70;
     isSuccess &= writeRegister(REG_STATUS,&command,1);
+
+    // Read back the settings that identify the radio link. A floating MISO line
+    // otherwise makes a failed power-up indistinguishable from a configured radio.
+    uint8_t readback = 0;
+    isSuccess = readRegister(REG_RF_CH, &readback, 1) && readback == 2U && isSuccess;
+    isSuccess = readRegister(REG_SETUP_AW, &readback, 1)
+        && (readback & 0x03U) == 0x03U && isSuccess;
+    isSuccess = readRegister(REG_RX_PW_P0, &readback, 1)
+        && readback == PACKET_WIDTH && isSuccess;
+    isSuccess = readRegister(REG_RF_SETUP, &readback, 1)
+        && (readback & 0x28U) == 0x08U && isSuccess;
     return isSuccess;
 }
 
@@ -160,14 +237,14 @@ bool NRF24L01P::setChannel(uint8_t channel) {
  * @return
  */
 bool NRF24L01P::setPALevel(uint8_t level) {
-    uint8_t setup;
-    bool isSuccess;
-    isSuccess = readRegister(REG_RF_SETUP,&setup,1);
+    uint8_t setup{};
+    if (!readRegister(REG_RF_SETUP, &setup, 1)) {
+        return false;
+    }
     setup &= (~0x06);
     if (level > 3) level = 3;
     setup |= (level << 1);
-    isSuccess &= writeRegister(REG_RF_SETUP, &setup,1);
-    return isSuccess;
+    return writeRegister(REG_RF_SETUP, &setup,1);
 }
 
 /**
@@ -176,15 +253,16 @@ bool NRF24L01P::setPALevel(uint8_t level) {
  * @return
  */
 bool NRF24L01P::setDataRate(uint8_t rate) {
-    uint8_t setup;
-    bool isSuccess;
-    isSuccess = readRegister(REG_RF_SETUP,&setup,1); // Clear RF_DR_LOW and RF_DR_HIGH
+    uint8_t setup{};
+    if (!readRegister(REG_RF_SETUP, &setup, 1)) {
+        return false;
+    }
+    // Clear RF_DR_LOW and RF_DR_HIGH.
     setup  &= (~0x28);
     if (rate == 0) setup |= (1 << 5);       // 250kbps (RF_DR_LOW = 1)
     else if (rate == 1) setup &= ~(1 << 3); // 1Mbps (RF_DR_HIGH = 0)
     else if (rate == 2) setup |= (1 << 3);  // 2Mbps (RF_DR_HIGH = 1)
-    isSuccess&=writeRegister(REG_RF_SETUP, &setup,1);
-    return isSuccess;
+    return writeRegister(REG_RF_SETUP, &setup,1);
 }
 
 
@@ -226,83 +304,96 @@ bool NRF24L01P::setTX_Addr(uint8_t *address) {
  * @return
  */
 bool NRF24L01P::openReadingPipe(uint8_t pipe, uint8_t *address) {
-    bool isSuccess = true;
-    setRX_Addr(pipe,address);
-    uint8_t en_rxaddr;
-    isSuccess = readRegister(REG_EN_RXADDR,&en_rxaddr,1);
+    if (!setRX_Addr(pipe, address)) {
+        return false;
+    }
+    uint8_t en_rxaddr{};
+    if (!readRegister(REG_EN_RXADDR, &en_rxaddr, 1)) {
+        return false;
+    }
     en_rxaddr |= (1 << pipe); // Enable data pipe [cite: 774, 775]
-    writeRegister(REG_EN_RXADDR, &en_rxaddr, 1);
-    return isSuccess;
+    return writeRegister(REG_EN_RXADDR, &en_rxaddr, 1);
 }
 
 bool NRF24L01P::PowerDown() {
-    bool isSuccess;
-    uint8_t config;
-    isSuccess = readRegister(REG_CONFIG,&config,1);
+    uint8_t config{};
+    if (!readRegister(REG_CONFIG, &config, 1)) {
+        return false;
+    }
     config &= ~0x02;
-    isSuccess &= writeRegister(REG_CONFIG,&config,1);
-    return isSuccess;
+    return writeRegister(REG_CONFIG, &config, 1);
 }
 
 bool NRF24L01P::standbyI() {
     write_ce(0);
-    bool isSuccess;
-    uint8_t config;
-    isSuccess = readRegister(REG_CONFIG,&config,1);
+    uint8_t config{};
+    if (!readRegister(REG_CONFIG, &config, 1)) {
+        return false;
+    }
     config |= 0x02;
-    isSuccess &= writeRegister(REG_CONFIG,&config,1);
-    return isSuccess;
+    return writeRegister(REG_CONFIG, &config, 1);
 }
 
 bool NRF24L01P::start_RxMode() {
     write_ce(0);
-    bool isSuccess;
     uint8_t config{};
-    isSuccess = readRegister(REG_CONFIG,&config,1);
-    config |= 0x03;
-    isSuccess &= writeRegister(REG_CONFIG,&config,1);
-    write_ce(1);
+    if (!readRegister(REG_CONFIG, &config, 1)) {
+        return false;
+    }
+    const bool was_powered = (config & 0x02U) != 0U;
+    config |= 0x03U;
+    const bool isSuccess = writeRegister(REG_CONFIG, &config, 1);
+    if (isSuccess && !was_powered) {
+        // nRF24L01+ needs up to 1.5 ms from power-down to standby-I.
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    write_ce(isSuccess ? 1U : 0U);
     return isSuccess;
 }
 
 bool NRF24L01P::start_TxMode() {
     write_ce(0);
-    bool isSuccess;
     uint8_t config{};
-    isSuccess = readRegister(REG_CONFIG,&config,1);
+    if (!readRegister(REG_CONFIG, &config, 1)) {
+        return false;
+    }
     config |= 0x02;
     config &= ~0x01;
-    isSuccess &= writeRegister(REG_CONFIG,&config,1);
-    write_ce(1);
+    const bool isSuccess = writeRegister(REG_CONFIG, &config, 1);
+    write_ce(isSuccess ? 1U : 0U);
     return isSuccess;
 }
 
 bool NRF24L01P::send(const uint8_t *data, uint8_t length) {
-    bool isSuccess;
-    uint8_t command = CMD_W_TX_PAYLOAD;
+    if (data == nullptr || length == 0) {
+        return false;
+    }
+    length = std::min(length, PACKET_WIDTH);
+    std::array<uint8_t, PACKET_WIDTH + 1> tx{};
+    tx[0] = CMD_W_TX_PAYLOAD;
+    std::copy_n(data, length, tx.begin() + 1);
+    write_ce(0);
     csLow();
-    isSuccess = spiSend(&command,1);
-    isSuccess &= spiSend(data,length);
+    const bool isSuccess = spiSend(tx.data(), length + 1U);
     csHigh();
-    isSuccess &= start_TxMode();
-    return isSuccess;
+    return isSuccess && start_TxMode();
 }
 
 bool NRF24L01P::getStatus(NRF24L01P::Status_t &status) {
     bool isSuccess;
     uint8_t data{};
     isSuccess = readRegister(REG_STATUS,&data,1);
-    if (true) {
+    if (isSuccess) {
         // Bit 6: Data Ready RX FIFO interrupt
-        status.RX_DR   = (data & 0x40);
+        status.RX_DR   = (data & 0x40U) != 0U;
         // Bit 5: Data Sent TX FIFO interrupt
-        status.TX_DS   = (data & 0x20);
+        status.TX_DS   = (data & 0x20U) != 0U;
         // Bit 4: Maximum number of TX retransmits interrupt
-        status.MAX_RT  = (data & 0x10);
+        status.MAX_RT  = (data & 0x10U) != 0U;
         // Bits 3:1: Data pipe number for the payload available for reading
-        status.RX_P_NO = (data & 0x0E);
+        status.RX_P_NO = static_cast<uint8_t>((data >> 1U) & 0x07U);
         // Bit 0: TX FIFO full flag
-        status.TX_FULL = (data & 0x01);
+        status.TX_FULL = (data & 0x01U) != 0U;
     }
     return isSuccess;
 }
@@ -318,20 +409,20 @@ bool NRF24L01P::setStatus(uint8_t data) {
  * @return
  */
 bool NRF24L01P::tryReceive(uint8_t *data, uint8_t length) {
-    Status_t status;
-    uint8_t command = CMD_R_RX_PAYLOAD;
-//    getStatus(status);
-//    if(status.RX_DR){
-        csLow();
-        spiSend(&command,1);
-        spiReceive(data,length);
-        csHigh();
-//        setStatus(0x40);
-//        flushRx();
-        return true;
-//    } else{
-//        return false;
-//    }
+    if (data == nullptr || length == 0) {
+        return false;
+    }
+    length = std::min(length, PACKET_WIDTH);
+    std::array<uint8_t, PACKET_WIDTH + 1> tx{};
+    std::array<uint8_t, PACKET_WIDTH + 1> rx{};
+    tx[0] = CMD_R_RX_PAYLOAD;
+    csLow();
+    const bool success = spiTransfer(tx.data(), rx.data(), length + 1U);
+    csHigh();
+    if (success) {
+        std::copy_n(rx.begin() + 1, length, data);
+    }
+    return success;
 }
 
 void NRF24L01P::isrExtiHandler() {
@@ -342,6 +433,9 @@ void NRF24L01P::isrExtiHandler() {
 }
 
 void NRF24L01P::isrSpiDmaCompleteHandler() {
+    if (spiDmaSemaphore == nullptr) {
+        return;
+    }
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(spiDmaSemaphore, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -352,26 +446,82 @@ void NRF24L01P::isrSpiDmaCompleteHandler() {
  * @brief
  * @param slot
  */
-void NRF24L01P::signal_IRQEvent(std::function<void(Status_t &curStatus)> slot) {
-    NRF24L01P::Status_t status;
-    getStatus(status);
-    setStatus(0x70);
-    slot(status);
+bool NRF24L01P::signal_IRQEvent(const StatusHandler& slot) {
+    if (!slot) {
+        return false;
+    }
+
+    Status_t status{};
+    if (!getStatus(status)) {
+        status.IO_ERROR = true;
+        static_cast<void>(slot(status));
+        return false;
+    }
+
+    bool success = true;
     if (status.RX_DR) {
-//        setStatus(0x40);
-        flushRx();
+        // Read then clear RX_DR before checking the FIFO. If a packet arrives after
+        // the FIFO-empty check it asserts a fresh IRQ instead of being erased by a
+        // late W1C, while packets already queued are drained in this service call.
+        for (std::uint8_t payload_index = 0;
+             payload_index < RX_FIFO_DEPTH;
+             ++payload_index) {
+            Status_t payload_status = status;
+            if (payload_index != 0U) {
+                payload_status.TX_DS = false;
+                payload_status.MAX_RT = false;
+            }
+            if (!slot(payload_status)) {
+                success = false;
+                break;
+            }
+
+            success = setStatus(0x40U) && success;
+            if (!success) {
+                break;
+            }
+
+            std::uint8_t fifo_status = 0;
+            if (!readRegister(REG_FIFO_STATUS, &fifo_status, 1)) {
+                success = false;
+                break;
+            }
+            if ((fifo_status & 0x01U) != 0U) { // RX_EMPTY
+                break;
+            }
+            if (payload_index + 1U == RX_FIFO_DEPTH) {
+                // A healthy nRF24L01+ cannot have more than three queued RX
+                // payloads. Fail closed if the FIFO never drains so the caller
+                // reinitializes and flushes the radio instead of spinning here.
+                success = false;
+                break;
+            }
+        }
     }
-    else if (status.TX_DS) {
-        // 发送成功 (收到 ACK)
-//        setStatus(0x20); // 清除标志位
-        start_RxMode();  // 切回接收模式
+    else {
+        success = slot(status) && success;
     }
-    else if (status.MAX_RT) {
-        // 发送失败 (达到最大重发次数)
-        flushTx();       // 必须清空 TX FIFO
-//        setStatus(0x10); // 清除标志位
-        start_RxMode();  // 切回接收模式
+
+    std::uint8_t clear_mask = 0;
+    if (status.TX_DS) {
+        clear_mask |= 0x20U;
     }
+    if (status.MAX_RT) {
+        clear_mask |= 0x10U;
+        success = flushTx() && success;
+    }
+    if (clear_mask != 0U) {
+        success = setStatus(clear_mask) && success;
+    }
+    if (status.TX_DS || status.MAX_RT) {
+        success = start_RxMode() && success;
+    }
+    if (!success) {
+        Status_t error_status{};
+        error_status.IO_ERROR = true;
+        static_cast<void>(slot(error_status));
+    }
+    return success;
 }
 
 

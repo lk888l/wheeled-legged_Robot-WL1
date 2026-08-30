@@ -31,7 +31,7 @@ payload 后，在任务上下文中使用与串口相同的解析器执行。
 
 | 命令 | 参数 | 作用 |
 | --- | --- | --- |
-| `R` | `<turn> <velocity> <roll> <height>` | 一次更新转向、速度、横滚和腿高目标 |
+| `R` | `<turn> <velocity> <roll> <height> [profile [flags]]` | 原子更新遥控目标和可选档位/动作位 |
 | `VandD` | `<difference> <velocity>` | 更新左右轮速差和平均速度目标 |
 | `target_roll` | `<degrees>` | 更新横滚目标 |
 | `legheight` | `<millimetres>` | 更新共同腿高目标，并打印运动学计算结果 |
@@ -48,17 +48,23 @@ R 0.0 -0.0 0.0 61.5
 1. `turn` → `Differ_Target`，目标左右 RPM 差；
 2. `velocity` → `Velocity_Target`，目标平均 RPM；
 3. `roll` → `Roll_Target`，单位为度；
-4. `height` → `Target_height`，单位为毫米。
+4. `height` → `Target_height`，单位为毫米；
+5. 可选 `profile`：`0` 柔和、`1` 普通、`2` 运动；
+6. 可选 `flags`：bit0 武装跳跃，bit1 发出跳跃请求（只认上升沿）。
+
+四个主字段分别限制为转向/速度 `-100..100`、横滚 `-18..18°`、腿高
+`44.5..78.5 mm`。一帧的四个字段在短临界区内同时提交，运动任务不会读到
+新旧字段混合值。有效 `R` 帧中断超过 250 ms 后，速度、转向、横滚会归零，
+跳跃同时解除武装；姿态平衡内环继续运行。队列会保留 UART/无线来源，串口
+测试帧不能伪装成新鲜无线链路；缺少 `flags` 的旧帧不具备跳跃权限。
 
 `tele_firmware` 会将摇杆速度取反后编码到第二个字段。只在一端修改符号会导致
 前进/后退方向反转。
 
-`legheight` 输入最终会在舵机任务中限制到 `44.5..78.5 mm`。命令返回的
-`Servo angel` 诊断值是在限幅前计算的，因此越界输入只适合检查算法，不代表
-舵机实际会到达该位置。
+`legheight` 输入会先限制到 `44.5..78.5 mm`，再计算并打印运动学结果。
 
-`anglebias` 的值会被 MotionControl 在下一次 10 ms 周期按腿高重新计算，
-不适合作为持久调参接口。
+`anglebias <degrees>` 会启用持久手动偏置并限制为 `5..20°`；`anglebias auto`
+恢复按腿高自动计算。实际值最多以 `5°/s` 渐变，避免一帧把姿态环推入饱和。
 
 ## PID 命令
 
@@ -84,9 +90,43 @@ velocitypid -p 0.04
 differpid -i 0.0008
 ```
 
-`Angle_kp` 会每 10 ms 按腿高重算为 `0.3 * height + 56.9`，因此
-`anglepid -p` 只会短暂生效。Angle `Ki`、`Kd` 和速度/差速参数会持续到
-下次复位。
+`anglepid -p` 现在是持久手动 `Kp` 覆盖；`anglepid auto` 恢复
+`0.3 * average_height + 56.9`。其他 PID 参数也会持续到下次复位。为避免实时
+命令把控制器直接推入长期饱和，固件会将手动值限制在已知量级：姿态
+`P=40..120, I=0..1, D=30..100`，轮速 `P=0..0.15, I=0..0.03,
+D=0..0.1`，差速 `P=0..5, I=0..0.01, D=0..1`，横滚
+`P=-1..1, I=-1..0`。原始参数不会一帧跳变，而是按约 1 秒跨越完整允许范围的
+速率渐变；跳跃已武装、处于动作阶段或 Fault 锁存时，原始 PID 和偏置修改会被
+拒绝。跳跃 Ready 稳定计时还会等待全部参数渐变完成，动作期间参数保持冻结。
+
+实时强度档位使用：
+
+```text
+pidlevel 0   # 柔和：降低外环增益和速度/转向/横滚权限
+pidlevel 1   # 普通：当前稳定参数
+pidlevel 2   # 运动：提高外环响应，保持已验证的姿态内环
+```
+
+档位在 400 ms 内插值，切换时会预置 PID 历史，避免微分冲击。柔和档仍保留
+完整的 `±1000` 平衡 PWM 权限。
+
+## 跳跃预留命令
+
+```text
+jump status
+jump arm
+jump trigger
+jump disarm
+```
+
+状态机包含 Ready、Preload、Thrust、Flight、Landing、Recover 和 Fault，使用
+IMU 加速度、Roll 和角速度监督阶段及超时。因为舵机没有位置反馈，它只是受 IMU
+监督的时间轨迹，不是舵机位置闭环。默认构建
+`WL1_ENABLE_EXPERIMENTAL_JUMP=OFF`，上述命令只运行 dry-run，绝不会覆盖真实
+腿高；实际执行开关不能通过无线或串口打开。实验构建若在动作中进入 Fault，
+解除武装只会先锁存确认；左右软件目标到达 52 mm、舵机任务确认已消费目标且
+软件平滑完成，再保持 200 ms 后才清除 Fault。舵机任务失联或控制周期超过
+30 ms 会锁存故障。由于没有位置回读，这仍不等于证明舵机轴实际到位。
 
 横滚控制提供：
 
@@ -110,8 +150,11 @@ rollpid -i <value>
 | `nrfshow -mp <slot>` | 将遥测槽 `0..3` 映射到 Pitch 并开始发送 |
 | `nrfshow -my <slot>` | 将遥测槽 `0..3` 映射到 Yaw 并开始发送 |
 | `nrfshow -nn` | 停止周期 nRF 遥测 |
+| `nrfstatus` | 显示无线 ready、IRQ、电源重试、补轮询、收包、SPI 错误和丢队列计数 |
+| `controlstatus` | 显示档位、IMU/失联/跳跃状态，以及舵机 ready/完成、目标序号和心跳年龄 |
 
-`showimu` 会在 10 ms 控制环内格式化并提交 UART 日志。长时间开启可能增加
+`showimu` 输出 `Roll,Pitch,Yaw,a=<|a|g>,ok=<accel trusted>`。它会在 10 ms
+控制环内格式化并提交 UART 日志。长时间开启可能增加
 中断延迟和 UART 丢帧，只用于短时诊断。
 
 nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发送

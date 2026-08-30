@@ -11,8 +11,12 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
+- Gentle, normal, and sport control profiles with a 400 ms transition;
+- Bounded slew for raw PID/pitch-bias tuning, locked while jump is armed, active, or faulted;
 - Fixed 32-byte wireless commands over the nRF24L01+;
+- A 250 ms remote-link failsafe and automatic nRF reinitialization;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
+- Two-second PC13 patterns with a slow normal heartbeat and distinct IMU/radio/jump states;
 - Fixed-capacity ETL containers for command queues and UART buffers.
 
 Further reading:
@@ -78,12 +82,24 @@ Build configurations:
 | `CMAKE_BUILD_TYPE` | Compiler options | Purpose |
 | --- | --- | --- |
 | `Debug` or unspecified | `-Og -g` | Debugging, stepping, and variable inspection |
-| `Release` | `-Ofast` | Normal operation |
-| `RelWithDebInfo` | `-Ofast -g` | Optimized execution with debug information |
+| `Release` | `-O2` | Normal operation; preserves NaN/Inf safety checks |
+| `RelWithDebInfo` | `-O2 -g` | Optimized execution with debug information |
 | `MinSizeRel` | `-Os` | Minimize image size |
 
 The project always uses the Cortex-M4F hard-float ABI (`fpv4-sp-d16`), C11, and
 C++23.
+
+Jump actuation has a separate compile-time safety gate and is disabled by default.
+Normal builds run the observable state machine in dry-run mode without overriding
+real leg targets:
+
+```sh
+cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DWL1_ENABLE_EXPERIMENTAL_JUMP=OFF
+```
+
+Use `ON` only after mechanical-limit, servo-timing, elevated-stand, and fault-path
+tests have been completed.
 
 ### 3. Flash with ST-Link
 
@@ -95,8 +111,8 @@ openocd -f STlink.cfg \
 ```
 
 After flashing, USART1 should print `CPPMain: success`, followed by `MPU: success`
-when MPU6050 initialization succeeds. The PC13 activity LED toggles approximately
-every 100 ms.
+when MPU6050 initialization succeeds. PC13 uses a two-second status pattern; the
+normal heartbeat is a single 200 ms pulse and is deliberately slower than faults.
 
 ## First Power-On
 
@@ -122,7 +138,7 @@ For detailed checks, see [Debugging and troubleshooting](docs/troubleshooting.md
 | USART1 RX | PA10 | 115200, 8-N-1, DMA2 Stream 5, receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
-| Activity LED | PC13 | Toggles every 100 ms |
+| Activity LED | PC13 | Active low, status pattern in 100 ms slots |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -137,8 +153,12 @@ follow this table and `Core/Src/usart.c`.
 | SDA | PB7 | I2C1, 400 kHz |
 | Address | — | 7-bit `0x68` (the driver uses the left-shifted value `0xD0`) |
 
-The current configuration uses a ±1000 °/s gyroscope range, a ±4 g accelerometer
-range, and VQF for attitude fusion.
+The current configuration uses a ±2000 °/s gyroscope range, a ±8 g accelerometer
+range, and a 100 Hz VQF. Each sample is one coherent 14-byte burst. Acceleration
+outside 0.8–1.2 g, away from the learned rest norm, more than 12° from
+gyro-predicted gravity, or near raw saturation is excluded from tilt correction.
+It is accepted again inside 6°. After fusion loss, hard reacquisition requires an
+external wheel/command stationary gate and 300 ms of stable gravity.
 
 ### Motors and Encoders
 
@@ -166,7 +186,9 @@ dead-zone compensation.
 TIM9 generates 100 Hz PWM. The software limits the target leg height to
 `44.5..78.5 mm` and converts it to a servo angle using four-bar inverse
 kinematics. Mechanical dimensions and coordinate-system definitions are in
-`Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`.
+`Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`. There is no shaft-position
+feedback: firmware can only acknowledge a live PWM task, consumption of the latest
+target, and completion of the software ramp, not physical arrival.
 
 ### nRF24L01+
 
@@ -201,8 +223,14 @@ The car enters nRF receive mode after power-on. A valid payload is an ASCII
 command padded to 32 bytes with `0x00`. The recommended control frame is:
 
 ```text
-R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
+R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm> [profile [flags]]
 ```
+
+`profile` is optionally 0/1/2 for gentle/normal/sport. In optional `flags`, bit 0
+arms the reserved jump controller and bit 1 is a rising-edge jump request. Legacy
+four-field transmitters remain compatible for driving but always disarm jump. After
+250 ms without a valid `R` frame, speed, steering, and roll targets are zeroed and
+jump is disarmed; real jump actuation additionally requires a fresh radio-origin frame.
 
 Example:
 

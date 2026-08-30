@@ -140,17 +140,21 @@ void radioTask(void*)
             vTaskDelay(radio_retry_period);
         }
         initialization_attempt = 0U;
-        static_cast<void>(ulTaskNotifyTake(pdTRUE, 0U));
 
         TickType_t last_transmit = xTaskGetTickCount();
         bool driver_healthy = true;
+        if (radio.isIrqAsserted()) {
+            driver_healthy = processRadioIrq(counters);
+        }
+
         while (driver_healthy) {
             const TickType_t now = xTaskGetTickCount();
             const TickType_t elapsed = now - last_transmit;
             const TickType_t wait =
                 elapsed >= radio_period ? 0U : radio_period - elapsed;
 
-            if (ulTaskNotifyTake(pdTRUE, wait) > 0U) {
+            const bool irq_notified = ulTaskNotifyTake(pdTRUE, wait) > 0U;
+            if (irq_notified || radio.isIrqAsserted()) {
                 driver_healthy = processRadioIrq(counters);
             }
 

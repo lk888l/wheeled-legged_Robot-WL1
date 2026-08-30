@@ -10,8 +10,12 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 
 - 10 ms 姿态环，计算左右轮 PWM；
 - 50 ms 速度、转向和横滚/腿高控制；
+- 柔和、普通、运动三档控制参数，切换时用 400 ms 渐变；
+- 原始 PID/俯仰偏置在线调节也使用限幅渐变，跳跃武装、动作或 Fault 锁存期间锁定；
 - nRF24L01+ 固定 32 字节无线命令；
+- 250 ms 遥控失联保护和 nRF 自动重初始化；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
+- PC13 两秒状态图案，正常慢心跳并区分 IMU、无线和跳跃状态；
 - ETL 固定容量容器，用于命令队列和 UART 缓冲。
 
 进一步阅读：
@@ -25,6 +29,9 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 > [!WARNING]
 > 轮腿自平衡控制会在任务启动后直接输出电机 PWM。首次烧录、修改控制方向或
 > 调整 PID 时，应架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
+> 当前默认构建使用 `WL1_REQUIRE_UPRIGHT_STARTUP=OFF`，IMU 获得可信姿态后会在
+> 任意俯仰/横滚角直接接管车轮；倒地上电也可能输出接近满占空比。需要恢复扶正后
+> 才启动的保护时，以 `-DWL1_REQUIRE_UPRIGHT_STARTUP=ON` 重新配置并构建。
 
 ## 快速开始
 
@@ -75,11 +82,21 @@ cmake --build build/Release --parallel
 | `CMAKE_BUILD_TYPE` | 编译选项 | 用途 |
 | --- | --- | --- |
 | `Debug` 或未指定 | `-Og -g` | 调试、单步和变量观察 |
-| `Release` | `-Ofast` | 实际运行 |
-| `RelWithDebInfo` | `-Ofast -g` | 优化运行并保留调试信息 |
+| `Release` | `-O2` | 实际运行；保留控制安全路径中的 NaN/Inf 检查 |
+| `RelWithDebInfo` | `-O2 -g` | 优化运行并保留调试信息 |
 | `MinSizeRel` | `-Os` | 优先减小镜像 |
 
 工程固定使用 Cortex-M4F 硬浮点 ABI（`fpv4-sp-d16`）、C11 和 C++23。
+
+跳跃执行有单独的编译安全门，默认关闭。普通构建只运行可观测的 dry-run
+状态机，不会用跳跃轨迹覆盖舵机目标：
+
+```sh
+cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DWL1_ENABLE_EXPERIMENTAL_JUMP=OFF
+```
+
+`ON` 仅预留给完成机械限位、舵机时序和架空测试后的实验固件。
 
 ### 3. 使用 ST-Link 烧录
 
@@ -91,7 +108,7 @@ openocd -f STlink.cfg \
 ```
 
 烧录后，USART1 应输出 `CPPMain: success`，MPU6050 初始化成功时输出
-`MPU: success`。PC13 活动指示灯约每 100 ms 翻转一次。
+`MPU: success`。PC13 使用 2 秒状态图案；正常状态仅亮 200 ms，明显慢于故障提示。
 
 ## 首次上电
 
@@ -117,7 +134,7 @@ openocd -f STlink.cfg \
 | USART1 RX | PA10 | 115200, 8-N-1，DMA2 Stream 5，Receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
-| Activity LED | PC13 | 100 ms 周期翻转 |
+| Activity LED | PC13 | 低电平点亮，100 ms 时间槽状态图案 |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -132,7 +149,12 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 | SDA | PB7 | I2C1，400 kHz |
 | Address | — | 7-bit `0x68`（驱动中使用左移后的 `0xD0`） |
 
-当前配置为陀螺仪 ±1000 °/s、加速度计 ±4 g，姿态融合使用 VQF。
+当前配置为陀螺仪 ±2000 °/s、加速度计 ±8 g、100 Hz，DLPF 配置为 3。
+驱动每周期从 `0x3B` 连续读取 14 字节，并使用 VQF 融合。线加速度模长不在
+`0.8..1.2 g`、偏离已学习静止模长、与陀螺预测重力方向相差超过 12°，或原始值
+接近饱和时，不把该加速度写入倾角修正；回到 6° 内才重新接纳。融合丢失后，
+只有外部轮速/命令门确认近似静止，且稳定重力持续 300 ms，才会硬重捕获，避免
+大动作后的缓慢回正和动态加速度误校正。
 
 ### 电机与编码器
 
@@ -158,7 +180,8 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 
 TIM9 产生 100 Hz PWM。软件将目标腿高限制为 `44.5..78.5 mm`，经四连杆
 逆运动学换算为舵机角度。机械尺寸和坐标系定义位于
-`Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`。
+`Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`。舵机没有轴位置回读；固件只会
+确认 PWM 任务存活、最新目标已消费以及软件平滑轨迹完成，不能据此证明机械到位。
 
 ### nRF24L01+
 
@@ -192,7 +215,7 @@ OLED。CubeMX 保留了软件 I²C 引脚：
 的 ASCII 命令，推荐控制帧为：
 
 ```text
-R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
+R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm> [profile [flags]]
 ```
 
 示例：
@@ -203,6 +226,10 @@ R 0.0 -0.0 0.0 61.5
 
 字段顺序必须保持为转向、速度、横滚、腿高。仓库中的 `tele_firmware`
 会把遥控器速度取反后放入第二个字段，这是两端现有坐标系约定。
+可选 `profile` 为 `0/1/2`（柔和/普通/运动）；`flags` 的 bit0 为跳跃武装，
+bit1 为跳跃请求。旧遥控器不发送可选字段时仍兼容运动控制，但始终解除跳跃
+武装。任意有效 `R` 帧超过 250 ms 未刷新时，车端会将速度、转向、横滚目标
+清零并解除跳跃武装；真实跳跃还要求无线来源的 `R` 帧持续新鲜。
 
 | 参数 | 当前设置 |
 | --- | --- |

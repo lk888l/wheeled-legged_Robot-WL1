@@ -12,8 +12,17 @@
 #ifndef __NRF24L01P_HPP
 #define __NRF24L01P_HPP
 
-//stm-hal library include
+// C++ library includes
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <cstdint>
+#include <cstring>
+#include <functional>
 #include <string_view>
+#include <type_traits>
+
+//stm-hal library include
 #include "main.h"
 //User-lk library include
 #include "BasicObject.hpp"
@@ -69,12 +78,14 @@ public:
      * 使用位域直接映射 8-bit 寄存器内容
      */
     struct Status_t{
-        uint8_t TX_FULL {};  // [位0] TX FIFO 满标志。1: 已满；0: 尚有空间。
-        uint8_t RX_P_NO {};  // [位1-3] 接收数据通道号。000-101 表示通道0-5；110 未使用；111 表示 RX FIFO 为空。
-        uint8_t MAX_RT  {};  // [位4] 达到最大重发次数中断。若此位为1，必须手动清除才能继续通信。
-        uint8_t TX_DS   {};  // [位5] 数据发送完成中断（收到 ACK 后置位）。
-        uint8_t RX_DR   {};  // [位6] 收到有效数据中断。
+        bool TX_FULL {};     // [位0] TX FIFO 满标志。1: 已满；0: 尚有空间。
+        uint8_t RX_P_NO {7}; // [位1-3] 接收数据通道号；111 表示 RX FIFO 为空。
+        bool MAX_RT  {};     // [位4] 达到最大重发次数中断。
+        bool TX_DS   {};     // [位5] 数据发送完成中断（收到 ACK 后置位）。
+        bool RX_DR   {};     // [位6] 收到有效数据中断。
+        bool IO_ERROR {};    // SPI/mode transition failed while servicing this event.
     };
+    using StatusHandler = std::function<bool(Status_t&)>;
 
     NRF24L01P(SPI_HandleTypeDef* hspi,
               GPIO_TypeDef* csPort, uint16_t csPin,
@@ -84,6 +95,7 @@ public:
     bool Init();
     SPI_HandleTypeDef* getSPIHandle();
     uint16_t getIRQGPIOPort();
+    [[nodiscard]] bool isIRQAsserted() const;
     bool setChannel(uint8_t channel);
     bool setPALevel(uint8_t level);
     bool setDataRate(uint8_t rate);
@@ -128,7 +140,7 @@ public:
      */
     void isrSpiDmaCompleteHandler();
     /* signal function define */
-    void signal_IRQEvent(std::function<void(Status_t &curStatus)> slot);
+    [[nodiscard]] bool signal_IRQEvent(const StatusHandler& slot);
 
     /**
      * @brief 将字符串数据填充到uint8_t数组
@@ -204,15 +216,20 @@ private:
     uint8_t             TxAddress[5] = {0x11,0x52,0x01,0x31,0x41};
     //freeRTOS variable define
     SemaphoreHandle_t   spiDmaSemaphore = nullptr;
+    StaticSemaphore_t   spiDmaSemaphoreStorage{};
     /* signal config define */
     SignalContext IRQEvent_cfg{};
     // Low-level SPI and Pin operations
     void csLow();
     void csHigh();
     void write_ce(uint8_t gpio_status);
-    inline bool spiSend(const uint8_t *pData, uint16_t size);
-    inline bool spiReceive(uint8_t *pData, uint16_t size);
-    inline bool spiTransfer(const uint8_t *pTxData, uint8_t *pRxData, uint16_t Size);
+    static constexpr TickType_t SPI_DMA_TIMEOUT = pdMS_TO_TICKS(10);
+    static constexpr std::uint8_t RX_FIFO_DEPTH = 3U;
+    bool ensureSemaphore();
+    bool spiSend(const uint8_t *pData, uint16_t size);
+    bool spiReceive(uint8_t *pData, uint16_t size);
+    bool spiTransfer(const uint8_t *pTxData, uint8_t *pRxData, uint16_t size);
+    bool sendCommand(uint8_t command);
     // Register operations [cite: 704, 705]
     bool readRegister(uint8_t reg, uint8_t* buf, uint8_t len);
     bool writeRegister(uint8_t reg, const uint8_t* buf, uint8_t len);

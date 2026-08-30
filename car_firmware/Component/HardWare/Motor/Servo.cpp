@@ -19,7 +19,7 @@ Servo::Servo(TIM_HandleTypeDef *htim, uint32_t channel, int32_t minPulseUs, int3
         : HTim(htim), TimChannel(channel)
         , MinPulse(minPulseUs), MaxPulse(maxPulseUs), MaxAngle(maxAngle)
 {
-    // 创建软件定时器，周期为 20ms
+    // 创建软件定时器，周期为 10ms
     xTimer = xTimerCreate("ServoTimer", pdMS_TO_TICKS(UPDATE_PERIOD_MS),
                       pdTRUE, (void*)this, ServoTimerCallback);
     K_Pulse = (float)(maxPulseUs - minPulseUs) / maxAngle;
@@ -40,49 +40,74 @@ void Servo::setPWM_FromAngle(float angle) {
 
 
 bool Servo::Init() {
-    return static_cast<bool>(HAL_TIM_PWM_Start(HTim, TimChannel));
+    if (xTimer == nullptr || HAL_TIM_PWM_Start(HTim, TimChannel) != HAL_OK) {
+        return false;
+    }
+    // Keep the lightweight 10 ms updater periodic. New targets only replace
+    // TargetAngle; they never restart the timer and therefore cannot postpone it.
+    return xTimerStart(xTimer, 0) == pdPASS;
 }
 
 void Servo::stop() {
+    if (xTimer != nullptr) {
+        xTimerStop(xTimer, 0);
+    }
     HAL_TIM_PWM_Stop(HTim, TimChannel);
 }
 
 bool Servo::setAngle_Immediate(float angle) {
     if(Limit_Max_Angle!=0 && angle>Limit_Max_Angle)   angle = Limit_Max_Angle;
     else if(angle<Limit_Min_Angle)  angle = Limit_Min_Angle;
-    xTimerStop(xTimer, 0);          //stop soft timer to immediate execution
-    setPWM_FromAngle(angle);
+    taskENTER_CRITICAL();
     CurrentAngle = TargetAngle = angle;
+    StepSize = 0.0F;
+    taskEXIT_CRITICAL();
+    setPWM_FromAngle(angle);
     return true;
 }
 
 void Servo::setAngle_Smooth(float targetAngle, float speed) {
     if(Limit_Max_Angle!=0 && targetAngle>Limit_Max_Angle)   targetAngle = Limit_Max_Angle;
     else if(targetAngle<Limit_Min_Angle)  targetAngle = Limit_Min_Angle;
-    if(speed == 0){
+    if(speed <= 0 || xTimer == nullptr){
         setAngle_Immediate(targetAngle);
+        return;
     }
+    taskENTER_CRITICAL();
     TargetAngle = targetAngle;
     StepSize = speed * (UPDATE_PERIOD_MS / 1000.0f);
-    xTimerStart(xTimer, 0);     // start soft timer
+    taskEXIT_CRITICAL();
 }
 
 float Servo::getCurrentAngle() const {
-    return CurrentAngle;
+    taskENTER_CRITICAL();
+    const float angle = CurrentAngle;
+    taskEXIT_CRITICAL();
+    return angle;
+}
+
+bool Servo::isCommandComplete(float tolerance_degrees) const {
+    if (tolerance_degrees < 0.0F) tolerance_degrees = 0.0F;
+    taskENTER_CRITICAL();
+    const bool complete = this->abs(TargetAngle - CurrentAngle) <= tolerance_degrees;
+    taskEXIT_CRITICAL();
+    return complete;
 }
 
 void Servo::updateSmoothing() {
-    float diff = TargetAngle - CurrentAngle;
+    taskENTER_CRITICAL();
+    const float diff = TargetAngle - CurrentAngle;
     if (this->abs(diff) <= StepSize) {
         CurrentAngle = TargetAngle;
-        xTimerStop(xTimer, 0); // 到达目的地，停掉定时器节省资源
     }
     else {
         // 向目标方向迈进一步
         if (diff > 0) CurrentAngle += StepSize;
         else CurrentAngle -= StepSize;
     }
-    setPWM_FromAngle(CurrentAngle);
+    const float angle = CurrentAngle;
+    taskEXIT_CRITICAL();
+    setPWM_FromAngle(angle);
 }
 
 int32_t Servo::PhysicalToPulse(float physicalAngle, float baseMinPulse, float baseMaxPulse, float baseMaxAngle) {
