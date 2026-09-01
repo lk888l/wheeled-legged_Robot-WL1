@@ -13,7 +13,6 @@
 
 /// cpp standard library include
 #include <cmath>
-#include <atomic>
 /// cpp etl include
 //#include "etl/memory.h"
 //#include "etl/pool.h"
@@ -22,16 +21,10 @@
 /// user library include
 #include "cpp_Interface.h"
 #include "main.h"
-#include "i2c.h"
-#include "usart.h"
-#include "spi.h"
+#include "AppTask.hpp"
+#include "BoardHardware.hpp"
+#include "RuntimeStatus.hpp"
 ///cpp User library include
-#include "TB6612.h"
-#include "HallEncoder.h"
-#include "Servo.hpp"
-#include "MPU6050.h"
-#include "NRF24L01P.hpp"
-#include "LkUart.hpp"
 #include "TaskReactor.hpp"
 #include "CtrlAlgorithm/LQR.hpp"
 #include "CtrlAlgorithm/PID.hpp"
@@ -43,7 +36,6 @@
 
 
 /* My variables define BEGIN */
-LkUart<> Uart1(&huart1);
 volatile bool isShowIMUData;
 volatile bool isShowMotorRAM;
 /// PID
@@ -75,7 +67,6 @@ volatile float Roll_Target{};
 volatile float LWheel_x{};
 volatile float RWheel_x{};
 /// telecontrol
-NRF24L01P nRF(&hspi2,GPIOA,GPIO_PIN_4,GPIOB,GPIO_PIN_12,GPIOA,GPIO_PIN_12);
 volatile bool isNRF_print{};
 const volatile float* NRF_print[4]{reinterpret_cast<const volatile float *>(&EAngle_print[0]),
                                    reinterpret_cast<const volatile float *>(&EAngle_print[1]),
@@ -83,41 +74,137 @@ const volatile float* NRF_print[4]{reinterpret_cast<const volatile float *>(&EAn
                                    reinterpret_cast<const volatile float *>(&Angle_kp)};
 /* My variables define END */
 
-// freeRTOS variably define
-TaskHandle_t Handle_LEDBlinkFunc = nullptr;
-TaskHandle_t Handle_ServoControlFunc = nullptr;
-TaskHandle_t Handle_MotionControlFunc = nullptr;
+namespace {
+
+bsp::BoardHardware* g_hardware = nullptr;
+app::RuntimeStatus g_runtime_status;
+app::InitializationReport g_initialization_report;
+app::AppTask* g_servo_task = nullptr;
+app::AppTask* g_motion_task = nullptr;
+
+bsp::BoardHardware& hardware()
+{
+    configASSERT(g_hardware != nullptr);
+    return *g_hardware;
+}
+
+LkUart<>& command_uart()
+{
+    return hardware().command_uart();
+}
+
+NRF24L01P& radio()
+{
+    return hardware().radio();
+}
+
+bool hardware_ready(bsp::HardwareModuleId id)
+{
+    return g_initialization_report.succeeded(bsp::module_id(id));
+}
+
+const char* system_state_name(app::SystemState state)
+{
+    switch (state) {
+    case app::SystemState::booting: return "booting";
+    case app::SystemState::ready: return "ready";
+    case app::SystemState::initialization_failed: return "init-failed";
+    case app::SystemState::task_failed: return "task-failed";
+    case app::SystemState::runtime_fault: return "runtime-fault";
+    }
+    return "unknown";
+}
+
+} // namespace
 
 
 /*---------------------  define task function begin  ---------------------*/
 using CommandHandler = std::function<void(etl::string_view)>;
-TaskFunction_t LEDBlinkFunc(){
+
+void HeartbeatFunc(void*)
+{
+    app::SystemState previous_state = app::SystemState::booting;
+    uint8_t phase = 0U;
+
+    while (true) {
+        const app::SystemState state = g_runtime_status.state();
+        if (state != previous_state) {
+            previous_state = state;
+            phase = 0U;
+        }
+
+        bool led_on = false;
+        uint32_t duration_ms = 100U;
+        switch (state) {
+        case app::SystemState::booting:
+            led_on = (phase == 0U);
+            duration_ms = 100U;
+            phase = static_cast<uint8_t>((phase + 1U) % 2U);
+            break;
+        case app::SystemState::ready:
+            led_on = (phase == 0U);
+            duration_ms = led_on ? 80U : 920U;
+            phase = static_cast<uint8_t>((phase + 1U) % 2U);
+            break;
+        case app::SystemState::initialization_failed:
+            led_on = (phase == 0U || phase == 2U);
+            duration_ms = (phase == 3U) ? 640U : 120U;
+            phase = static_cast<uint8_t>((phase + 1U) % 4U);
+            break;
+        case app::SystemState::task_failed:
+            led_on = (phase == 0U || phase == 2U || phase == 4U);
+            duration_ms = (phase == 5U) ? 520U : 120U;
+            phase = static_cast<uint8_t>((phase + 1U) % 6U);
+            break;
+        case app::SystemState::runtime_fault:
+            led_on = (phase == 0U);
+            duration_ms = 80U;
+            phase = static_cast<uint8_t>((phase + 1U) % 2U);
+            break;
+        }
+
+        // PC13 LED is active-low on the WL1 controller board.
+        HAL_GPIO_WritePin(GPIOC,
+                          GPIO_PIN_13,
+                          led_on ? GPIO_PIN_RESET : GPIO_PIN_SET);
+        vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    }
+}
+
+void CommandServiceFunc(void*)
+{
     TaskReactor t1;
     TaskReactor::strCMD_t Uart_CMD;
     uint8_t NRF_Tx_Num[NRF24L01P::PACKET_WIDTH]{};
     uint8_t NRF_Rx_Num[NRF24L01P::PACKET_WIDTH]{};
-    etl::string_view NRF_TxStr = "NRF: 1\n";
     etl::string_view NRF_RxStr{};
     etl::unordered_map<etl::string_view,CommandHandler,25,57> cmdMap = {
-//            {"servo", [](etl::string_view args) {
-//                uint16_t angle{},speed{};
-//                if(TaskReactor::parseStrArg(args,angle) && TaskReactor::parseStrArg(args,speed)){
-//                    uint32_t notifyValue = ((angle & 0xFF) << 20) | (speed & 0xFFF);
-//                    xTaskNotify(Handle_ServoControlFunc, notifyValue, eSetValueWithOverwrite);
-//                }
-//                else{
-//                    Uart1.print("Command \"servo\": Useless parameters\n");
-//                }
-//            }},
+            {"ping",[](etl::string_view){
+                command_uart().print("pong state={} control={}\n",
+                                     system_state_name(g_runtime_status.state()),
+                                     g_runtime_status.control_enabled() ? "on" : "off");
+            }},
+            {"status",[](etl::string_view){
+                command_uart().print("status={} control={} hw_fail={} task_fail={}\n",
+                                     system_state_name(g_runtime_status.state()),
+                                     g_runtime_status.control_enabled() ? "on" : "off",
+                                     g_runtime_status.hardware_failed_mask(),
+                                     g_runtime_status.task_failed_mask());
+            }},
             {"motor",[](etl::string_view args){
                 uint16_t vL = 0, vR = 0;
                 if(TaskReactor::parseStrArg(args,vL) && TaskReactor::parseStrArg(args,vR)){
-                    Uart1.print("motor: {}\t{}\n",vL,vR);
+                    if (!g_runtime_status.control_enabled() || g_motion_task == nullptr ||
+                        !g_motion_task->is_running()) {
+                        command_uart().print("motor rejected: control is in safe mode\n");
+                        return;
+                    }
+                    command_uart().print("motor: {}\t{}\n",vL,vR);
                     uint32_t notifyValue = (vL << 16) | (vR & 0xFFFF);
-                    xTaskNotify(Handle_MotionControlFunc, notifyValue, eSetValueWithOverwrite);
+                    (void)g_motion_task->notify_value(notifyValue);
                 }
                 else{
-                    Uart1.print("Command \"servo\": Useless parameters\n");
+                    command_uart().print("Command \"motor\": Useless parameters\n");
                 }
             }},
             {"showimu",[](etl::string_view args){
@@ -220,8 +307,12 @@ TaskFunction_t LEDBlinkFunc(){
                 }
             }},
             {"nrfsend",[&NRF_Tx_Num](etl::string_view args){
+                if (!hardware_ready(bsp::HardwareModuleId::radio)) {
+                    command_uart().print("nrfsend rejected: radio unavailable\n");
+                    return;
+                }
                 NRF24L01P::str_touint8(args, NRF_Tx_Num);
-                nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
+                radio().send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
             }},
             {"nrfshow",[](etl::string_view args){
                 if(args.size() >= 3 && args[0] == '-'){
@@ -260,7 +351,7 @@ TaskFunction_t LEDBlinkFunc(){
                 if(TaskReactor::parseStrArg(args,height)){
                     result_deg = LegKinematics::getMotorAngleForHeight(height,&result_x);
                     float bais_p = ((-0.000155f * height + 0.03882f) * height + -3.001f) * height + 83.25f;
-                    Uart1.print("Servo angel: {:07.3f} {:07.3f} {:07.3f}\n",result_deg,result_x,bais_p);
+                    command_uart().print("Servo angel: {:07.3f} {:07.3f} {:07.3f}\n",result_deg,result_x,bais_p);
                     Target_height = height;
                 }
             }},
@@ -301,41 +392,42 @@ TaskFunction_t LEDBlinkFunc(){
             }},
     };
     etl::queue<etl::string<32>,4> CMD_que;
-    /// Init NRF
-    nRF.Init();
-    nRF.start_RxMode();
-    /// connect Uart1
-    Uart1.Start_DMAIT_Receive();
-    t1.connect(&Uart1,&LkUart<>::signal_RxComplete,[&Uart_CMD,&cmdMap,&CMD_que](etl::string<128> &rxmes){
-//        Uart1.print("receive: {}\n",rxmes);
-//        if(TaskReactor::parseStrCMD(rxmes,Uart_CMD)){
-//            auto it = cmdMap.find(Uart_CMD.command);
-//            if (it != cmdMap.end()) {
-//                it->second(Uart_CMD.args); // 执行对应的 Lambda 或函数
-//            } else {
-//                Uart1.print("Unknown command!\n");
-//            }
-//        }
-        if(rxmes.size()>32) {CMD_que.push(rxmes.substr(0, 32));}
-        else    {CMD_que.push(rxmes);}
-//        rxmes.insert(0, "Roger：");
-//        NRF24L01P::str_touint8(rxmes, NRF_Tx_Num);
-//        nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
-    });
-    /// connect NRF
-    t1.connect(&nRF,&NRF24L01P::signal_IRQEvent,[&NRF_Rx_Num,&NRF_RxStr,&CMD_que](NRF24L01P::Status_t &curStatus){
-        if(curStatus.RX_DR){
-            nRF.tryReceive(NRF_Rx_Num);
-            NRF24L01P::uint8_tostr(NRF_RxStr,NRF_Rx_Num);
-            if(!CMD_que.full()) CMD_que.push(etl::string<32>(NRF_RxStr));
-        }
-        if(curStatus.TX_DS){
-            Uart1.print("nRF: send success\n");
-        }
-        if(curStatus.MAX_RT){
-            Uart1.print("nRF: send fail\n");
-        }
-    });
+    if (hardware_ready(bsp::HardwareModuleId::command_uart)) {
+        t1.connect(&command_uart(),
+                   &LkUart<>::signal_RxComplete,
+                   [&CMD_que](etl::string<128>& rxmes) {
+                       if (CMD_que.full()) {
+                           command_uart().print("command dropped: queue full\n");
+                           return;
+                       }
+                       if (rxmes.size() > 32U) {
+                           CMD_que.push(rxmes.substr(0, 32));
+                       } else {
+                           CMD_que.push(rxmes);
+                       }
+                   });
+    }
+
+    if (hardware_ready(bsp::HardwareModuleId::radio)) {
+        t1.connect(&radio(),
+                   &NRF24L01P::signal_IRQEvent,
+                   [&NRF_Rx_Num, &NRF_RxStr, &CMD_que](NRF24L01P::Status_t& curStatus) {
+                       if (curStatus.RX_DR) {
+                           radio().tryReceive(NRF_Rx_Num);
+                           NRF24L01P::uint8_tostr(NRF_RxStr, NRF_Rx_Num);
+                           if (!CMD_que.full()) {
+                               CMD_que.push(etl::string<32>(NRF_RxStr));
+                           }
+                       }
+                       if (curStatus.TX_DS) {
+                           command_uart().print("nRF: send success\n");
+                       }
+                       if (curStatus.MAX_RT) {
+                           command_uart().print("nRF: send fail\n");
+                       }
+                   });
+    }
+
     t1.taskLoop(pdMS_TO_TICKS(100),[&CMD_que,&Uart_CMD,&cmdMap](){
         while(!CMD_que.empty()){
             auto cmd = CMD_que.front();
@@ -346,70 +438,60 @@ TaskFunction_t LEDBlinkFunc(){
                     it->second(Uart_CMD.args); // 执行对应的 Lambda 或函数
                 } else {
                     //Unknown command!
-                    Uart1.print("receive: {}\n",cmd);
+                    command_uart().print("receive: {}\n",cmd);
                 }
             }
             else{
-                Uart1.print("receive: {}\n",cmd);
+                command_uart().print("receive: {}\n",cmd);
             }
         }
     },
-[&NRF_Tx_Num,&NRF_TxStr](){
-//        Uart1.print("hello{}\n",123);
-        if(isNRF_print){
+    [&NRF_Tx_Num](){
+        if(isNRF_print && hardware_ready(bsp::HardwareModuleId::radio)){
             NRF24L01P::args_touint8s(NRF_Tx_Num,NRF_print);
-            nRF.send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
+            radio().send(NRF_Tx_Num, NRF24L01P::PACKET_WIDTH);
         }
-//        NRF24L01P::args_touint8s(NRF_Tx_Num,NRF_print);
-//        etl::string_view debugargs(reinterpret_cast<const char*>(NRF_Tx_Num),32);
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     });
-    for(;;){
-
-    }
 }
 
 /*---------------------  LQR task function begin  ---------------------*/
-TaskFunction_t MotionControlFunc(){
+void MotionControlFunc(void*){
     ///  FreeRtos variable
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = 10;   //(ms)
     uint32_t notifiedValue_0{};
     ///  c++ variable
-    MPU6050 IMU_Main(&hi2c1,{MPU6050::GyroRange_t::G1000,MPU6050::AccRange_t::A4,static_cast<uint16_t>(MPU6050::ms_toHZ(2)),{0,0,0}});
+    auto& IMU_Main = hardware().imu();
     MPU6050::EulerAngle MAngle;
     //    double IMU_Acc[3];
     double IMU_Gyro[3];
     LQR Ctrl_cal(std::forward<double[4]>({-4.569790f, -4.472503f, -0.000000f, 0.000000f}));
-    HallEncoder Enc_Left(&htim2,HallEncoder::InitConfig_t{7, 150, 4, xFrequency});
-    HallEncoder Enc_Right(&htim3,HallEncoder::InitConfig_t{7, 150, 4, xFrequency});
-    TB6612 TB6_wheel(TB6612::InitConfig_t{.Htim =&htim1,.AChannel = TIM_CHANNEL_1,.BChannel = TIM_CHANNEL_2,
-                        .A1GPIO_Port = AIN1_GPIO_Port,.A1GPIO_Pin = AIN1_Pin,.A2GPIO_Port =  AIN2_GPIO_Port,.A2GPIO_Pin = AIN2_Pin,
-                        .B1GPIO_Port = BIN1_GPIO_Port,.B1GPIO_Pin = BIN1_Pin,.B2GPIO_Port =  BIN2_GPIO_Port,.B2GPIO_Pin = BIN2_Pin});
-    TB6_wheel.Init();
+    auto& Enc_Left = hardware().left_encoder();
+    auto& Enc_Right = hardware().right_encoder();
+    auto& TB6_wheel = hardware().wheel_motor();
     TB6_wheel.setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::A), TB6612::Direction::Negative);
     TB6_wheel.setA_DeadZone(0);TB6_wheel.setB_DeadZone(0);
-    //IMU --> MPU6050Init
-    IMU_Main.setGyroOffset(2.5,0.7,0.9);
-    if(IMU_Main.Init()){
-        Uart1.print("MPU: success\n");
-    }
-    else{
-        Uart1.print("MPU: fail\n");
-    }
-    Enc_Left.clearCounter();
-    Enc_Right.clearCounter();
     double LQRPos_Left{};
     double LQRPos_Right{};
     xLastWakeTime = xTaskGetTickCount();        //get now system tick to delay a period
     while(1){
-        taskENTER_CRITICAL();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        if (!g_runtime_status.control_enabled()) {
+            TB6_wheel.forceStop();
+            continue;
+        }
+        taskENTER_CRITICAL();
         static double filtered_RPM_Left = 0;
         static double filtered_RPM_Right = 0;
-        IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro);
+        if (!IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro)) {
+            taskEXIT_CRITICAL();
+            g_runtime_status.enter_runtime_fault();
+            hardware().force_safe_outputs();
+            command_uart().print("[runtime][FAIL] imu read; control stopped\n");
+            continue;
+        }
         if(isShowIMUData) {
-            Uart1.print("{:07.3f},{:07.3f},{:07.3f}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
+            command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
         }
         double LQR_Angle = MPU6050::DegTorad(MAngle.Pitch + 20.0);
         double LQR_Gyro = -MPU6050::DegTorad(IMU_Gyro[1]);
@@ -434,10 +516,10 @@ TaskFunction_t MotionControlFunc(){
         NeededPWM_Left = TB6612::clamp(NeededPWM_Left,1000,-1000);
         NeededPWM_Right = TB6612::clamp(NeededPWM_Right,1000,-1000);
         if(isShowMotorRAM){
-            Uart1.print("A: {:07.3f}\tB: {:07.3f}\n",RPM_Left_Raw,RPM_Right_Raw);
+            command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",RPM_Left_Raw,RPM_Right_Raw);
         }
         if(xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue_0, 0 ) == pdTRUE){
-            Uart1.print("Motor output:{}\t{}\n",(notifiedValue_0>>14),(notifiedValue_0 & 0xFFFF));
+            command_uart().print("Motor output:{}\t{}\n",(notifiedValue_0>>14),(notifiedValue_0 & 0xFFFF));
             TB6_wheel.setBVel_raw(static_cast<int16_t>(notifiedValue_0>>14));
             TB6_wheel.setAVel_raw(static_cast<int16_t>(notifiedValue_0 & 0xFFFF));
         }
@@ -449,12 +531,12 @@ TaskFunction_t MotionControlFunc(){
 
 
 /*---------------------  PID task function begin  ---------------------*/
-TaskFunction_t MotionControlFunc_PID(){
+void MotionControlFunc_PID(void*){
     ///  FreeRtos variable
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = 10;   //(ms)
     uint8_t vel_loop_cnt = 0;
-    uint32_t notifiedValue_0{};
+    uint8_t imu_read_failures = 0U;
     ///  c++ variable
     //  PID
     PID Angle_PID(70.0f,0,51.0f,-1000,1000,-100,100);
@@ -463,47 +545,42 @@ TaskFunction_t MotionControlFunc_PID(){
     PID AdaptY_PID(0,0,0,-78,78,-100,100);
     float Differ_RPM, Angle_target{},DifferPWM{};
     //sensor
-    MPU6050 IMU_Main(&hi2c1,{MPU6050::GyroRange_t::G1000,MPU6050::AccRange_t::A4,static_cast<uint16_t>(MPU6050::ms_toHZ(xFrequency)),{0,0,0}});
+    auto& IMU_Main = hardware().imu();
     MPU6050::EulerAngle MAngle;
     double IMU_Gyro[3];
-    HallEncoder Enc_Left(&htim2,HallEncoder::InitConfig_t{7, 50, 4, 50});
-    HallEncoder Enc_Right(&htim3,HallEncoder::InitConfig_t{7, 50, 4, 50});
-    // Motor derive
-    TB6612 TB6_wheel(TB6612::InitConfig_t{.Htim =&htim1,.AChannel = TIM_CHANNEL_1,.BChannel = TIM_CHANNEL_2,
-            .A1GPIO_Port = AIN1_GPIO_Port,.A1GPIO_Pin = AIN1_Pin,.A2GPIO_Port =  AIN2_GPIO_Port,.A2GPIO_Pin = AIN2_Pin,
-            .B1GPIO_Port = BIN1_GPIO_Port,.B1GPIO_Pin = BIN1_Pin,.B2GPIO_Port =  BIN2_GPIO_Port,.B2GPIO_Pin = BIN2_Pin});
-    TB6_wheel.Init();
-    TB6_wheel.setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::B), TB6612::Direction::Negative);
-    TB6_wheel.setA_DeadZone(50);TB6_wheel.setB_DeadZone(50);
-    //IMU --> MPU6050Init
-    IMU_Main.setGyroOffset(2.5,0.7,0.9);
-    if(IMU_Main.Init()){
-        Uart1.print("MPU: success\n");
-    }
-    else{
-        Uart1.print("MPU: fail\n");
-    }
-    Enc_Left.clearCounter();
-    Enc_Right.clearCounter();
+    auto& Enc_Left = hardware().left_encoder();
+    auto& Enc_Right = hardware().right_encoder();
+    auto& TB6_wheel = hardware().wheel_motor();
     xLastWakeTime = xTaskGetTickCount();        //get now system tick to delay a period
     while(1){
-        taskENTER_CRITICAL();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        if (!g_runtime_status.control_enabled()) {
+            TB6_wheel.forceStop();
+            continue;
+        }
+        taskENTER_CRITICAL();
         // read now Leg height to calculate pitch angle compensate and angle_kp
         float Y_avg = (Left_Legheight + Left_Legheight) / 2.0f;
         Angle_bias = (0.01026f * Y_avg * Y_avg) - (1.258f * Y_avg) + 48.24f;
         Angle_kp = (0.3f*Y_avg) + 56.9;
         // get IMU euler angle
-        IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro);
-        EAngle_print[0] = static_cast<volatile float>(MAngle.Roll); EAngle_print[1] = static_cast<volatile float>(MAngle.Pitch);EAngle_print[2] = static_cast<volatile float>(MAngle.Yaw);
-        if(isShowIMUData) {
-            Uart1.print("{:07.3f},{:07.3f},{:07.3f}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
+        if (!IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro)) {
+            taskEXIT_CRITICAL();
+            TB6_wheel.forceStop();
+            if (++imu_read_failures >= 3U) {
+                g_runtime_status.enter_runtime_fault();
+                hardware().force_safe_outputs();
+                command_uart().print("[runtime][FAIL] imu read; control stopped\n");
+            }
+            continue;
         }
-//        if(xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue_0, 0 ) == pdTRUE){
-//            Uart1.print("Motor output:{}\t{}\n",(notifiedValue_0>>16),(notifiedValue_0 & 0xFFFF));
-//            TB6_wheel.setBVel_raw(static_cast<int16_t>(notifiedValue_0>>14));
-//            TB6_wheel.setAVel_raw(static_cast<int16_t>(notifiedValue_0 & 0xFFFF));
-//        }
+        imu_read_failures = 0U;
+        EAngle_print[0] = static_cast<float>(MAngle.Roll);
+        EAngle_print[1] = static_cast<float>(MAngle.Pitch);
+        EAngle_print[2] = static_cast<float>(MAngle.Yaw);
+        if(isShowIMUData) {
+            command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
+        }
         vel_loop_cnt++;
         if(vel_loop_cnt >= 5){
             vel_loop_cnt = 0;
@@ -517,7 +594,7 @@ TaskFunction_t MotionControlFunc_PID(){
             DifferPWM = Differ_PID.update(Differ_Target,Differ_RPM);
 //            Uart1.print("Angle_target: {:07.3f}\t{:07.3f}\n",Ave_RPM,Angle_target);
             if(isShowMotorRAM){
-                Uart1.print("A: {:07.3f}\tB: {:07.3f}\n",Left_RPM,Right_RPM);
+                command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",Left_RPM,Right_RPM);
             }
             //roll pid
             AdaptY_PID.setTunings(Adapt_y_kp,Adapt_y_ki,0);
@@ -544,7 +621,9 @@ TaskFunction_t MotionControlFunc_PID(){
             }
             Left_Legheight = (Target_height - adjust_y);
             Right_Legheight = Target_height + adjust_y;
-            xTaskNotifyGive(Handle_ServoControlFunc);
+            if (g_servo_task != nullptr) {
+                (void)g_servo_task->notify_give();
+            }
         }
         Angle_PID.setTunings(Angle_kp,Angle_ki,Angle_kd);
         float EvenPWM = Angle_PID.update(Angle_target,MAngle.Pitch + Angle_bias);
@@ -560,42 +639,17 @@ TaskFunction_t MotionControlFunc_PID(){
 
 /*---------------------  Servo task function begin  ---------------------*/
 
-TaskFunction_t ServoControlFunc(){
-    Servo Ser_Lift(&htim9,TIM_CHANNEL_1,
-                   Servo::PhysicalToPulse(0.0f),
-                   Servo::PhysicalToPulse(180.0f),
-                   180.0);
-    Servo Ser_Right(&htim9,TIM_CHANNEL_2,
-                    Servo::PhysicalToPulse(169.0f),
-                    Servo::PhysicalToPulse(11.0f),
-                    180.0);
-    Ser_Lift.Init();
-    Ser_Right.Init();
-    Ser_Lift.setLimit(0,50);
-    Ser_Right.setLimit(0,50);
-    uint32_t notifiedValue = 0;
-    uint16_t targetAngle,moveSpeed;
+void ServoControlFunc(void*){
+    auto& Ser_Lift = hardware().left_servo();
+    auto& Ser_Right = hardware().right_servo();
     float Left_deg{},Right_deg{};
     while(1){
-//        if(xTaskNotifyWait(0x00, 0xFFFFFFFF, &notifiedValue, portMAX_DELAY ) == pdTRUE){
-//            targetAngle = (uint16_t)((notifiedValue >> 20) & 0xFF); // 取高 8 位
-//            moveSpeed = (uint16_t)(notifiedValue & 0xFFF);     // 取低 16 位
-//            Uart1.print("servoTask: {}, {}\n",targetAngle,moveSpeed);
-//            if(targetAngle > 50){
-//                targetAngle = 50;
-//            }
-//            else if(targetAngle<0){
-//                targetAngle = 0;
-//            }
-//            if(moveSpeed == 0){
-//                Ser_Lift.setAngle_Immediate(static_cast<float>(targetAngle));
-//                Ser_Right.setAngle_Immediate(static_cast<float>(targetAngle));
-//            } else {
-//                Ser_Lift.setAngle_Smooth(static_cast<float>(targetAngle),static_cast<float>(moveSpeed));
-//                Ser_Right.setAngle_Smooth(static_cast<float>(targetAngle),static_cast<float>(moveSpeed));
-//            }
-//        }
         if(ulTaskNotifyTake(pdTRUE, portMAX_DELAY)){
+            if (!g_runtime_status.control_enabled()) {
+                Ser_Lift.stop();
+                Ser_Right.stop();
+                continue;
+            }
             float L_x,R_x;
             if(Left_Legheight>78.5)     {Left_Legheight=78.5;}
             else if(Left_Legheight<44.5){Left_Legheight=44.5;}
@@ -605,64 +659,130 @@ TaskFunction_t ServoControlFunc(){
             Right_deg = LegKinematics::getMotorAngleForHeight(Right_Legheight,&R_x);
             Ser_Lift.setAngle_Smooth(Left_deg-10.0f,1000);
             Ser_Right.setAngle_Smooth(Right_deg-10.0f,1000);
-//        Uart1.print("servoTask: {}, {}\n",Left_deg,Right_deg);
         }
     }
 }
 
+namespace {
+
+void initialization_observer(const app::InitializationStep& step,
+                             bool succeeded,
+                             void* context)
+{
+    auto* board = static_cast<bsp::BoardHardware*>(context);
+    if (board == nullptr) {
+        return;
+    }
+
+    if (succeeded) {
+        board->command_uart().print("[init][ OK ] {}\n", step.name);
+    } else {
+        board->command_uart().print("[init][FAIL] {}\n", step.name);
+    }
+    // Startup diagnostics must not overrun the fixed-depth asynchronous TX
+    // queue when several modules finish immediately one after another.
+    vTaskDelay(pdMS_TO_TICKS(3));
+}
+
+bool start_task(app::AppTask& task, void* context)
+{
+    const bool started = task.start(context);
+    g_runtime_status.record_task_result(task.id(), started);
+    if (started) {
+        command_uart().print("[task][ OK ] {}\n", task.name());
+    } else {
+        command_uart().print("[task][FAIL] {}\n", task.name());
+    }
+    vTaskDelay(pdMS_TO_TICKS(3));
+    return started;
+}
+
+} // namespace
+
 void CPP_Main()
 {
+    static bsp::BoardHardware board;
+    static app::AppTask heartbeat_task({app::TaskId::heartbeat,
+                                        "Heartbeat",
+                                        192,
+                                        tskIDLE_PRIORITY + 1,
+                                        HeartbeatFunc});
+    static app::AppTask command_task({app::TaskId::command_service,
+                                      "CommandService",
+                                      2000,
+                                      28,
+                                      CommandServiceFunc});
+    static app::AppTask servo_task({app::TaskId::servo_control,
+                                    "ServoControl",
+                                    256,
+                                    28,
+                                    ServoControlFunc});
+    static app::AppTask motion_task({app::TaskId::motion_control,
+                                     "MotionControl",
+                                     2500,
+                                     29,
+                                     MotionControlFunc_PID});
 
-    BaseType_t xReturn = pdPASS;
-    xReturn = xTaskCreate((TaskFunction_t)LEDBlinkFunc,
-                           (const char*)"LEDBlink",
-                           (uint16_t)2000,
-                           (void*)NULL,
-                           (UBaseType_t)28,
-                           (TaskHandle_t*)&Handle_LEDBlinkFunc);
-    xReturn |= xTaskCreate((TaskFunction_t)ServoControlFunc,
-                          (const char*)"ServoControl",
-                          (uint16_t)256,
-                          (void*)NULL,
-                          (UBaseType_t)28,
-                          (TaskHandle_t*)&Handle_ServoControlFunc);
-    xReturn |= xTaskCreate((TaskFunction_t)MotionControlFunc_PID,
-                           (const char*)"MotionControl",
-                           (uint16_t)2500,
-                           (void*)NULL,
-                           (UBaseType_t)29,
-                           (TaskHandle_t*)&Handle_MotionControlFunc);
+    g_hardware = &board;
+    g_servo_task = &servo_task;
+    g_motion_task = &motion_task;
+    g_runtime_status.reset();
+    board.force_safe_outputs();
 
-    if(pdPASS == xReturn){
-        Uart1.print("CPPMain: success\n");
-    }
-    else {
-        Uart1.print("CPPMain: fail\n");
-    }
-}
+    command_uart().print("[app] WL1 startup begin\n");
+    const bool heartbeat_started = start_task(heartbeat_task, nullptr);
 
-/*---------------------  system interrupt callback function begin  ---------------------*/
+    const auto initialization_plan =
+        bsp::HardwareFactory::create_initialization_plan(board);
+    app::InitializationManager initialization_manager;
+    g_initialization_report = initialization_manager.initialize_all(
+        initialization_plan.data(),
+        initialization_plan.size(),
+        initialization_observer,
+        &board);
+    g_runtime_status.publish_initialization_report(g_initialization_report);
 
-//spi interrupt callback
-extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
-    if (hspi == nRF.getSPIHandle()) { // 替换为你的 SPI 实例
-        nRF.isrSpiDmaCompleteHandler();
+    const bool command_channel_available =
+        hardware_ready(bsp::HardwareModuleId::command_uart) ||
+        hardware_ready(bsp::HardwareModuleId::radio);
+    bool command_started = true;
+    if (command_channel_available) {
+        command_started = start_task(command_task, nullptr);
+    } else {
+        command_uart().print("[task][SKIP] CommandService: no command channel\n");
     }
-}
-extern "C" void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
-    if (hspi == nRF.getSPIHandle()) {
-        nRF.isrSpiDmaCompleteHandler();
-    }
-}
-extern "C" void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
-    if (hspi == nRF.getSPIHandle()) {
-        nRF.isrSpiDmaCompleteHandler();
-    }
-}
 
-// EXTI interrupt callback
-extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    if (GPIO_Pin == nRF.getIRQGPIOPort()) { // 替换为你在 CubeMX 中定义的引脚宏
-        nRF.isrExtiHandler();
+    bool servo_started = false;
+    bool motion_started = false;
+    const bool may_start_control = g_initialization_report.all_succeeded() &&
+                                   heartbeat_started && command_started &&
+                                   g_runtime_status.task_failed_mask() == 0U;
+    if (may_start_control) {
+        servo_started = start_task(servo_task, nullptr);
+        if (servo_started) {
+            g_runtime_status.enable_control(true);
+            motion_started = start_task(motion_task, nullptr);
+        }
     }
+
+    if (!may_start_control || !servo_started || !motion_started) {
+        g_runtime_status.enable_control(false);
+        board.force_safe_outputs();
+    }
+
+    if (g_runtime_status.task_failed_mask() != 0U) {
+        g_runtime_status.set_state(app::SystemState::task_failed);
+    } else if (!g_initialization_report.all_succeeded()) {
+        g_runtime_status.set_state(app::SystemState::initialization_failed);
+    } else if (g_runtime_status.control_enabled()) {
+        g_runtime_status.set_state(app::SystemState::ready);
+    } else {
+        g_runtime_status.set_state(app::SystemState::task_failed);
+    }
+
+    command_uart().print("[app] state={} control={} hw_fail={} task_fail={}\n",
+                         system_state_name(g_runtime_status.state()),
+                         g_runtime_status.control_enabled() ? "on" : "off",
+                         g_runtime_status.hardware_failed_mask(),
+                         g_runtime_status.task_failed_mask());
 }

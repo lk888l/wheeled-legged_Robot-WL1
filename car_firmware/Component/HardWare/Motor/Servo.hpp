@@ -45,7 +45,7 @@ private:
     float CurrentAngle;
     float TargetAngle{};        // 用户期望到达的角度
     float StepSize{};           // 每一帧移动的步长
-    TimerHandle_t xTimer;     // FreeRTOS 软件定时器句柄
+    TimerHandle_t xTimer{nullptr};     // FreeRTOS 软件定时器句柄
     static const uint32_t UPDATE_PERIOD_MS = 10; // 10ms 更新一次，匹配 50Hz PWM
 
     float K_Pulse;

@@ -13,7 +13,12 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 - A 50 ms loop for speed, steering, roll, and leg-height control;
 - Fixed 32-byte wireless commands over the nRF24L01+;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
-- Fixed-capacity ETL containers for command queues and UART buffers.
+- Fixed-capacity ETL containers for command queues and UART buffers;
+- A factory-built, ordered hardware initialization plan that records every
+  failure without skipping later modules;
+- A fail-safe gate that keeps wheel PWM at zero and does not create balancing
+  tasks if any hardware initialization step fails, while preserving available
+  command channels.
 
 Further reading:
 
@@ -22,10 +27,10 @@ Further reading:
 - [Debugging and troubleshooting](docs/troubleshooting.md): power-on checks, common faults, and CubeMX regeneration checks.
 
 > [!WARNING]
-> The wheeled-legged self-balancing controller drives the motor PWM immediately
-> after its task starts. During initial flashing, control-direction changes, or
-> PID tuning, raise the wheels off the ground, disconnect motor power, or use a
-> current-limited power supply, and make sure power can be cut immediately.
+> Balancing is enabled only after every hardware module and required application
+> task starts successfully. This software gate does not replace physical safety:
+> raise the wheels, disconnect motor power, or use a current-limited supply during
+> initial flashing and tuning.
 
 ## Quick Start
 
@@ -61,6 +66,14 @@ cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Release --parallel
 ```
 
+Run the platform-independent startup-manager tests without a board:
+
+```sh
+cmake -S tests -B build/host-tests -G Ninja
+cmake --build build/host-tests --parallel
+ctest --test-dir build/host-tests --output-on-failure
+```
+
 If Ninja is unavailable, replace `-G Ninja` with an available generator, such as
 `-G "MinGW Makefiles"` on Windows. Use a new build directory when changing
 generators.
@@ -93,9 +106,44 @@ openocd -f STlink.cfg \
   -c "program build/Release/WL1_F411CEU6.elf verify reset exit"
 ```
 
-After flashing, USART1 should print `CPPMain: success`, followed by `MPU: success`
-when MPU6050 initialization succeeds. The PC13 activity LED toggles approximately
-every 100 ms.
+If the controller supply has been independently verified while a particular
+probe still reports a false low Vref, use the tested 100 kHz compatibility path:
+
+```sh
+openocd -f STlink_hla.cfg \
+  -c "adapter speed 400; init; halt; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+```
+
+Full-image write and verification were tested at 400 kHz; reset returns to the
+100 kHz debugging speed. The deprecated HLA backend is only a compatibility
+fallback for a confirmed measurement fault; use `STlink.cfg` for normal probes.
+
+USART1 now prints one `[init][ OK ]` or `[init][FAIL]` line per module and ends
+with an application summary. Only `state=ready control=on` means balancing and
+motor output are allowed. A failed module is reported immediately, but the
+remaining initialization steps still run.
+
+## Startup Safety and PC13 Heartbeat
+
+The ordered initialization plan is: command UART, MPU6050, left encoder, right
+encoder, wheel-motor PWM, left servo, right servo, and nRF24L01+. Any failure
+prevents `ServoControl` and `MotionControl` from being created and forces safe
+outputs. `Heartbeat` remains independent; `CommandService` remains available
+when either USART1 or nRF initialized successfully.
+
+PC13 is treated as active-low:
+
+| State | LED pattern | Meaning |
+| --- | --- | --- |
+| `booting` | 100 ms on / 100 ms off | Initialization in progress |
+| `ready` | 80 ms on / 920 ms off | Control enabled |
+| `init-failed` | Two short flashes, then pause | Hardware failure; safe mode |
+| `task-failed` | Three short flashes, then pause | Application task creation failed |
+| `runtime-fault` | 80 ms on / 80 ms off | Runtime IMU failure; outputs stopped |
+
+Without a serial adapter, inspect `g_app_system_state`,
+`g_app_hardware_failed_mask`, `g_app_task_failed_mask`, and
+`g_app_control_enabled` through ST-Link/GDB.
 
 ## First Power-On
 
@@ -121,7 +169,7 @@ For detailed checks, see [Debugging and troubleshooting](docs/troubleshooting.md
 | USART1 RX | PA10 | 115200, 8-N-1, DMA2 Stream 5, receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
-| Activity LED | PC13 | Toggles every 100 ms |
+| Status LED | PC13 | Active-low; state-dependent heartbeat above |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -152,9 +200,8 @@ range, and VQF for attitude fusion.
 
 The current PID path inverts the TB6612 B-channel direction and configures a
 minimum compare value of 50 counts for both PWM channels. The final PWM command
-is limited to `-1000..1000`. The current driver reapplies this minimum value at
-the end even for a zero command; see the
-[known implementation constraints in the architecture document](docs/architecture.md#已知实现约束).
+is limited to `-1000..1000`. A zero command uses a dedicated safe branch, so the
+dead zone is not reapplied and the compare value remains zero.
 
 ### Leg Servos
 
@@ -177,7 +224,7 @@ kinematics. Mechanical dimensions and coordinate-system definitions are in
 | MOSI | PB15 | SPI2_MOSI |
 | CSN | PA4 | Software-controlled chip select, active low |
 | CE | PB12 | TX/RX mode control |
-| IRQ | PA12 | Falling-edge EXTI |
+| IRQ | PA12 | Pull-up input, falling-edge EXTI; no floating pin when absent |
 | VCC | 3.3 V | Do not connect to 5 V |
 | GND | GND | Common ground with the MCU |
 
@@ -197,8 +244,9 @@ does not initialize or refresh the OLED. CubeMX reserves these software-I²C pin
 
 ## Wireless Protocol
 
-The car enters nRF receive mode after power-on. A valid payload is an ASCII
-command padded to 32 bytes with `0x00`. The recommended control frame is:
+The car enters nRF receive mode only after initialization and register readback
+verification succeed. A valid payload is an ASCII command padded to 32 bytes
+with `0x00`. The recommended control frame is:
 
 ```text
 R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
@@ -236,6 +284,8 @@ The RF parameters and `R` command format must be changed in sync with
 ```text
 car_firmware/
 ├── Component/
+│   ├── Application/               # Initialization, AppTask, runtime status
+│   ├── Bsp/                       # Board facade and hardware factory
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 and VQF
 │   │   ├── Motor/                # Encoders, TB6612, and servos
@@ -254,17 +304,19 @@ car_firmware/
 ├── CMakeLists.txt
 ├── CMakeLists_template.txt
 ├── STlink.cfg
+├── STlink_hla.cfg                 # Low-speed fallback for confirmed false Vref
+├── tests/                          # Host startup-semantics tests
 └── WL1_F411CEU6.ioc
 ```
 
-The C entry point is `Core/Src/main.c`. Before the scheduler starts,
-`MX_FREERTOS_Init()` calls `CPP_Main()`, which then creates the application tasks
-in `Component/UserApp/main.cpp`.
+The C entry point is `Core/Src/main.c`. `MX_FREERTOS_Init()` creates only the
+`AppBootstrap` task. After the scheduler starts, that task calls `CPP_Main()` to
+construct board services, initialize every hardware step, and create eligible
+application tasks, then deletes itself.
 
-`MotionControlFunc_PID()` is the control task that is currently created. The LQR
-path in `MotionControlFunc()` remains available for experiments but does not
-currently run. `MainControl.*` and the OLED module are likewise not connected to
-the application path.
+`MotionControlFunc_PID()` remains the active algorithm, but it is created only
+after the safety gate passes. The LQR path remains available for experiments but
+does not currently run. `MainControl.*` and OLED remain outside the runtime path.
 
 ## Development Guidelines
 

@@ -137,9 +137,8 @@ public:
      */
     static inline void str_touint8(const etl::string_view &sv, uint8_t *NRF_Text) {
         if (NRF_Text == nullptr) return;
-        size_t copy_len = std::min(sv.size(), size_t(PACKET_WIDTH-1));
-        if(copy_len != 31)  {memset(&NRF_Text[copy_len], 0, PACKET_WIDTH-copy_len);}
-        else {NRF_Text[PACKET_WIDTH] = 0;}
+        memset(NRF_Text, 0, PACKET_WIDTH);
+        size_t copy_len = std::min(sv.size(), size_t(PACKET_WIDTH));
         std::copy(sv.begin(), sv.begin() + copy_len, NRF_Text);
     }
     /**

@@ -18,6 +18,7 @@ LQR::LQR(double *_k)
 }
 
 void LQR::setHight(double _highvalue) {
+    (void)_highvalue;
 
 }
 

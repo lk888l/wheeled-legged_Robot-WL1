@@ -48,11 +48,11 @@
 /* USER CODE BEGIN Variables */
 static signed char pcWriteBuffer[500];
 /* USER CODE END Variables */
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 64 * 4,
+/* Definitions for AppBootstrap */
+osThreadId_t AppBootstrapHandle;
+const osThreadAttr_t AppBootstrap_attributes = {
+  .name = "AppBootstrap",
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 
@@ -61,7 +61,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void *argument);
+void StartAppBootstrap(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -117,13 +117,11 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of AppBootstrap */
+  AppBootstrapHandle = osThreadNew(StartAppBootstrap, NULL, &AppBootstrap_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-    CPP_Main();
-//    vTaskDelete(defaultTaskHandle);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -132,24 +130,23 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_StartAppBootstrap */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the AppBootstrap thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+/* USER CODE END Header_StartAppBootstrap */
+void StartAppBootstrap(void *argument)
 {
-  /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-//    CPP_Main();
-    vTaskDelay(1000);
-    vTaskDelete(defaultTaskHandle);
-    while(1){
-
-    }
-  /* USER CODE END StartDefaultTask */
+  /* USER CODE BEGIN StartAppBootstrap */
+  /* Run application composition after the scheduler is live, matching the
+     app-main task model used by the reference project. CPP_Main creates the
+     persistent application tasks; this bootstrap task then releases itself. */
+  CPP_Main();
+  vTaskDelete(NULL);
+  for (;;) {}
+  /* USER CODE END StartAppBootstrap */
 }
 
 /* Private application code --------------------------------------------------*/

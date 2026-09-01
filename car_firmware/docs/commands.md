@@ -3,6 +3,10 @@
 `car_firmware` 的 USART1 和 nRF24L01+ 共用同一套文本命令解析器。命令名称
 区分大小写，参数之间使用一个或多个空格。
 
+初始化失败进入安全模式后，只要 USART1 或 nRF 至少一条命令通道初始化成功，
+命令服务仍会运行。参数写入和诊断应答会保留，但平衡任务不会运行，执行器输出
+请求会被安全门控拒绝。
+
 ## 传输方式
 
 ### USART1
@@ -102,6 +106,8 @@ rollpid -i <value>
 
 | 命令 | 作用 |
 | --- | --- |
+| `ping` | 返回 `pong`、当前状态和控制开关，检查命令服务存活 |
+| `status` | 返回状态、控制开关、硬件失败位图和任务失败位图 |
 | `showimu -y` | 以约 100 Hz 输出 `Roll,Pitch,Yaw` |
 | `showimu -n` | 停止 IMU 连续输出 |
 | `showrpm -y` | 以约 20 Hz 输出左右轮 RPM |
@@ -119,6 +125,16 @@ nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发
 一次。车端发送期间不处于接收模式；发送成功或达到最大重试次数后才切回 RX。
 遥控闭环运行时不建议开启周期遥测。
 
+`status` 示例：
+
+```text
+status=init-failed control=off hw_fail=130 task_fail=0
+```
+
+硬件位从 bit 0 起依次表示 USART1 命令接收、MPU6050、左编码器、右编码器、
+轮电机 PWM、左舵机、右舵机、nRF24L01+。任务位从 bit 0 起依次表示
+Heartbeat、CommandService、ServoControl、MotionControl。
+
 ## 兼容/实验命令
 
 ```text
@@ -127,7 +143,8 @@ motor <left> <right>
 
 解析成功后会打印数值并通知 MotionControl。当前实际运行的
 `MotionControlFunc_PID()` 没有消费这条通知，因此该命令不会覆盖闭环 PWM；
-它只保留用于旧的 LQR/手动电机实验。
+它只保留用于旧的 LQR/手动电机实验。在安全模式或 MotionControl 未运行时，
+固件明确返回 `motor rejected: control is in safe mode`，不会发送空任务句柄通知。
 
 未知命令不会返回 `Unknown command`，而是按以下格式回显：
 

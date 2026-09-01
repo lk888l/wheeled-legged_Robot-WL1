@@ -12,7 +12,10 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 - 50 ms 速度、转向和横滚/腿高控制；
 - nRF24L01+ 固定 32 字节无线命令；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
-- ETL 固定容量容器，用于命令队列和 UART 缓冲。
+- ETL 固定容量容器，用于命令队列和 UART 缓冲；
+- 工厂生成的固定初始化清单，逐项执行并聚合错误；
+- 任一硬件初始化失败时进入安全模式：不创建平衡任务，轮电机 PWM 保持为 0，
+  同时尽可能保留串口或无线命令应答。
 
 进一步阅读：
 
@@ -22,8 +25,9 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
   CubeMX 重新生成检查项。
 
 > [!WARNING]
-> 轮腿自平衡控制会在任务启动后直接输出电机 PWM。首次烧录、修改控制方向或
-> 调整 PID 时，应架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
+> 只有全部硬件模块和必要应用任务均启动成功后，固件才允许创建并运行平衡任务。
+> 这道门控不能替代物理安全措施；首次烧录、修改控制方向或调整 PID 时，仍应
+> 架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
 
 ## 快速开始
 
@@ -59,6 +63,14 @@ cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Release --parallel
 ```
 
+初始化管理器可以在主机上独立测试，无需开发板：
+
+```sh
+cmake -S tests -B build/host-tests -G Ninja
+cmake --build build/host-tests --parallel
+ctest --test-dir build/host-tests --output-on-failure
+```
+
 如果系统没有 Ninja，可将 `-G Ninja` 换成可用生成器，例如 Windows 上的
 `-G "MinGW Makefiles"`。切换生成器时使用新的构建目录。
 
@@ -89,8 +101,66 @@ openocd -f STlink.cfg \
   -c "program build/Release/WL1_F411CEU6.elf verify reset exit"
 ```
 
-烧录后，USART1 应输出 `CPPMain: success`，MPU6050 初始化成功时输出
-`MPU: success`。PC13 活动指示灯约每 100 ms 翻转一次。
+若已经用万用表确认主控板供电正常，但特定 ST-Link 仍误报低 Vref，可使用仓库内
+经过本板验证的 100 kHz HLA 兼容配置：
+
+```sh
+openocd -f STlink_hla.cfg \
+  -c "adapter speed 400; init; halt; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+```
+
+400 kHz 已完成整片写入与校验；配置文件会在复位时降回 100 kHz，供稳定调试。
+HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 ST-Link 仍优先使用
+`STlink.cfg` 的标准 SWD 后端。
+
+烧录后，USART1 会按顺序输出每个初始化步骤，例如：
+
+```text
+[app] WL1 startup begin
+[task][ OK ] Heartbeat
+[init][ OK ] command-uart
+[init][FAIL] imu-mpu6050
+...
+[app] state=init-failed control=off hw_fail=... task_fail=0
+```
+
+每个失败都会立即输出，但不会中断后续初始化。最终只有
+`state=ready control=on` 才表示平衡与电机输出已获准运行。
+
+## 启动、安全门控与 LED 心跳
+
+FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口。初始化工厂固定按
+以下顺序生成并执行 8 个步骤：
+
+1. USART1 命令接收；
+2. MPU6050；
+3. 左编码器；
+4. 右编码器；
+5. TB6612 轮电机 PWM；
+6. 左舵机 PWM；
+7. 右舵机 PWM；
+8. nRF24L01+。
+
+步骤失败只会记录对应位并继续。全部步骤结束后再做一次统一判定：只要
+`hardware_failed_mask != 0`，就不创建 `ServoControl` 和 `MotionControl`，
+强制轮电机 compare 为 0、方向脚为低，并停止两路舵机 PWM。独立的
+`Heartbeat` 仍运行；USART1 或 nRF 中任一可用时，`CommandService` 仍运行，
+可使用 `ping`、`status` 和原有参数命令。会导致输出的请求在安全模式下会被拒绝。
+
+PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式如下：
+
+| 状态 | LED 模式 | 周期 | 含义 |
+| --- | --- | ---: | --- |
+| `booting` | 100 ms 亮 / 100 ms 灭连续交替 | 200 ms | 正在逐项初始化 |
+| `ready` | 80 ms 亮 / 920 ms 灭 | 1 s | 全部初始化成功，控制已启用 |
+| `init-failed` | 连闪 2 次后停顿 | 1 s | 至少一个硬件步骤失败，安全模式 |
+| `task-failed` | 连闪 3 次后停顿 | 1.12 s | FreeRTOS 应用任务创建失败，安全模式 |
+| `runtime-fault` | 80 ms 亮 / 80 ms 灭连续快闪 | 160 ms | 运行期 IMU 连续读取失败，输出已关闭 |
+
+没有串口适配器时，可通过 ST-Link/GDB 读取
+`g_app_system_state`、`g_app_hardware_attempted_mask`、
+`g_app_hardware_failed_mask`、`g_app_task_failed_mask` 和
+`g_app_control_enabled`。位定义与上述初始化顺序一致，从 bit 0 开始。
 
 ## 首次上电
 
@@ -116,7 +186,7 @@ openocd -f STlink.cfg \
 | USART1 RX | PA10 | 115200, 8-N-1，DMA2 Stream 5，Receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
-| Activity LED | PC13 | 100 ms 周期翻转 |
+| Status LED | PC13 | 低有效；模式见“启动、安全门控与 LED 心跳” |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -145,8 +215,8 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 | 右编码器 A / B | PB4 / PB5 | TIM3_CH1 / CH2 |
 
 当前 PID 路径将 TB6612 B 通道方向反相，并给两路 PWM 都配置 50 counts
-最小比较值。PWM 命令最终限幅为 `-1000..1000`。当前驱动对零命令也会在
-末尾重新应用这个最小值，详见[架构说明的已知约束](docs/architecture.md#已知实现约束)。
+最小比较值。PWM 命令最终限幅为 `-1000..1000`；零命令是专门的安全分支，
+不会再应用死区，compare 保持为 0。
 
 ### 腿部舵机
 
@@ -168,7 +238,7 @@ TIM9 产生 100 Hz PWM。软件将目标腿高限制为 `44.5..78.5 mm`，经四
 | MOSI | PB15 | SPI2_MOSI |
 | CSN | PA4 | 软件片选，低有效 |
 | CE | PB12 | 收发模式控制 |
-| IRQ | PA12 | 下降沿 EXTI |
+| IRQ | PA12 | 上拉输入、下降沿 EXTI；模块缺失时避免悬空 |
 | VCC | 3.3 V | 不可接 5 V |
 | GND | GND | 与主控共地 |
 
@@ -187,8 +257,8 @@ OLED。CubeMX 保留了软件 I²C 引脚：
 
 ## 无线协议
 
-小车在上电后进入 nRF 接收模式。有效 payload 是以 `0x00` 补齐到 32 字节
-的 ASCII 命令，推荐控制帧为：
+nRF 初始化和寄存器回读验证成功后，小车进入接收模式。有效 payload 是以
+`0x00` 补齐到 32 字节的 ASCII 命令，推荐控制帧为：
 
 ```text
 R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
@@ -223,6 +293,8 @@ R 0.0 -0.0 0.0 61.5
 ```text
 car_firmware/
 ├── Component/
+│   ├── Application/               # 初始化管理、AppTask、运行状态
+│   ├── Bsp/                       # 板级硬件门面与硬件工厂
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 与 VQF
 │   │   ├── Motor/                # 编码器、TB6612、舵机
@@ -241,13 +313,21 @@ car_firmware/
 ├── CMakeLists.txt
 ├── CMakeLists_template.txt
 ├── STlink.cfg
+├── STlink_hla.cfg                 # Vref 已确认误报时的低速兼容配置
+├── tests/                          # 可在主机运行的启动语义测试
 └── WL1_F411CEU6.ioc
 ```
 
-C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 在调度器启动前调用
-`CPP_Main()`，再由 `Component/UserApp/main.cpp` 创建应用任务。
+C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 只创建 `AppBootstrap`；
+调度器启动后，该任务调用 `CPP_Main()` 进行硬件组合、逐项初始化和应用任务
+创建，随后删除自身。这与参考工程的 app-main task 模型一致，同时避免在
+调度器启动前创建软件定时器、信号量或调用会阻塞的初始化代码。
 
-`MotionControlFunc_PID()` 是当前被创建的控制任务。
+这里参考的是 [esp_idf_template](https://github.com/lk888l/esp32_idf/tree/main/esp_idf_template)
+中“应用管理器统一编排、任务对象封装”的思路；本项目按机器人安全需求将
+其语义调整为“初始化失败继续执行，最后统一安全门控”。
+
+`MotionControlFunc_PID()` 仍是当前控制算法，但只会在统一安全门控通过后创建。
 `MotionControlFunc()` 中的 LQR 路径仍保留作实验，但当前不会运行。
 `MainControl.*` 和 OLED 模块同样尚未接入应用路径。
 

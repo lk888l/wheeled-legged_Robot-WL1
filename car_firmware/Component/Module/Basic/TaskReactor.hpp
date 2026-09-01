@@ -20,6 +20,7 @@
 #include "task.h"
 //user C++ library include
 #include "BasicObject.hpp"
+#include "TextCommandParser.hpp"
 //stm-Hal library include
 #include "main.h"
 
@@ -35,11 +36,7 @@ public:
     /**
      * @brief
      */
-    struct strCMD_t {
-        etl::string_view command;   // command
-        etl::string_view args;      // parameter
-//        bool hasArgs;               // 是否成功分离出了参数
-    };
+    using strCMD_t = text_command::ParsedCommand;
 
 private:
     std::array<SlotCallback, 32> slots; // 32个Bit对应32个槽
@@ -118,36 +115,7 @@ public:
     }
 
     static bool parseStrCMD(etl::string_view input, strCMD_t &strCmd){
-        //Remove leading spaces
-        size_t start = input.find_first_not_of(" ");
-        if (start == std::string_view::npos) {
-            strCmd.command = "";
-            strCmd.args = "";
-            return false;
-        }
-        input.remove_prefix(start);
-        //Look for the first space.
-        size_t spacePos = input.find(' ');
-        if (spacePos != std::string_view::npos){
-            etl::string_view cmd = input.substr(0, spacePos);
-            etl::string_view args = input.substr(spacePos + 1);
-            size_t firstArg = args.find_first_not_of(" ");
-            if (firstArg != std::string_view::npos) {
-                strCmd.command = cmd;
-                strCmd.args    = args;
-                return true;
-            }
-            else{       // 有空格但空格后全是空格
-                strCmd.command = input;
-                strCmd.args = "";
-            }
-            return true;
-        }
-        else{           //纯命令，无参数
-            strCmd.command = input;
-            strCmd.args = "";
-            return true;
-        }
+        return text_command::parse(input, strCmd);
     }
 
     template<typename T>

@@ -11,30 +11,34 @@
 4. nRF24L01+ 只接 3.3 V，并在模块附近放置去耦电容；
 5. 烧录后执行 verify，再复位运行；
 6. USART1 使用 PA15/PA10、115200, 8-N-1；
-7. 启动日志包含 `CPPMain: success` 和 `MPU: success`；
+7. 启动日志列出 8 个 `[init]` 结果，并以 `[app] state=...` 结束；
 8. 暂不开启电机功率，分别检查 IMU、编码器和舵机。
 
 ## 启动日志
 
 | 日志 | 含义 |
 | --- | --- |
-| `CPPMain: success` | 任务创建状态检查通过，但当前 OR 累积逻辑不能证明三个任务都成功 |
-| `CPPMain: fail` | 创建状态检查失败，优先检查 FreeRTOS heap 和任务栈 |
-| `MPU: success` | MPU6050 初始化事务成功 |
-| `MPU: fail` | I2C、地址、供电或器件身份检查失败 |
+| `[init][ OK ] <name>` | 该硬件步骤完成；固件继续下一项 |
+| `[init][FAIL] <name>` | 该硬件步骤失败；固件记录失败位并继续下一项 |
+| `[task][ OK ] <name>` | 对应应用任务创建成功 |
+| `[task][FAIL] <name>` | 任务创建失败，优先检查 FreeRTOS heap 和任务栈 |
+| `[app] state=ready control=on ...` | 所有启动门控通过，平衡控制已启用 |
+| `[app] state=init-failed control=off ...` | 至少一个硬件步骤失败，执行器保持安全状态 |
+| `[runtime][FAIL] imu read; control stopped` | 连续 3 次 IMU 读取失败，已在运行期关断输出 |
 | `nRF: send success` | TX 完成且收到 ACK |
 | `nRF: send fail` | 达到最大自动重发次数 |
 | `receive: ...` | 收到无法匹配的文本命令 |
 
-当前 nRF 初始化返回值没有启动日志，因此“没有 nRF 日志”不能证明初始化成功。
+nRF 初始化会回读 RF channel 和 address width；SPI DMA 虽然完成但模块缺失、
+MISO 悬空或寄存器值不匹配时，`radio-nrf24` 仍会报告失败。
 
 ## 常见现象
 
 | 现象 | 优先检查 |
 | --- | --- |
 | 无任何日志、LED 不翻转 | 供电、BOOT0、复位、时钟、HardFault、镜像地址 |
-| `CPPMain: fail` | 32 KiB FreeRTOS heap、任务栈、重复创建对象 |
-| `MPU: fail` | PB6/PB7、0x68 地址、上拉、电源和共地 |
+| `[task][FAIL] ...` | 32 KiB FreeRTOS heap、任务栈、重复创建对象 |
+| `[init][FAIL] imu-mpu6050` | PB6/PB7、0x68 地址、上拉、电源和共地 |
 | IMU 值跳变或缓慢漂移 | 安装方向、振动、陀螺零偏、采样周期 |
 | 手转轮子但 RPM 为 0 | TIM2/TIM3 引脚、编码器供电、相线和计数器 |
 | 电机一上电就全速 | 反馈符号、Pitch 偏置、编码器左右映射、PWM 方向 |
@@ -42,7 +46,9 @@
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
 | 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
 | 串口偶尔少日志 | UART 固定发送缓冲已满；高频日志会被丢弃 |
-| PC13 翻转不稳定 | Reactor 被高频事件唤醒、控制临界区过长 |
+| PC13 连闪 2 次 | 硬件初始化失败；执行 `status` 或读失败位图 |
+| PC13 连闪 3 次 | 应用任务创建失败；检查 heap 和任务栈 |
+| PC13 连续快闪 | 运行期 IMU 读取故障，输出已关闭 |
 
 ## IMU 排查
 
@@ -89,8 +95,8 @@ showrpm -y
 应向前追赶重心；若相反，应先修正 IMU/PWM 方向，不能靠增大 PID 解决。
 
 `motor` 命令在当前 PID 路径中不会直接驱动电机，不能用它作为硬件点动测试。
-另外，TB6612 驱动当前会在零命令分支之后重新应用 50 counts 最小 PWM；
-如果需要可靠滑行/制动状态，应先修正零值处理并在支架上复验。
+TB6612 的零命令有独立安全分支，compare 保持 0，不再重新应用 50 counts
+死区。进入安全模式时还会把四个方向脚拉低。
 
 ## 舵机与腿部机构
 
@@ -128,7 +134,7 @@ legheight 60
 5. auto ACK 开启；
 6. payload 是补零的 ASCII 文本；
 7. 字段顺序为 Turn、Velocity、Roll、Height；
-8. 小车 PA12 配置为下降沿 EXTI；
+8. 小车 PA12 配置为上拉输入、下降沿 EXTI；
 9. SPI2 RX/TX DMA 中断和 EXTI15_10 中断正常。
 
 典型中心帧：
@@ -210,21 +216,69 @@ load
 monitor reset run
 ```
 
+没有连接串口或外部模块时，等待约 1 秒后中断目标并读取启动状态：
+
+```gdb
+monitor reset run
+shell sleep 1
+monitor halt
+p g_app_system_state
+p/x g_app_hardware_attempted_mask
+p/x g_app_hardware_failed_mask
+p/x g_app_task_failed_mask
+p g_app_control_enabled
+```
+
+仅连接主控板时，MPU6050（bit 1）和 nRF24L01+（bit 7）应检测失败，因此典型
+`g_app_hardware_failed_mask` 为 `0x82`，状态为 `initialization_failed`（数值 3），
+`g_app_control_enabled` 必须为 0。编码器、电机和舵机步骤只能验证 MCU 定时器
+是否成功启动，无法在没有反馈/识别引脚的情况下判断板外器件是否物理存在。
+
+本次仅连接主控板的实测结果如下，连续 3 次复位结果一致：
+
+| 检查项 | 实测值 | 结论 |
+| --- | --- | --- |
+| 硬件尝试 / 失败位图 | `0xFF / 0x82` | 8 项全部执行；IMU、nRF 失败后仍继续 |
+| 任务尝试 / 失败位图 | `0x03 / 0x00` | 仅 Heartbeat、CommandService 创建成功 |
+| 系统状态 / 控制门 | `3 / 0` | `initialization_failed`，控制关闭 |
+| TIM1 CCR1 / CCR2 | `0 / 0` | 左右轮 PWM 为零 |
+| PA6、PA7、PB0、PB1 | 全部低电平 | TB6612 四个方向输入关闭 |
+| TIM9 CCER、CCR1、CCR2 | `0 / 0 / 0` | 两路舵机 PWM 已停止 |
+| PC13 LED | 两次约 120 ms 点亮，随后约 640 ms 熄灭 | `init-failed` 心跳符合设计 |
+
+ST-Link VCP（COM22，115200 8-N-1）串口实测同时覆盖 LF 和 CRLF 帧：
+
+| 输入 | 实测应答 |
+| --- | --- |
+| `ping` | `pong state=init-failed control=off` |
+| `status` | `status=init-failed control=off hw_fail=130 task_fail=0` |
+| `motor 100 100` | `motor rejected: control is in safe mode` |
+| `unknown_probe` | `receive: unknown_probe` |
+
+执行被拒绝的 `motor` 命令后再次读取寄存器，TIM1/TIM9 CCR 仍全部为 0，四个
+TB6612 方向位仍为低电平。
+
 若 OpenOCD 报告 target voltage 过低，应先用万用表确认目标板 VCC 和 ST-Link
-Vref，不能仅凭“仍能识别芯片”忽略欠压。
+Vref，不能仅凭“仍能识别芯片”忽略欠压。若已独立确认供电正常且该探头属于
+已知测量误报，可改用 `STlink_hla.cfg`：复位和寄存器调试使用 100 kHz，整片
+Flash 写入显式切换为已实测的 400 kHz，避免 100 kHz 下 Flash 算法超时。本项目
+所连接的 ST-LINK/V2 已通过 CPUID 读取、ELF 写入校验和多次复位运行验证。
+标准探头仍应优先使用 `STlink.cfg`。
 
 ## CubeMX 重新生成检查项
 
 使用 `WL1_F411CEU6.ioc` 重新生成后至少检查：
 
 1. MCU 仍为 STM32F411CEU6，HSE 25 MHz，SYSCLK 100 MHz；
-2. `Core/Src/freertos.c` 的 USER CODE 中仍调用 `CPP_Main()`；
+2. `Core/Src/freertos.c` 的 `StartAppBootstrap()` USER CODE 中仍在调度器启动后
+   调用 `CPP_Main()`，而 `MX_FREERTOS_Init()` 不提前调用它；
 3. FreeRTOS tick 仍为 1 kHz、heap 仍满足任务创建需求；
 4. USART1 仍映射 PA15/PA10，RX/TX DMA 分别为 Stream 5/7；
 5. SPI2 仍映射 PB13/PB14/PB15，DMA 分别为 Stream 3/4；
-6. PA12 仍为下降沿 EXTI，优先级为 6；
+6. PA12 仍为上拉输入、下降沿 EXTI，优先级为 6；
 7. SPI/UART DMA 中断优先级仍为 5；
 8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
 9. I2C1 仍为 PB6/PB7、400 kHz；
-10. CMake 中的应用 include 和 source glob 仍完整；
+10. CMake 中 `Component/Application`、`Component/Bsp` 和 UserApp 的 include/source
+    glob 仍完整；
 11. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。

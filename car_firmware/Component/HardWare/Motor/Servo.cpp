@@ -24,7 +24,8 @@ Servo::Servo(TIM_HandleTypeDef *htim, uint32_t channel, int32_t minPulseUs, int3
                       pdTRUE, (void*)this, ServoTimerCallback);
     K_Pulse = (float)(maxPulseUs - minPulseUs) / maxAngle;
     B_Pulse = (float)minPulseUs;
-    setAngle_Immediate(angle);
+    CurrentAngle = TargetAngle = angle;
+    setPWM_FromAngle(angle);
 
 }
 
@@ -40,17 +41,28 @@ void Servo::setPWM_FromAngle(float angle) {
 
 
 bool Servo::Init() {
-    return static_cast<bool>(HAL_TIM_PWM_Start(HTim, TimChannel));
+    if (HTim == nullptr || xTimer == nullptr) {
+        return false;
+    }
+    return HAL_TIM_PWM_Start(HTim, TimChannel) == HAL_OK;
 }
 
 void Servo::stop() {
-    HAL_TIM_PWM_Stop(HTim, TimChannel);
+    if (xTimer != nullptr) {
+        xTimerStop(xTimer, 0);
+    }
+    if (HTim != nullptr) {
+        __HAL_TIM_SET_COMPARE(HTim, TimChannel, 0);
+        HAL_TIM_PWM_Stop(HTim, TimChannel);
+    }
 }
 
 bool Servo::setAngle_Immediate(float angle) {
     if(Limit_Max_Angle!=0 && angle>Limit_Max_Angle)   angle = Limit_Max_Angle;
     else if(angle<Limit_Min_Angle)  angle = Limit_Min_Angle;
-    xTimerStop(xTimer, 0);          //stop soft timer to immediate execution
+    if (xTimer != nullptr) {
+        xTimerStop(xTimer, 0);      //stop soft timer to immediate execution
+    }
     setPWM_FromAngle(angle);
     CurrentAngle = TargetAngle = angle;
     return true;
@@ -64,7 +76,11 @@ void Servo::setAngle_Smooth(float targetAngle, float speed) {
     }
     TargetAngle = targetAngle;
     StepSize = speed * (UPDATE_PERIOD_MS / 1000.0f);
-    xTimerStart(xTimer, 0);     // start soft timer
+    if (xTimer != nullptr) {
+        xTimerStart(xTimer, 0); // start soft timer
+    } else {
+        setAngle_Immediate(targetAngle);
+    }
 }
 
 float Servo::getCurrentAngle() const {

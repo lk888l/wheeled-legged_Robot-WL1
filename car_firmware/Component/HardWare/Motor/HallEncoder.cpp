@@ -16,7 +16,14 @@ HallEncoder::HallEncoder(TIM_HandleTypeDef *_htim, HallEncoder::InitConfig_t _cf
     , Hall_Cfg(_cfg)
     , lastRawTick(0)
 {
-    HAL_TIM_Encoder_Start(_htim,TIM_CHANNEL_ALL);
+}
+
+bool HallEncoder::Init()
+{
+    if (HTim == nullptr) {
+        return false;
+    }
+    return HAL_TIM_Encoder_Start(HTim, TIM_CHANNEL_ALL) == HAL_OK;
 }
 
 /**
@@ -58,6 +65,7 @@ double HallEncoder::getRPM() {
 
 void HallEncoder::clearCounter() {
     AccumulateNum = 0;
+    lastRawTick = 0;
     __HAL_TIM_SET_COUNTER(HTim,0);
 }
 

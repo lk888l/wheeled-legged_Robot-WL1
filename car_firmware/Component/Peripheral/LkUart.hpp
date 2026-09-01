@@ -132,8 +132,15 @@ public:
      */
     bool Start_DMAIT_Receive(){
         if(freeQueue_Rx.pop(curBufIndex_Rx)){
-            HAL_UARTEx_ReceiveToIdle_DMA(HUart, reinterpret_cast<uint8_t*>(buffers_Rx[curBufIndex_Rx].data()), RX_BufferSize); //start DMA receive
-            return true;
+            const HAL_StatusTypeDef result = HAL_UARTEx_ReceiveToIdle_DMA(
+                HUart,
+                reinterpret_cast<uint8_t*>(buffers_Rx[curBufIndex_Rx].data()),
+                RX_BufferSize);
+            if (result == HAL_OK) {
+                return true;
+            }
+            freeQueue_Rx.push(curBufIndex_Rx);
+            return false;
         }
         else{
             return false;
@@ -219,13 +226,5 @@ public:
 // 静态成员初始化
 template<size_t TX_BufferSize, size_t TX_BufDepth, size_t RX_BufferSize, size_t RX_BufDepth>
 LkUart<TX_BufferSize, TX_BufDepth,RX_BufferSize,RX_BufDepth>* LkUart<TX_BufferSize, TX_BufDepth,RX_BufferSize,RX_BufDepth>::instance_ = nullptr;
-
-extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-    LkUart<>::isrTxComplete(huart);
-}
-
-extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
-    LkUart<>::isRxComplete(huart, Size);
-}
 
 #endif //__LKUART_HPP

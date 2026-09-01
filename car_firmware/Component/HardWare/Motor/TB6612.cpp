@@ -23,15 +23,35 @@ TB6612::TB6612(InitConfig_t _tbconfig)
  * @brief start PWM
  * @return true: successful  or   false: fail
  */
-bool TB6612::Init() const
+bool TB6612::Init()
 {
-    uint8_t HalState;
-    HalState = HAL_TIM_PWM_Start(TB6_Cfg.Htim,TB6_Cfg.AChannel);
-    HalState |= HAL_TIM_PWM_Start(TB6_Cfg.Htim,TB6_Cfg.BChannel);
-    if(HalState == HAL_OK){
-        return true;
+    if (TB6_Cfg.Htim == nullptr) {
+        return false;
     }
-    return false;
+
+    forceStop();
+    const HAL_StatusTypeDef channel_a =
+        HAL_TIM_PWM_Start(TB6_Cfg.Htim, TB6_Cfg.AChannel);
+    const HAL_StatusTypeDef channel_b =
+        HAL_TIM_PWM_Start(TB6_Cfg.Htim, TB6_Cfg.BChannel);
+    forceStop();
+
+    if (channel_a != HAL_OK || channel_b != HAL_OK) {
+        HAL_TIM_PWM_Stop(TB6_Cfg.Htim, TB6_Cfg.AChannel);
+        HAL_TIM_PWM_Stop(TB6_Cfg.Htim, TB6_Cfg.BChannel);
+        return false;
+    }
+    return true;
+}
+
+void TB6612::forceStop()
+{
+    setAPWM(0);
+    setBPWM(0);
+    HAL_GPIO_WritePin(TB6_Cfg.A1GPIO_Port, TB6_Cfg.A1GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TB6_Cfg.A2GPIO_Port, TB6_Cfg.A2GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TB6_Cfg.B1GPIO_Port, TB6_Cfg.B1GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TB6_Cfg.B2GPIO_Port, TB6_Cfg.B2GPIO_Pin, GPIO_PIN_RESET);
 }
 
 /**
@@ -119,6 +139,7 @@ void TB6612::setAVel_raw(int16_t _value) {
     else{
         //stop
         setAPWM(0);
+        return;
     }
     _value = std::abs(_value);
     if(_value < ADeadZone)
@@ -138,6 +159,7 @@ void TB6612::setBVel_raw(int16_t _value) {
     else{
         //stop
         setBPWM(0);
+        return;
     }
     _value = std::abs(_value);
     if(_value < BDeadZone)
