@@ -109,8 +109,3 @@ extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef* uart)
 {
     LkUart::handleTxCompleteFromIsr(uart);
 }
-
-extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef* uart)
-{
-    LkUart::handleTxCompleteFromIsr(uart);
-}
