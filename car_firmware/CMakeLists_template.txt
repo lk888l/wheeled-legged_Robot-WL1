@@ -55,7 +55,7 @@ include_directories(${includes}
 
 add_definitions(${defines})
 
-file(GLOB_RECURSE SOURCES ${sources}
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS ${sources}
     "Component/Application/*.*" "Component/Bsp/*.*" "Component/UserApp/*.*" "Component/HardWare/OLED/*.*" "Component/HardWare/Motor/*.*" "Component/HardWare/IMU/*.*" "Component/HardWare/Telecontrol/*.*"
     "Component/Peripheral/*.*" "Component/Module/include/etl/*.*" "Component/Module/Basic/*.*"
     )

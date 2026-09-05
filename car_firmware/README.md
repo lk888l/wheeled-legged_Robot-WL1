@@ -13,7 +13,9 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 - nRF24L01+ 固定 32 字节无线命令；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
 - ETL 固定容量容器，用于命令队列和 UART 缓冲；
-- 工厂生成的固定初始化清单，逐项执行并聚合错误；
+- PA0 板载 KEY 单击、双击和长按，5 ms 低优先级扫描、静态任务和有界事件队列；
+- 心跳、命令、舵机、运动和按键业务分别封装为继承 `AppTask` 的任务类；
+- 在 `main.cpp` 中逐个显式初始化硬件模块，用轻量报告记录全部结果；
 - 任一硬件初始化失败时进入安全模式：不创建平衡任务，轮电机 PWM 保持为 0，
   同时尽可能保留串口或无线命令应答。
 
@@ -21,6 +23,8 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 
 - [软件架构](docs/architecture.md)：启动流程、任务、控制环和并发模型；
 - [命令参考](docs/commands.md)：串口/无线命令、默认参数和调参顺序；
+- [PA0 按键](docs/button-a0.md)：事件时序、内存、业务接入及实时性边界；
+- [2026-09-05 工程审查](docs/engineering-review-2026-09-05.md)：已修复问题、验证结果和待整改项；
 - [调试与故障排查](docs/troubleshooting.md)：上电检查、常见故障和
   CubeMX 重新生成检查项。
 
@@ -63,7 +67,7 @@ cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Release --parallel
 ```
 
-初始化管理器可以在主机上独立测试，无需开发板：
+初始化、按键、任务生命周期、命令业务与 PID 等回归测试可在主机独立运行：
 
 ```sh
 cmake -S tests -B build/host-tests -G Ninja
@@ -129,8 +133,8 @@ HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 
 
 ## 启动、安全门控与 LED 心跳
 
-FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口。初始化工厂固定按
-以下顺序生成并执行 8 个步骤：
+FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口 `CPP_Main()`。
+`Component/UserApp/main.cpp` 直接按以下顺序调用 8 个模块的初始化方法：
 
 1. USART1 命令接收；
 2. MPU6050；
@@ -141,8 +145,10 @@ FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口。初始
 7. 右舵机 PWM；
 8. nRF24L01+。
 
-步骤失败只会记录对应位并继续。全部步骤结束后再做一次统一判定：只要
-`hardware_failed_mask != 0`，就不创建 `ServoControl` 和 `MotionControl`，
+每次调用后记录结果、输出日志并延时 3 ms，失败时继续初始化后续模块。
+`InitializationReport::all_succeeded(bsp::kRequiredHardwareMask)` 统一检查报告有效、
+必要模块全部尝试且全部成功；漏掉必要模块也不能通过门控。检查未通过时，
+不创建 `ServoControl` 和 `MotionControl`，
 强制轮电机 compare 为 0、方向脚为低，并停止两路舵机 PWM。独立的
 `Heartbeat` 仍运行；USART1 或 nRF 中任一可用时，`CommandService` 仍运行，
 可使用 `ping`、`status` 和原有参数命令。会导致输出的请求在安全模式下会被拒绝。
@@ -187,6 +193,7 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
 | Status LED | PC13 | 低有效；模式见“启动、安全门控与 LED 心跳” |
+| Onboard KEY | PA0 | 上拉输入、按下接地；5 ms 扫描，不启用 EXTI |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -293,8 +300,8 @@ R 0.0 -0.0 0.0 61.5
 ```text
 car_firmware/
 ├── Component/
-│   ├── Application/               # 初始化管理、AppTask、运行状态
-│   ├── Bsp/                       # 板级硬件门面与硬件工厂
+│   ├── Application/               # 初始化报告、AppTask、运行状态、纯按键状态机
+│   ├── Bsp/                       # 板级硬件门面、稳定模块 ID 与名称
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 与 VQF
 │   │   ├── Motor/                # 编码器、TB6612、舵机
@@ -306,7 +313,9 @@ car_firmware/
 │   ├── Peripheral/               # USART DMA 封装
 │   └── UserApp/
 │       ├── CtrlAlgorithm/        # PID、LQR、腿部运动学
-│       └── main.cpp              # 任务、命令与当前控制流程
+│       ├── Tasks/                # 五个继承 AppTask 的业务任务类
+│       ├── ControlState.hpp      # 参数、反馈及腿目标快照
+│       └── main.cpp              # 组合入口、初始化、安全门控
 ├── Core/                         # STM32CubeMX 生成代码
 ├── Drivers/                      # STM32 HAL / CMSIS
 ├── Middlewares/                  # FreeRTOS
@@ -314,7 +323,7 @@ car_firmware/
 ├── CMakeLists_template.txt
 ├── STlink.cfg
 ├── STlink_hla.cfg                 # Vref 已确认误报时的低速兼容配置
-├── tests/                          # 可在主机运行的启动语义测试
+├── tests/                          # 主机状态机、并发与业务回归测试
 └── WL1_F411CEU6.ioc
 ```
 
@@ -323,20 +332,25 @@ C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 只创建 `AppBootstrap`；
 创建，随后删除自身。这与参考工程的 app-main task 模型一致，同时避免在
 调度器启动前创建软件定时器、信号量或调用会阻塞的初始化代码。
 
-这里参考的是 [esp_idf_template](https://github.com/lk888l/esp32_idf/tree/main/esp_idf_template)
-中“应用管理器统一编排、任务对象封装”的思路；本项目按机器人安全需求将
-其语义调整为“初始化失败继续执行，最后统一安全门控”。
+这里借鉴 [esp_idf_template](https://github.com/lk888l/esp32_idf/tree/main/esp_idf_template)
+的入口组合、模块封装和分层思路，并按本项目需要调整启动方式：在 `main.cpp`
+逐模块调用初始化，失败后保留诊断通道，最后统一安全门控。初始化不再经过工厂、
+函数指针表或观察回调；业务仍由独立 FreeRTOS 任务运行。具体取舍和新增模块步骤见
+[软件架构](docs/architecture.md)。
 
-`MotionControlFunc_PID()` 仍是当前控制算法，但只会在统一安全门控通过后创建。
-`MotionControlFunc()` 中的 LQR 路径仍保留作实验，但当前不会运行。
+`MotionControlTask` 保留串级 PID、10 ms/50 ms 周期和原优先级，只在必要任务与
+硬件安全门控通过后启动。`LQR` 算法类保留作实验，未调度的旧入口循环已移除。
 `MainControl.*` 和 OLED 模块同样尚未接入应用路径。
 
 ## 开发约定
 
-- `Core/` 中的 CubeMX 文件只在 `USER CODE` 区域添加手写代码；
+- `Core/` 中手写逻辑放在 `USER CODE`；GPIO 声明和配置变更同步 `.ioc`，避免重新生成丢失；
 - `CMakeLists.txt` 标记为模板生成文件，持久修改应同步到
   `CMakeLists_template.txt`；
-- 在已有 `GLOB_RECURSE` 目录中添加源文件后需要重新运行 CMake；
+- 源文件 glob 使用 `CONFIGURE_DEPENDS`，新增任务文件会触发 CMake 重新检查；
+- 任务继承 `AppTask`，在组合入口注入依赖，禁止复制或销毁运行中的任务；
+- 新硬件在 `Bsp/HardwareModule.hpp` 分配稳定 ID，并在 `main.cpp` 显式初始化、记录结果；
+- 控制共享数据通过 `ControlState` 快照传递，不跨任务暴露可写引用；
 - 不要在 ISR 中调用普通 FreeRTOS API，只使用 `...FromISR` 版本；
 - 会调用 FreeRTOS ISR API 的中断，其 NVIC 数值优先级不得小于 5；
 - 控制任务中避免动态分配、阻塞式 I/O 和高频 UART 输出；

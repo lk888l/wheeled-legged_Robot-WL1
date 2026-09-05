@@ -14,8 +14,8 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 - Fixed 32-byte wireless commands over the nRF24L01+;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
 - Fixed-capacity ETL containers for command queues and UART buffers;
-- A factory-built, ordered hardware initialization plan that records every
-  failure without skipping later modules;
+- Explicit, ordered hardware initialization calls in `main.cpp`, with a lightweight
+  report that records every result without skipping later modules;
 - A fail-safe gate that keeps wheel PWM at zero and does not create balancing
   tasks if any hardware initialization step fails, while preserving available
   command channels.
@@ -31,6 +31,15 @@ Further reading:
 > task starts successfully. This software gate does not replace physical safety:
 > raise the wheels, disconnect motor power, or use a current-limited supply during
 > initial flashing and tuning.
+
+
+The car now provides PA0 onboard KEY click, double-click, and long-press events.
+`ButtonTask` polls every 5 ms at priority 1 with a static 128-word stack and a bounded
+event queue. All five application tasks derive from `AppTask`; the composition root
+injects their dependencies. The existing 10/50 ms control periods and priorities remain.
+Use the `button` command to inspect counts, dropped events, and the maximum sampling gap.
+See [button integration](docs/button-a0.md) and the [engineering review](docs/engineering-review-2026-09-05.md)
+for timing semantics, validation, and outstanding runtime risks (Chinese).
 
 ## Quick Start
 
@@ -66,7 +75,7 @@ cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Release --parallel
 ```
 
-Run the platform-independent startup-manager tests without a board:
+Run the host regression tests for initialization, tasks, buttons, commands, and PID without a board:
 
 ```sh
 cmake -S tests -B build/host-tests -G Ninja
@@ -125,9 +134,16 @@ remaining initialization steps still run.
 
 ## Startup Safety and PC13 Heartbeat
 
-The ordered initialization plan is: command UART, MPU6050, left encoder, right
-encoder, wheel-motor PWM, left servo, right servo, and nRF24L01+. Any failure
-prevents `ServoControl` and `MotionControl` from being created and forces safe
+After the scheduler starts, `AppBootstrap` calls `CPP_Main()`. The entry point in
+`Component/UserApp/main.cpp` explicitly initializes command UART, MPU6050, left
+encoder, right encoder, wheel-motor PWM, left servo, right servo, and nRF24L01+ in
+that order. Each call records and logs its result, followed by a 3 ms delay; later
+modules are still attempted after a failure.
+
+`InitializationReport::all_succeeded(bsp::kRequiredHardwareMask)` requires a valid
+report and successful attempts for every required module. A missing required
+module also fails this gate. A failed gate prevents `ServoControl` and
+`MotionControl` from being created and forces safe
 outputs. `Heartbeat` remains independent; `CommandService` remains available
 when either USART1 or nRF initialized successfully.
 
@@ -142,7 +158,7 @@ PC13 is treated as active-low:
 | `runtime-fault` | 80 ms on / 80 ms off | Runtime IMU failure; outputs stopped |
 
 Without a serial adapter, inspect `g_app_system_state`,
-`g_app_hardware_failed_mask`, `g_app_task_failed_mask`, and
+`g_app_hardware_attempted_mask`, `g_app_hardware_failed_mask`, `g_app_task_failed_mask`, and
 `g_app_control_enabled` through ST-Link/GDB.
 
 ## First Power-On
@@ -284,8 +300,8 @@ The RF parameters and `R` command format must be changed in sync with
 ```text
 car_firmware/
 ├── Component/
-│   ├── Application/               # Initialization, AppTask, runtime status
-│   ├── Bsp/                       # Board facade and hardware factory
+│   ├── Application/               # Initialization report, AppTask, runtime status
+│   ├── Bsp/                       # Board facade, stable module IDs and names
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 and VQF
 │   │   ├── Motor/                # Encoders, TB6612, and servos
@@ -297,7 +313,9 @@ car_firmware/
 │   ├── Peripheral/               # USART DMA wrapper
 │   └── UserApp/
 │       ├── CtrlAlgorithm/        # PID, LQR, and leg kinematics
-│       └── main.cpp              # Tasks, commands, and current control flow
+│       ├── Tasks/                # Five AppTask-derived business tasks
+│       ├── ControlState.hpp      # Coherent parameter and feedback snapshots
+│       └── main.cpp              # Composition, initialization, and safety gates
 ├── Core/                         # STM32CubeMX-generated code
 ├── Drivers/                      # STM32 HAL / CMSIS
 ├── Middlewares/                  # FreeRTOS
@@ -314,15 +332,26 @@ The C entry point is `Core/Src/main.c`. `MX_FREERTOS_Init()` creates only the
 construct board services, initialize every hardware step, and create eligible
 application tasks, then deletes itself.
 
-`MotionControlFunc_PID()` remains the active algorithm, but it is created only
+The structure draws on the composition entry point, module encapsulation, and
+layering in [esp_idf_template](https://github.com/lk888l/esp32_idf/tree/main/esp_idf_template).
+WL1 uses explicit per-module initialization calls in `main.cpp`, followed by a
+single safety gate, and keeps available diagnostics after a failure. Hardware
+initialization has no factory, function-pointer table, or observer callback.
+Independent FreeRTOS task classes retain their constructor-injected dependencies
+and static object lifetimes. See the [architecture guide](docs/architecture.md)
+for the adaptation choices and steps for adding modules.
+
+`MotionControlTask` runs the existing cascaded PID algorithm and is started only
 after the safety gate passes. The LQR path remains available for experiments but
 does not currently run. `MainControl.*` and OLED remain outside the runtime path.
 
 ## Development Guidelines
 
-- Add handwritten code to CubeMX files under `Core/` only inside `USER CODE` sections;
+- Keep handwritten logic in `USER CODE` sections and synchronize generated GPIO changes with the `.ioc` file;
 - `CMakeLists.txt` is marked as a template-generated file, so persistent changes should also be applied to `CMakeLists_template.txt`;
-- Rerun CMake after adding source files under existing `GLOB_RECURSE` directories;
+- Source globs use `CONFIGURE_DEPENDS` to discover new application task files;
+- Derive business tasks from `AppTask`, inject dependencies, and exchange control data through `ControlState` snapshots;
+- Assign new hardware a stable ID in `Bsp/HardwareModule.hpp`, then explicitly initialize it and record the result in `main.cpp`;
 - Do not call regular FreeRTOS APIs from an ISR; use only the `...FromISR` variants;
 - Interrupts that call FreeRTOS ISR APIs must have an NVIC numerical priority of 5 or greater;
 - Avoid dynamic allocation, blocking I/O, and high-frequency UART output in control tasks;

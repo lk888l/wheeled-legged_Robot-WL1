@@ -13,7 +13,6 @@
 //c++ std library include
 #include <functional>
 //etl library include
-#include "etl/vector.h"
 #include "etl/string.h"
 //freeRTOS library include
 #include "FreeRTOS.h"
@@ -21,17 +20,15 @@
 //user C++ library include
 #include "BasicObject.hpp"
 #include "TextCommandParser.hpp"
-//stm-Hal library include
-#include "main.h"
 
 class TaskReactor : BasicObject {
     using SlotCallback = std::function<void()>;
 public:
     TaskReactor()
-        :reactorTask_(xTaskGetCurrentTaskHandle()){
-        SlotGroup.assign(32, nullptr);
-        SlotGroup.uninitialized_resize(1);
-    }
+        :reactorTask_(xTaskGetCurrentTaskHandle()) {}
+
+    TaskReactor(const TaskReactor&) = delete;
+    TaskReactor& operator=(const TaskReactor&) = delete;
 
     /**
      * @brief
@@ -39,9 +36,8 @@ public:
     using strCMD_t = text_command::ParsedCommand;
 
 private:
-    std::array<SlotCallback, 32> slots; // 32个Bit对应32个槽
     TaskHandle_t reactorTask_ = nullptr;
-    etl::vector<std::function<void()>, 32> SlotGroup{nullptr};
+    std::array<SlotCallback, 32> SlotGroup{};
 protected:
 
     /**
@@ -70,9 +66,10 @@ public:
      */
     template<typename Sender, typename SignalMethod, typename SlotLambda>
     bool connect(Sender* sender, SignalMethod signal, SlotLambda slot) {
+        if (sender == nullptr) return false;
         uint32_t bitMask = allocNotiftBit();
         if (bitMask == 0) return false;                             // More than 32 signals failed.
-        sender->bindReactor(signal, reactorTask_, bitMask);      // execute LKObject bindReactorBit.
+        if (!sender->bindReactor(signal, reactorTask_, bitMask)) return false;
         // Put the slot function into the container
         int bitIndex = __builtin_ctz(bitMask);
 
@@ -120,16 +117,7 @@ public:
 
     template<typename T>
     static bool parseStrArg(etl::string_view &str_arg,T& value){
-        // 1. 跳过前导空格
-//        size_t first = str_arg.find_first_not_of(' ');
-////        if (first == std::string_view::npos) return false;
-////        str_arg.remove_prefix(first);
-        size_t last = str_arg.find(' ');
-        etl::string_view token = str_arg.substr(0, last);
-        auto result = std::from_chars(token.data(), token.data() + token.size(), value);
-        if (last == std::string_view::npos) str_arg = "";
-        else str_arg.remove_prefix(last+1);
-        return result.ec == std::errc(); // 返回转换是否成功
+        return text_command::parse_argument(str_arg, value);
     }
 };
 

@@ -1,9 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 
-#include "InitializationManager.hpp"
+#include "HardwareModule.hpp"
 #include "HallEncoder.h"
 #include "LkUart.hpp"
 #include "MPU6050.h"
@@ -12,23 +11,6 @@
 #include "TB6612.h"
 
 namespace bsp {
-
-enum class HardwareModuleId : uint8_t {
-    command_uart = 0,
-    imu,
-    left_encoder,
-    right_encoder,
-    wheel_motor,
-    left_servo,
-    right_servo,
-    radio,
-    count,
-};
-
-constexpr uint8_t module_id(HardwareModuleId id)
-{
-    return static_cast<uint8_t>(id);
-}
 
 /**
  * Board-level hardware facade.
@@ -44,16 +26,18 @@ public:
     BoardHardware(const BoardHardware&) = delete;
     BoardHardware& operator=(const BoardHardware&) = delete;
 
-    bool initialize_command_uart();
-    bool initialize_imu();
-    bool initialize_left_encoder();
-    bool initialize_right_encoder();
-    bool initialize_wheel_motor();
-    bool initialize_left_servo();
-    bool initialize_right_servo();
-    bool initialize_radio();
+    [[nodiscard]] bool initialize_command_uart();
+    [[nodiscard]] bool initialize_imu();
+    [[nodiscard]] bool initialize_left_encoder();
+    [[nodiscard]] bool initialize_right_encoder();
+    [[nodiscard]] bool initialize_wheel_motor();
+    [[nodiscard]] bool initialize_left_servo();
+    [[nodiscard]] bool initialize_right_servo();
+    [[nodiscard]] bool initialize_radio();
 
     void force_safe_outputs();
+    [[nodiscard]] bool button_pressed() const;
+    void set_status_led(bool on);
 
     LkUart<>& command_uart() { return command_uart_; }
     MPU6050& imu() { return imu_; }
@@ -73,16 +57,6 @@ private:
     Servo left_servo_;
     Servo right_servo_;
     NRF24L01P radio_;
-};
-
-class HardwareFactory {
-public:
-    static constexpr size_t kModuleCount =
-        static_cast<size_t>(HardwareModuleId::count);
-    using InitializationPlan = std::array<app::InitializationStep, kModuleCount>;
-
-    [[nodiscard]] static InitializationPlan create_initialization_plan(
-        BoardHardware& hardware);
 };
 
 } // namespace bsp

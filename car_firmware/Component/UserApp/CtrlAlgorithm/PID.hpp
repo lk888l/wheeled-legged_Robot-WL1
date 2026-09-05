@@ -119,7 +119,7 @@ private:
     float integral_;
     float prev_error_;
     float prevTWO_error_;
-    float prev_actual;
+    float prev_actual{}; // Deterministic first derivative sample; never read stack garbage.
     float last_out_{};
 };
 

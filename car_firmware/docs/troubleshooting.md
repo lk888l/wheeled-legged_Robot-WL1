@@ -65,7 +65,7 @@ showimu -y
 showimu -n
 ```
 
-当前陀螺零偏在 `MotionControlFunc_PID()` 中固定为：
+当前陀螺零偏在 `BoardHardware` 构造函数中固定为：
 
 ```text
 X = 2.5, Y = 0.7, Z = 0.9
@@ -234,7 +234,9 @@ p g_app_control_enabled
 `g_app_control_enabled` 必须为 0。编码器、电机和舵机步骤只能验证 MCU 定时器
 是否成功启动，无法在没有反馈/识别引脚的情况下判断板外器件是否物理存在。
 
-本次仅连接主控板的实测结果如下，连续 3 次复位结果一致：
+以下为本次任务类/按键改造之前的历史上板记录，连续 3 次复位结果一致。
+2026-09-05 改造仅做软件验证；这些数值不能作为新版的上板证明。新版无外部模块时
+还应创建 ButtonA0，任务尝试位图预计为 `0x13`；`motor` 拒绝文本也已更新。
 
 | 检查项 | 实测值 | 结论 |
 | --- | --- | --- |
@@ -268,6 +270,8 @@ Flash 写入显式切换为已实测的 400 kHz，避免 100 kHz 下 Flash 算�
 ## CubeMX 重新生成检查项
 
 使用 `WL1_F411CEU6.ioc` 重新生成后至少检查：
+
+PA0 必须保留 `KEY_A0` 上拉输入及低有效配置，不开启 EXTI；PC13 仍是低有效 LED。
 
 1. MCU 仍为 STM32F411CEU6，HSE 25 MHz，SYSCLK 100 MHz；
 2. `Core/Src/freertos.c` 的 `StartAppBootstrap()` USER CODE 中仍在调度器启动后

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "AppTask.hpp"
-#include "InitializationManager.hpp"
+#include "InitializationReport.hpp"
 
 namespace app {
 
@@ -15,8 +15,11 @@ enum class SystemState : uint32_t {
     runtime_fault = 5U,
 };
 
+[[nodiscard]] const char* system_state_name(SystemState state);
+
 /**
- * Single-writer/multi-reader runtime status for this single-core MCU.
+ * Runtime status for this single-core MCU. Short critical sections serialize
+ * bootstrap transitions with motion faults; a runtime fault stays latched.
  * All fields are naturally aligned 32-bit words and are also exported with C
  * linkage so they can be inspected through ST-Link without a serial adapter.
  */

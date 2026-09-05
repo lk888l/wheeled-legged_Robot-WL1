@@ -18,6 +18,7 @@
 //User-lk library include
 #include "BasicObject.hpp"
 #include "etl/string_view.h"
+#include "TelemetryFrame.hpp"
 //freeRTOS variable define
 #include "semphr.h"
 
@@ -160,35 +161,16 @@ public:
      * @param buffer
      * @param args
      */
-    static void args_touint8s(uint8_t *buffer, const volatile float* args[4]){
-        char* ptr = reinterpret_cast<char*>(buffer);
-        char* const last = reinterpret_cast<char*>(buffer) + 32; // 缓冲区绝对终点
-
-        for (uint8_t i=0; i<4; i++){
-            if (ptr + 8 >= last) break;
-            *ptr++ = ' ';
-            float val{};
-            if(args[i] != nullptr) {val = *args[i];}
-            if (val < 0) {
-                *ptr++ = '-';
-                val = -val;
-            }
-            uint32_t total_dec = static_cast<uint32_t>(val * 10.0f + 0.5f);
-            uint32_t integer_part = total_dec / 10;
-            uint32_t fractional_part = total_dec % 10;
-            auto res = std::to_chars(ptr, reinterpret_cast<char *>(buffer - 4), integer_part);
-            if (res.ec == std::errc()) {
-                ptr = res.ptr;
-                *ptr++ = '.';
-                *ptr++ = static_cast<char>('0' + fractional_part);
-            }else {
-                // 空间不足，在此可做异常处理
-                return;
-            }
+    static void args_touint8s(uint8_t* buffer, const volatile float* args[4]) {
+        if (buffer == nullptr || args == nullptr) return;
+        std::array<float, 4U> values{};
+        std::array<uint8_t, 32U> payload{};
+        for (size_t i = 0U; i < values.size(); ++i) {
+            if (args[i] != nullptr) values[i] = *args[i];
         }
-        *++ptr = '\0';
+        (void)radio_frame::encode_telemetry(values, payload);
+        for (size_t i = 0U; i < payload.size(); ++i) buffer[i] = payload[i];
     }
-
 private:
     SPI_HandleTypeDef*  HSpi;
     GPIO_TypeDef*       csPort;

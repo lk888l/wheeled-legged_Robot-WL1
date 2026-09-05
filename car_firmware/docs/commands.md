@@ -1,7 +1,8 @@
 # 串口与无线命令参考
 
 `car_firmware` 的 USART1 和 nRF24L01+ 共用同一套文本命令解析器。命令名称
-区分大小写，参数之间使用一个或多个空格。
+区分大小写，参数之间可以使用空格或制表符。数值 token 必须完整，拒绝 NaN、
+Inf、溢出和数字后的杂字符；多字段命令全部解析成功后才一起发布目标。
 
 初始化失败进入安全模式后，只要 USART1 或 nRF 至少一条命令通道初始化成功，
 命令服务仍会运行。参数写入和诊断应答会保留，但平衡任务不会运行，执行器输出
@@ -18,7 +19,7 @@
 | 流控 | 无 |
 | 接收 | DMA receive-to-idle |
 | 单次缓冲 | 128 字节 |
-| 实际入命令队列 | 最多取前 32 字节 |
+| 实际入命令队列 | 不超过 32 字节；超长帧整帧拒绝 |
 
 串口工具应启用发送行结束符（LF 或 CRLF 均可用于带参数命令）。建议每次只发
 一条短于 32 字节的命令，并等待其处理完成。
@@ -49,20 +50,20 @@ R 0.0 -0.0 0.0 61.5
 
 `R` 的字段顺序固定：
 
-1. `turn` → `Differ_Target`，目标左右 RPM 差；
-2. `velocity` → `Velocity_Target`，目标平均 RPM；
-3. `roll` → `Roll_Target`，单位为度；
-4. `height` → `Target_height`，单位为毫米。
+1. `turn` → `ControlParameters::difference_target`，目标左右 RPM 差；
+2. `velocity` → `velocity_target`，目标平均 RPM；
+3. `roll` → `roll_target`，单位为度；
+4. `height` → `leg_height`，单位为毫米。
 
 `tele_firmware` 会将摇杆速度取反后编码到第二个字段。只在一端修改符号会导致
 前进/后退方向反转。
 
-`legheight` 输入最终会在舵机任务中限制到 `44.5..78.5 mm`。命令返回的
+`legheight` 输入经横滚补偿后，由运动任务将两腿目标限制到 `44.5..78.5 mm`。命令返回的
 `Servo angel` 诊断值是在限幅前计算的，因此越界输入只适合检查算法，不代表
 舵机实际会到达该位置。
 
-`anglebias` 的值会被 MotionControl 在下一次 10 ms 周期按腿高重新计算，
-不适合作为持久调参接口。
+`anglebias` 仍接受存储值，但当前控制模式每 10 ms 自动按腿高校准 bias，
+不使用人工写入值；需要人工模式时应先实现模式切换。
 
 ## PID 命令
 
@@ -88,8 +89,8 @@ velocitypid -p 0.04
 differpid -i 0.0008
 ```
 
-`Angle_kp` 会每 10 ms 按腿高重算为 `0.3 * height + 56.9`，因此
-`anglepid -p` 只会短暂生效。Angle `Ki`、`Kd` 和速度/差速参数会持续到
+angle Kp 会每 10 ms 按校准腿高重算为 `0.3 * height + 56.9`，因此
+`anglepid -p` 的存储值不参与当前自动校准。Angle `Ki`、`Kd` 和速度/差速参数会持续到
 下次复位。
 
 横滚控制提供：
@@ -99,8 +100,7 @@ rollpid -p <value>
 rollpid -i <value>
 ```
 
-当前实现中两个选项都写入横滚 `Ki`，`Adapt_y_kp` 保持为 0。这是已知限制；
-修复代码前不要把 `rollpid -p` 当作比例参数接口。
+`-p` 更新横滚 Kp，`-i` 更新横滚 Ki；已修复旧实现将两者都写入 Ki 的问题。
 
 ## 观测和诊断
 
@@ -108,6 +108,7 @@ rollpid -i <value>
 | --- | --- |
 | `ping` | 返回 `pong`、当前状态和控制开关，检查命令服务存活 |
 | `status` | 返回状态、控制开关、硬件失败位图和任务失败位图 |
+| `button` | 返回 PA0 任务状态、click/double/long 计数、丢事件数和最大扫描间隔 |
 | `showimu -y` | 以约 100 Hz 输出 `Roll,Pitch,Yaw` |
 | `showimu -n` | 停止 IMU 连续输出 |
 | `showrpm -y` | 以约 20 Hz 输出左右轮 RPM |
@@ -119,7 +120,7 @@ rollpid -i <value>
 | `nrfshow -nn` | 停止周期 nRF 遥测 |
 
 `showimu` 会在 10 ms 控制环内格式化并提交 UART 日志。长时间开启可能增加
-中断延迟和 UART 丢帧，只用于短时诊断。
+控制计算耗时和 UART 丢帧，只用于短时诊断；格式化已移出临界区。
 
 nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发送
 一次。车端发送期间不处于接收模式；发送成功或达到最大重试次数后才切回 RX。
@@ -133,7 +134,8 @@ status=init-failed control=off hw_fail=130 task_fail=0
 
 硬件位从 bit 0 起依次表示 USART1 命令接收、MPU6050、左编码器、右编码器、
 轮电机 PWM、左舵机、右舵机、nRF24L01+。任务位从 bit 0 起依次表示
-Heartbeat、CommandService、ServoControl、MotionControl。
+Heartbeat、CommandService、ServoControl、MotionControl、ButtonA0。ButtonA0
+是可选业务任务，其失败 bit 4 不阻止控制任务运行。按键接入见 [PA0 按键](button-a0.md)。
 
 ## 兼容/实验命令
 
@@ -141,10 +143,9 @@ Heartbeat、CommandService、ServoControl、MotionControl。
 motor <left> <right>
 ```
 
-解析成功后会打印数值并通知 MotionControl。当前实际运行的
-`MotionControlFunc_PID()` 没有消费这条通知，因此该命令不会覆盖闭环 PWM；
-它只保留用于旧的 LQR/手动电机实验。在安全模式或 MotionControl 未运行时，
-固件明确返回 `motor rejected: control is in safe mode`，不会发送空任务句柄通知。
+当前 PID 路径不支持原始 PWM 点动，明确返回
+`motor rejected: raw PWM is unavailable in PID control mode`。
+旧版本只打印并发送一个无人消费的通知；现在不再给出已接受的假象，也不绕过闭环。
 
 未知命令不会返回 `Unknown command`，而是按以下格式回显：
 
@@ -164,5 +165,5 @@ receive: <original text>
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
 当前参数只存在 RAM 中。确认参数后，应修改
-`Component/UserApp/main.cpp` 中的默认初始化值，重新构建并烧录。
+`Component/UserApp/ControlState.hpp` 中的默认初始化值，重新构建并烧录。
 

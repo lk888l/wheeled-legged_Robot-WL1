@@ -2,34 +2,32 @@
 
 namespace app {
 
-bool AppTask::start(void* context)
+bool AppTask::start()
 {
-    if (handle_ != nullptr || config_.name == nullptr || config_.body == nullptr) {
+    if (handle_ != nullptr || config_.name == nullptr || config_.name[0] == '\0' ||
+        config_.stack_depth == 0U || config_.priority >= configMAX_PRIORITIES ||
+        ((stack_ == nullptr) != (tcb_ == nullptr))) {
         return false;
     }
 
-    context_ = context;
-    const BaseType_t result = xTaskCreate(task_entry,
-                                          config_.name,
-                                          config_.stack_depth,
-                                          this,
-                                          config_.priority,
-                                          &handle_);
-    if (result != pdPASS) {
+    // Publish the static task handle before run() can observe it. Interrupts
+    // remain enabled; scheduler suspension occurs only during startup.
+    vTaskSuspendAll();
+    if (stack_ != nullptr) {
+        handle_ = xTaskCreateStatic(task_entry, config_.name, config_.stack_depth,
+                                   this, config_.priority, stack_, tcb_);
+    } else if (xTaskCreate(task_entry, config_.name, config_.stack_depth,
+                           this, config_.priority, &handle_) != pdPASS) {
         handle_ = nullptr;
-        context_ = nullptr;
-        return false;
     }
-    return true;
+    const bool started = handle_ != nullptr;
+    (void)xTaskResumeAll();
+    return started;
 }
 
 bool AppTask::notify_give() const
 {
-    if (handle_ == nullptr) {
-        return false;
-    }
-    xTaskNotifyGive(handle_);
-    return true;
+    return handle_ != nullptr && xTaskNotifyGive(handle_) == pdPASS;
 }
 
 bool AppTask::notify_value(uint32_t value, eNotifyAction action) const
@@ -42,15 +40,12 @@ bool AppTask::notify_value(uint32_t value, eNotifyAction action) const
 
 void AppTask::task_entry(void* argument)
 {
-    auto* task = static_cast<AppTask*>(argument);
-    if (task != nullptr && task->config_.body != nullptr) {
-        task->config_.body(task->context_);
+    auto& task = *static_cast<AppTask*>(argument);
+    task.run();
+    configASSERT(false); // Persistent tasks must not invalidate their handles.
+    for (;;) {
+        vTaskSuspend(nullptr);
     }
-
-    if (task != nullptr) {
-        task->handle_ = nullptr;
-    }
-    vTaskDelete(nullptr);
 }
 
 } // namespace app

@@ -10,15 +10,6 @@ namespace {
 
 NRF24L01P* g_radio_for_isr = nullptr;
 
-template <bool (bsp::BoardHardware::*Initialize)()>
-bool initialize_adapter(void* context)
-{
-    if (context == nullptr) {
-        return false;
-    }
-    return (static_cast<bsp::BoardHardware*>(context)->*Initialize)();
-}
-
 } // namespace
 
 namespace bsp {
@@ -129,43 +120,15 @@ void BoardHardware::force_safe_outputs()
     right_servo_.stop();
 }
 
-HardwareFactory::InitializationPlan HardwareFactory::create_initialization_plan(
-    BoardHardware& hardware)
+bool BoardHardware::button_pressed() const
 {
-    return {{
-        {module_id(HardwareModuleId::command_uart),
-         "command-uart",
-         initialize_adapter<&BoardHardware::initialize_command_uart>,
-         &hardware},
-        {module_id(HardwareModuleId::imu),
-         "imu-mpu6050",
-         initialize_adapter<&BoardHardware::initialize_imu>,
-         &hardware},
-        {module_id(HardwareModuleId::left_encoder),
-         "left-encoder",
-         initialize_adapter<&BoardHardware::initialize_left_encoder>,
-         &hardware},
-        {module_id(HardwareModuleId::right_encoder),
-         "right-encoder",
-         initialize_adapter<&BoardHardware::initialize_right_encoder>,
-         &hardware},
-        {module_id(HardwareModuleId::wheel_motor),
-         "wheel-motor",
-         initialize_adapter<&BoardHardware::initialize_wheel_motor>,
-         &hardware},
-        {module_id(HardwareModuleId::left_servo),
-         "left-servo",
-         initialize_adapter<&BoardHardware::initialize_left_servo>,
-         &hardware},
-        {module_id(HardwareModuleId::right_servo),
-         "right-servo",
-         initialize_adapter<&BoardHardware::initialize_right_servo>,
-         &hardware},
-        {module_id(HardwareModuleId::radio),
-         "radio-nrf24",
-         initialize_adapter<&BoardHardware::initialize_radio>,
-         &hardware},
-    }};
+    // WL1 onboard KEY: PA0, pull-up, closes to ground when pressed.
+    return HAL_GPIO_ReadPin(KEY_A0_GPIO_Port, KEY_A0_Pin) == GPIO_PIN_RESET;
+}
+
+void BoardHardware::set_status_led(bool on)
+{
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, on ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
 } // namespace bsp
