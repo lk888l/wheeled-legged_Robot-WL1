@@ -34,6 +34,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Component/UserApp/RemoteCommandCodec.cpp
     Component/UserApp/RemoteControlState.cpp
     Component/UserApp/RemoteDisplay.cpp
+    Component/UserApp/SerialCommandBridge.cpp
     Component/UserApp/main.cpp
 )
 

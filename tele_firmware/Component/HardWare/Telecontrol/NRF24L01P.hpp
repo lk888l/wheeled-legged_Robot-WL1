@@ -75,7 +75,7 @@ private:
     [[nodiscard]] bool flushRx();
     [[nodiscard]] bool startTransmit();
     [[nodiscard]] bool readStatus(Status& status);
-    [[nodiscard]] bool clearStatus();
+    [[nodiscard]] bool clearStatus(std::uint8_t flags = 0x70U);
 
     void setChipSelect(bool active) noexcept;
     void setChipEnable(bool enabled) noexcept;

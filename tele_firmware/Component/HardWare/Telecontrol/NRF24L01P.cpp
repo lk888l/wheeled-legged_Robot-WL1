@@ -240,10 +240,9 @@ bool NRF24L01P::readStatus(Status& status)
     return true;
 }
 
-bool NRF24L01P::clearStatus()
+bool NRF24L01P::clearStatus(std::uint8_t flags)
 {
-    const std::uint8_t clear_all_interrupts = 0x70U;
-    return writeRegister(register_status, &clear_all_interrupts, 1U);
+    return flags == 0U || writeRegister(register_status, &flags, 1U);
 }
 
 bool NRF24L01P::handleIrq(Status& status)
@@ -252,7 +251,13 @@ bool NRF24L01P::handleIrq(Status& status)
         return false;
     }
 
-    bool success = clearStatus();
+    // STATUS is write-one-to-clear. A TX completion can arrive between the
+    // read above and this write: clear only flags that this call observed.
+    const auto observed = static_cast<std::uint8_t>(
+        (status.rx_ready ? 0x40U : 0U) |
+        (status.tx_sent ? 0x20U : 0U) |
+        (status.max_retries ? 0x10U : 0U));
+    bool success = clearStatus(observed);
     if (status.rx_ready) {
         success = flushRx() && success;
     }
