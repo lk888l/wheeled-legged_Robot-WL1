@@ -22,8 +22,8 @@ Further reading:
 - [Debugging and troubleshooting](docs/troubleshooting.md): power-on checks, common faults, and CubeMX regeneration checks.
 
 > [!WARNING]
-> The wheeled-legged self-balancing controller drives the motor PWM immediately
-> after its task starts. During initial flashing, control-direction changes, or
+> The wheeled-legged self-balancing controller starts motor PWM automatically
+> once its startup conditions are met. During initial flashing, control-direction changes, or
 > PID tuning, raise the wheels off the ground, disconnect motor power, or use a
 > current-limited power supply, and make sure power can be cut immediately.
 
@@ -77,12 +77,14 @@ Build configurations:
 | `CMAKE_BUILD_TYPE` | Compiler options | Purpose |
 | --- | --- | --- |
 | `Debug` or unspecified | `-Og -g` | Debugging, stepping, and variable inspection |
-| `Release` | `-Ofast` | Normal operation |
-| `RelWithDebInfo` | `-Ofast -g` | Optimized execution with debug information |
+| `Release` | `-O3 -fno-fast-math` | Normal operation with VQF NaN semantics preserved |
+| `RelWithDebInfo` | `-O3 -fno-fast-math -g` | Optimized execution with debug information |
 | `MinSizeRel` | `-Os` | Minimize image size |
 
 The project always uses the Cortex-M4F hard-float ABI (`fpv4-sp-d16`), C11, and
 C++23.
+VQF uses NaN sentinels during filter initialization. Do not use `-Ofast` or
+`-ffast-math`: these options can cause stationary attitude to alternate between 0 and 180 degrees.
 
 ### 3. Flash with ST-Link
 
@@ -152,9 +154,14 @@ range, and VQF for attitude fusion.
 
 The current PID path inverts the TB6612 B-channel direction and configures a
 minimum compare value of 50 counts for both PWM channels. The final PWM command
-is limited to `-1000..1000`. The current driver reapplies this minimum value at
-the end even for a zero command; see the
-[known implementation constraints in the architecture document](docs/architecture.md#已知实现约束).
+is limited to `-1000..1000`. A zero command keeps the compare register at zero.
+
+Startup requires 500 ms of valid, stable attitude: corrected pitch within +/-8 degrees,
+roll within +/-5 degrees, gyro rate at most 20 degrees/s, and speed/turn targets below 1
+in magnitude. While waiting, wheel PWM stays zero and both legs use the bounded common
+height. Invalid IMU data or pitch/roll outside +/-30 degrees resets the controllers and
+returns to this waiting state. Pitch uses the current height-dependent balance bias;
+the IMU axes and signs retain the existing convention.
 
 ### Leg Servos
 

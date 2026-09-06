@@ -1,4 +1,5 @@
 #include <array>
+#include <algorithm>
 #include <cstdint>
 
 #include "FreeRTOS.h"
@@ -11,6 +12,7 @@
 #include "RemoteCommandCodec.hpp"
 #include "RemoteControlState.hpp"
 #include "RemoteDisplay.hpp"
+#include "SerialCommandQueue.hpp"
 #include "adc.h"
 #include "cpp_Interface.h"
 #include "main.h"
@@ -20,6 +22,9 @@
 namespace {
 constexpr TickType_t radio_period = pdMS_TO_TICKS(50U);
 constexpr TickType_t radio_retry_period = pdMS_TO_TICKS(1000U);
+constexpr TickType_t radio_tx_timeout = pdMS_TO_TICKS(30U);
+constexpr TickType_t serial_idle_timeout = pdMS_TO_TICKS(50U);
+constexpr TickType_t radio_poll_period = pdMS_TO_TICKS(5U);
 constexpr TickType_t input_period = pdMS_TO_TICKS(50U);
 constexpr TickType_t adc_timeout = pdMS_TO_TICKS(5U);
 constexpr TickType_t button_period = pdMS_TO_TICKS(5U);
@@ -30,7 +35,7 @@ constexpr UBaseType_t input_priority = tskIDLE_PRIORITY + 3U;
 constexpr UBaseType_t button_priority = tskIDLE_PRIORITY + 2U;
 constexpr UBaseType_t display_priority = tskIDLE_PRIORITY + 1U;
 
-constexpr std::uint16_t radio_stack_words = 768U;
+constexpr std::uint16_t radio_stack_words = 1024U;
 constexpr std::uint16_t input_stack_words = 256U;
 constexpr std::uint16_t button_stack_words = 256U;
 constexpr std::uint16_t display_stack_words = 512U;
@@ -56,10 +61,25 @@ TaskHandle_t input_task_handle = nullptr;
 
 struct RadioCounters {
     std::uint32_t sent = 0U;
+    std::uint32_t received = 0U;
     std::uint32_t max_retries = 0U;
     std::uint32_t driver_errors = 0U;
     std::uint32_t encoding_errors = 0U;
 };
+
+struct Transmission {
+    RemoteCommandCodec::Payload payload{};
+    TickType_t started = 0U;
+    bool pending = false;
+    bool from_uart = false;
+};
+
+etl::string_view payloadText(const RemoteCommandCodec::Payload& payload)
+{
+    const auto end = std::find(payload.begin(), payload.end(), 0U);
+    return {reinterpret_cast<const char*>(payload.data()),
+            static_cast<std::size_t>(end - payload.begin())};
+}
 
 void notifyTaskFromIsr(TaskHandle_t task) noexcept
 {
@@ -85,7 +105,7 @@ bool initializeRadio(std::uint32_t attempt)
     return false;
 }
 
-bool processRadioIrq(RadioCounters& counters)
+bool processRadioIrq(RadioCounters& counters, Transmission& transmission)
 {
     NRF24L01P::Status status;
     if (!radio.handleIrq(status)) {
@@ -96,43 +116,140 @@ bool processRadioIrq(RadioCounters& counters)
 
     if (status.tx_sent) {
         ++counters.sent;
+        debug_uart.print("nRF: send success [{}]: {}\r\n",
+                         transmission.from_uart ? "uart" : "joystick",
+                         payloadText(transmission.payload));
+        transmission.pending = false;
     }
     if (status.max_retries) {
         ++counters.max_retries;
-        if (counters.max_retries == 1U || counters.max_retries % 100U == 0U) {
+        if (transmission.from_uart) {
+            debug_uart.print("nRF: send fail [uart]: no ACK; {}\r\n",
+                             payloadText(transmission.payload));
+        } else if (counters.max_retries == 1U || counters.max_retries % 100U == 0U) {
             debug_uart.print(
                 "radio: no ACK (count {})\n", counters.max_retries);
+        }
+        transmission.pending = false;
+    }
+    // RX FIFO has three slots. Bound the work so telemetry cannot starve control.
+    for (std::uint8_t index = 0U; index < 3U; ++index) {
+        bool available = false;
+        RemoteCommandCodec::Payload received{};
+        if (!radio.hasReceivedPayload(available)) {
+            return false;
+        }
+        if (!available) {
+            break;
+        }
+        if (!radio.receive(received.data())) {
+            return false;
+        }
+        ++counters.received;
+        debug_uart.print("receive: {}\r\n", payloadText(received));
+    }
+    return true;
+}
+
+bool sendPayload(const RemoteCommandCodec::Payload& payload, bool from_uart,
+                 RadioCounters& counters, Transmission& transmission)
+{
+    transmission.payload = payload;
+    transmission.from_uart = from_uart;
+    if (from_uart) {
+        debug_uart.print("uart: sending {}\r\n", payloadText(payload));
+    }
+    if (!radio.send(payload.data(), static_cast<std::uint8_t>(payload.size()))) {
+        ++counters.driver_errors;
+        debug_uart.print("radio: SPI transmit failed\r\n");
+        return false;
+    }
+    transmission.started = xTaskGetTickCount();
+    transmission.pending = true;
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    return true;
+}
+
+void readSerialCommands(SerialCommandQueue& commands, TickType_t& last_receive,
+                        std::uint32_t& receive_errors, std::uint32_t& queue_drops)
+{
+    const std::uint32_t errors = debug_uart.receiveErrors();
+    if (errors != receive_errors) {
+        commands.discardPartial();
+        receive_errors = errors;
+        debug_uart.print("uart: RX error/overflow (count {})\r\n", errors);
+    }
+    LkUart::ReceivedData received;
+    // Bound each pass even if a PC continuously fills the DMA queue.
+    for (std::uint8_t index = 0U; index < 8U && debug_uart.readReceived(received); ++index) {
+        commands.append({received.data.data(), received.length});
+        last_receive = xTaskGetTickCount();
+    }
+    if (static_cast<TickType_t>(xTaskGetTickCount() - last_receive) >= serial_idle_timeout) {
+        commands.finish();
+    }
+    if (commands.droppedCommands() != queue_drops) {
+        queue_drops = commands.droppedCommands();
+        debug_uart.print("uart: command queue full (dropped {})\r\n", queue_drops);
+    }
+    static_cast<void>(debug_uart.startReceive(radio_task_handle));
+}
+
+bool processSerialCommands(SerialCommandQueue& commands, bool& joystick_enabled,
+                           RadioCounters& counters, Transmission& transmission)
+{
+    SerialCommandQueue::Command command;
+    if (!transmission.pending && commands.pop(command)) {
+        switch (command.kind) {
+        case SerialCommandQueue::Kind::transmit:
+            return sendPayload(command.payload, true, counters, transmission);
+        case SerialCommandQueue::Kind::joystick_on:
+            joystick_enabled = true;
+            debug_uart.print("joystick: on\r\n");
+            break;
+        case SerialCommandQueue::Kind::joystick_off:
+            joystick_enabled = false;
+            debug_uart.print("joystick: off\r\n");
+            break;
+        case SerialCommandQueue::Kind::help:
+            debug_uart.print("commands: nrfsend <1..32 bytes> | R <turn> <speed> <roll> <height>\r\n");
+            debug_uart.print("joystick on/off | status | help; CR/LF or 50 ms idle ends a command\r\n");
+            break;
+        case SerialCommandQueue::Kind::status:
+            debug_uart.print("status: joystick={} sent={} no_ack={} received={} errors={}\r\n",
+                             joystick_enabled ? "on" : "off", counters.sent,
+                             counters.max_retries, counters.received, counters.driver_errors);
+            debug_uart.print("uart: rx_errors={} dropped_logs={} stack={} words\r\n",
+                             debug_uart.receiveErrors(), debug_uart.droppedMessages(),
+                             uxTaskGetStackHighWaterMark(nullptr));
+            break;
+        case SerialCommandQueue::Kind::too_long:
+            debug_uart.print("uart: command too long (radio payload max 32 bytes)\r\n");
+            break;
+        case SerialCommandQueue::Kind::invalid:
+            debug_uart.print("uart: invalid command; use help or nrfsend <command>\r\n");
+            break;
         }
     }
     return true;
 }
 
-bool transmitRemoteCommand(
-    RemoteCommandCodec::Payload& payload, RadioCounters& counters)
-{
-    if (!RemoteCommandCodec::encode(remote_state.snapshot(), payload)) {
-        ++counters.encoding_errors;
-        debug_uart.print("radio: command encoding failed\n");
-        return true;
-    }
-
-    if (!radio.send(payload.data(), static_cast<std::uint8_t>(payload.size()))) {
-        ++counters.driver_errors;
-        debug_uart.print("radio: SPI transmit failed\n");
-        return false;
-    }
-
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    return true;
-}
-
 void radioTask(void*)
 {
+    if (debug_uart.startReceive(radio_task_handle)) {
+        debug_uart.print("uart: ready (115200 8N1); type help\r\n");
+    }
     // nRF24L01+ requires up to 100 ms after power-on before configuration.
     vTaskDelay(pdMS_TO_TICKS(100U));
 
     RadioCounters counters;
     RemoteCommandCodec::Payload payload{};
+    Transmission transmission;
+    SerialCommandQueue serial_commands;
+    bool joystick_enabled = true;
+    TickType_t last_receive = xTaskGetTickCount();
+    std::uint32_t receive_errors = 0U;
+    std::uint32_t queue_drops = 0U;
     std::uint32_t initialization_attempt = 0U;
 
     for (;;) {
@@ -140,25 +257,49 @@ void radioTask(void*)
             vTaskDelay(radio_retry_period);
         }
         initialization_attempt = 0U;
+        transmission.pending = false;
         static_cast<void>(ulTaskNotifyTake(pdTRUE, 0U));
 
-        TickType_t last_transmit = xTaskGetTickCount();
+        TickType_t last_serial_service = xTaskGetTickCount() - radio_period;
         bool driver_healthy = true;
         while (driver_healthy) {
-            const TickType_t now = xTaskGetTickCount();
-            const TickType_t elapsed = now - last_transmit;
-            const TickType_t wait =
-                elapsed >= radio_period ? 0U : radio_period - elapsed;
+            static_cast<void>(ulTaskNotifyTake(pdTRUE, radio_poll_period));
+            readSerialCommands(serial_commands, last_receive, receive_errors, queue_drops);
 
-            if (ulTaskNotifyTake(pdTRUE, wait) > 0U) {
-                driver_healthy = processRadioIrq(counters);
+            // UART and radio share task notifications. Inspect the radio IRQ
+            // level, and poll on a TX deadline to recover a missed EXTI edge.
+            if (radio.irqAsserted() ||
+                (transmission.pending &&
+                 static_cast<TickType_t>(xTaskGetTickCount() - transmission.started) >= radio_tx_timeout)) {
+                driver_healthy = processRadioIrq(counters, transmission);
+            }
+            if (driver_healthy && transmission.pending &&
+                static_cast<TickType_t>(xTaskGetTickCount() - transmission.started) >= radio_tx_timeout) {
+                ++counters.driver_errors;
+                debug_uart.print("radio: TX result timeout\r\n");
+                driver_healthy = false;
+            }
+
+            const TickType_t before_commands = xTaskGetTickCount();
+            // Keep a burst of PC commands at the normal 20 Hz link rate, so
+            // every result fits through the bounded UART logger as well.
+            if (driver_healthy && !transmission.pending &&
+                static_cast<TickType_t>(before_commands - last_serial_service) >= radio_period &&
+                static_cast<TickType_t>(before_commands - transmission.started) >= radio_period) {
+                last_serial_service = before_commands;
+                driver_healthy = processSerialCommands(
+                    serial_commands, joystick_enabled, counters, transmission);
             }
 
             const TickType_t after_wait = xTaskGetTickCount();
-            if (driver_healthy &&
-                static_cast<TickType_t>(after_wait - last_transmit) >= radio_period) {
-                last_transmit = after_wait;
-                driver_healthy = transmitRemoteCommand(payload, counters);
+            if (driver_healthy && joystick_enabled && !transmission.pending &&
+                static_cast<TickType_t>(after_wait - transmission.started) >= radio_period) {
+                if (RemoteCommandCodec::encode(remote_state.snapshot(), payload)) {
+                    driver_healthy = sendPayload(payload, false, counters, transmission);
+                } else {
+                    ++counters.encoding_errors;
+                    debug_uart.print("radio: command encoding failed\r\n");
+                }
             }
         }
 

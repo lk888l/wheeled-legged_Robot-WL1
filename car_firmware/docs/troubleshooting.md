@@ -38,6 +38,8 @@
 | IMU 值跳变或缓慢漂移 | 安装方向、振动、陀螺零偏、采样周期 |
 | 手转轮子但 RPM 为 0 | TIM2/TIM3 引脚、编码器供电、相线和计数器 |
 | 电机一上电就全速 | 反馈符号、Pitch 偏置、编码器左右映射、PWM 方向 |
+| 静止时 Roll 在 0°/180° 间跳变，两腿走向两端 | 检查是否误用 `-Ofast` / `-ffast-math`，这会破坏 VQF 的 NaN 初始化判断 |
+| 轮子保持零输出 | 查看 `Control_armed`、`Control_imu_valid`、`Control_pitch_error`；回中摇杆，扶到平衡附近稳定 500 ms |
 | 左右轮纠偏方向相反 | TB6612 B 反相配置、左右电机接线、差速符号 |
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
 | 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
@@ -65,8 +67,15 @@ showimu -n
 X = 2.5, Y = 0.7, Z = 0.9
 ```
 
-更换 MPU6050 或机械安装后应重新标定。控制代码还会根据腿高动态计算
-`Angle_bias`；不要只通过 `anglebias` 命令判断持久偏置。
+更换 MPU6050 或机械安装后应重新标定。`anglebias <degrees>` 设置最低腿高
+`44.5 mm` 的 `Angle_bias_min`，本次上电有效。实时 `Angle_bias` 每 10 ms
+按 `Angle_bias_min + f(平均腿高) - f(44.5)` 计算，在较高位置可能与基准不同。
+遥控器串口需使用 `nrfsend anglebias <degrees>`。基准不会被后续 `R` 帧覆盖。
+
+调试器中同时观察 `Angle_bias_min`、`Angle_bias`、`Left_Legheight` 和
+`Right_Legheight`，核对限幅后的左右腿平均高度；只看到无线 ACK 不能证明
+命令已被小车应用。数值示例见[命令参考](commands.md#最低腿高的重心标定)，
+回归检查和板上验证流程见[标定测试说明](../tests/README.md)。
 
 ## 编码器和电机排查
 
@@ -89,8 +98,10 @@ showrpm -y
 应向前追赶重心；若相反，应先修正 IMU/PWM 方向，不能靠增大 PID 解决。
 
 `motor` 命令在当前 PID 路径中不会直接驱动电机，不能用它作为硬件点动测试。
-另外，TB6612 驱动当前会在零命令分支之后重新应用 50 counts 最小 PWM；
-如果需要可靠滑行/制动状态，应先修正零值处理并在支架上复验。
+TB6612 零命令直接保持 PWM 为 0。启动等待或姿态/IMU 异常退出时，
+`Control_left_pwm`、`Control_right_pwm` 以及 TIM1 的 CCR1/CCR2 都应为 0。
+正常使能后，电机断开或车体被固定时无法消除姿态误差，PID 仍可能输出较大的
+纠偏量；应结合真实 Pitch、重心补偿和使能状态判断，不能只看 PWM 大小。
 
 ## 舵机与腿部机构
 

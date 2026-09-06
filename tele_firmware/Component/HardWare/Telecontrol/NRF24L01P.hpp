@@ -33,6 +33,11 @@ public:
     [[nodiscard]] bool send(const std::uint8_t* data, std::uint8_t length);
     [[nodiscard]] bool receive(std::uint8_t* data, std::uint8_t length = packet_width);
     [[nodiscard]] bool handleIrq(Status& status);
+    [[nodiscard]] bool hasReceivedPayload(bool& available);
+    [[nodiscard]] bool irqAsserted() const noexcept
+    {
+        return HAL_GPIO_ReadPin(irq_port_, irq_pin_) == GPIO_PIN_RESET;
+    }
 
     [[nodiscard]] SPI_HandleTypeDef* spiHandle() const noexcept { return spi_; }
     [[nodiscard]] std::uint16_t irqPin() const noexcept { return irq_pin_; }
@@ -58,6 +63,7 @@ private:
     static constexpr std::uint8_t register_rx_address_pipe0 = 0x0AU;
     static constexpr std::uint8_t register_tx_address = 0x10U;
     static constexpr std::uint8_t register_rx_width_pipe0 = 0x11U;
+    static constexpr std::uint8_t register_fifo_status = 0x17U;
 
     static constexpr TickType_t spi_timeout = pdMS_TO_TICKS(10U);
     static constexpr std::array<std::uint8_t, 5U> radio_address{
@@ -75,7 +81,7 @@ private:
     [[nodiscard]] bool flushRx();
     [[nodiscard]] bool startTransmit();
     [[nodiscard]] bool readStatus(Status& status);
-    [[nodiscard]] bool clearStatus();
+    [[nodiscard]] bool clearStatus(std::uint8_t flags = 0x70U);
 
     void setChipSelect(bool active) noexcept;
     void setChipEnable(bool enabled) noexcept;

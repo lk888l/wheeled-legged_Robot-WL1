@@ -119,6 +119,7 @@ void TB6612::setAVel_raw(int16_t _value) {
     else{
         //stop
         setAPWM(0);
+        return;
     }
     _value = std::abs(_value);
     if(_value < ADeadZone)
@@ -138,6 +139,7 @@ void TB6612::setBVel_raw(int16_t _value) {
     else{
         //stop
         setBPWM(0);
+        return;
     }
     _value = std::abs(_value);
     if(_value < BDeadZone)

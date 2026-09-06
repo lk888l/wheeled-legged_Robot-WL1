@@ -9,6 +9,10 @@
 #include <cmath>
 #include <assert.h>
 
+#if defined(__FAST_MATH__) || (defined(__FINITE_MATH_ONLY__) && __FINITE_MATH_ONLY__ > 0)
+#error "VQF requires IEEE NaN semantics for filter initialization; disable fast-math."
+#endif
+
 #define EPS std::numeric_limits<vqf_real_t>::epsilon()
 #define NaN std::numeric_limits<vqf_real_t>::quiet_NaN()
 #define PI 3.14159265358979323846264338327950288

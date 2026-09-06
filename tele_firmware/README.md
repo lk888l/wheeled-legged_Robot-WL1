@@ -117,12 +117,59 @@ SSD1306 128×64 OLED 使用 u8g2 软件 I²C：
 
 | 功能 | MCU 引脚 | 参数 |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200, 8-N-1 |
-| USART1 RX | PA10 | 当前应用未启动接收 |
+| USART1 TX | PA9 / PA15 | 同时输出同一路串口，115200, 8-N-1 |
+| USART1 RX | PA10 | DMA + IDLE 接收串口命令 |
 | Activity LED | PC13 | 每次提交无线发送时翻转 |
 
-PA15 不是常见的 USART1_TX 默认引脚；接串口工具时请以本表和
-`Core/Src/usart.c` 为准。
+PA9 用于常见 USB 串口接法，PA15 保留原遥控器接法；两者输出相同数据。
+PA9 映射放在 `Core/Src/usart.c` 的 USER CODE 中，CubeMX 重新生成时会保留。
+
+USB 串口模块的 **TXD 接 PA10，RXD 接 PA9（或 PA15），GND 共地**，参数设为
+115200、8-N-1、无流控。只接 TXD 时，遥控器可以执行命令，但电脑看不到回复。
+
+## 串口控制与反馈
+
+兼容旧版 `nrfsend <小车命令>`，每次发送 32 字节，短命令补零。
+`nrfsend` 前缀不占用无线 payload；超过 32 字节的内容会报错，不会截断发送。
+建议用 CR、LF 或 CRLF 结束命令。串口助手不带换行时，连续空闲 50 ms
+也会结束一条命令；逐字键入或分段发送时，段间停顿应小于 50 ms。
+命令队列最多保存八条，每 50 ms 处理一条；持续发送请控制在每秒 20 条以内。
+
+| 串口命令 | 行为 |
+| --- | --- |
+| `nrfsend R 0 0 0 61.5` | 将零转向、零速度、零横滚、61.5 mm 腿高发送给小车 |
+| `R 0 0 0 61.5` | 上一条命令的简写 |
+| `nrfsend nrfshow -mr 0` | 请求小车开启无线姿态回传 |
+| `nrfsend nrfshow -nn` | 请求小车关闭无线回传 |
+| `joystick off` | 暂停摇杆周期发送，供串口手动控制 |
+| `joystick on` | 恢复摇杆每 50 ms 发送，重启后默认开启 |
+| `status` | 查看发送成功、无 ACK、接收、驱动错误、串口丢弃和剩余栈计数 |
+| `help` | 查看串口命令帮助 |
+
+手动控制时按行发送：
+
+```text
+joystick off
+nrfsend R 0 0 0 61.5
+status
+```
+
+`joystick off` 只暂停自动发包，小车保留其最后收到的目标；它不是停车命令。
+串口的 `R` 参数直接采用小车协议中的 Turn、Speed、Roll、Leg，不额外翻转
+Speed。调试结束后发送 `joystick on` 恢复摇杆。OLED 仍显示摇杆值及锁定状态，
+串口发送的内容请以串口反馈为准。
+
+正常反馈示例：
+
+```text
+uart: sending R 0 0 0 61.5
+nRF: send success [uart]: R 0 0 0 61.5
+```
+
+第一行表示开始提交发送；第二行只在 nRF 的 `TX_DS` 置位、收到自动 ACK 后
+输出。摇杆帧也输出 `nRF: send success [joystick]: ...`。达到重试上限会输出
+`nRF: send fail [uart]: no ACK; ...`，收到小车回传则输出 `receive: ...`。
+无线 ACK 证明对端无线模块收到包，小车是否执行还取决于它的命令解析和运行状态。
 
 ## 无线协议
 

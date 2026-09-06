@@ -11,9 +11,11 @@
 4. OLED 出现 `WL1 REMOTE`；
 5. 推动摇杆时 OLED 数值变化；
 6. PC13 随发送翻转；
-7. USART1 TX（PA15）能输出 `radio: ready`。
+7. USART1 TX（PA9 或 PA15）能输出 `radio: ready`。
 
-调试串口参数为 115200, 8-N-1。应用当前只使用 TX，接收线路不是必需的。
+调试串口参数为 115200, 8-N-1、无流控。USB 串口 TXD 接 PA10，RXD 接 PA9
+或 PA15，GND 共地。修复前固件仅启用了 PA15，若 RXD 接 PA9 就会完全没有输出；
+现在两路同时输出相同数据。
 
 ## 常见现象
 
@@ -28,12 +30,24 @@
 | `radio: SPI transmit failed` | SPI2 DMA 中断、CSN/CE 接线、HAL SPI 状态 |
 | 按键连击或无响应 | PB0/PB1 上拉、低有效接法、接地、机械抖动 |
 | UART 日志偶尔缺失 | 日志固定缓冲已满；这是保护实时任务的预期行为 |
+| 串口命令能执行但电脑没有回复 | USB 串口 RXD 是否接 PA9/PA15；只接 PA10 只能发送命令 |
+| 串口控制值很快恢复成摇杆值 | 手动调试前发送 `joystick off`，完成后用 `joystick on` 恢复 |
+| 串口命令没有识别 | 使用 `nrfsend <小车命令>`，发送 CR/LF；无换行需连续空闲 50 ms |
 
 ## UART 日志解释
 
 | 日志 | 含义 |
 | --- | --- |
 | `radio: ready` | SPI 配置事务完成，驱动已请求进入接收模式；不等同于已收到对端 ACK |
+| `uart: ready (115200 8N1); type help` | 已启动串口 DMA 接收 |
+| `uart: sending ...` | 已解析串口命令，开始提交无线发送 |
+| `nRF: send success [uart/joystick]: ...` | `TX_DS` 确认无线 ACK；不等同于小车已执行命令 |
+| `nRF: send fail [uart]: no ACK; ...` | 该串口命令达到无线重试上限 |
+| `receive: ...` | 收到对端无线 payload，并转发到串口 |
+| `uart: command too long ...` | 拒绝超长命令，未截断发送 |
+| `uart: RX error/overflow ...` | 接收错误或队列溢出；检查接线、波特率及发送速率 |
+| `uart: command queue full ...` | PC 发包超过八槽命令队列容量 |
+| `radio: TX result timeout` | 30 ms 内未取得 TX 结果，驱动将重新初始化 |
 | `radio: init failed (attempt N)` | SPI/寄存器配置失败，1 s 后自动重试 |
 | `radio: no ACK (count N)` | 达到最大自动重发次数，TX FIFO 已清空 |
 | `radio: IRQ handling failed` | 读取/清除 nRF 状态时 SPI 事务失败 |
@@ -45,6 +59,27 @@
 | `buttons: stack N words` | 长按按键输出 Buttons 任务历史最小剩余栈 |
 
 故障日志经过限频，不代表计数只增加了一次。
+
+输入 `status` 查看累计计数、UART 丢弃数和 Radio 任务剩余栈。
+测试无线回传时可依次发送 `joystick off`、`nrfsend nrfshow -mr 0`，观察
+`receive: ...`，再用 `nrfsend nrfshow -nn` 关闭回传并发送 `joystick on`。
+
+串口解析的主机回归测试（需要本机 C++ 编译器，不使用 Arm 交叉编译器）：
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror -I Component/UserApp tests/serial_commands_test.cpp Component/UserApp/SerialCommandQueue.cpp -o build/serial_commands_test
+./build/serial_commands_test
+```
+
+连接遥控器和已上电的小车后，可在 PowerShell 中运行实机回归（端口按实际修改）：
+
+```powershell
+./tests/device_serial_test.ps1 -Port COM7
+```
+
+脚本验证零速度控制帧、无换行/分段输入、连续四条命令、payload 边界及姿态回传，
+结束时关闭姿态回传并恢复 `joystick on`。日志默认保存到
+`build/uart-radio/hardware-test.log`。
 
 ## 无法控制小车
 

@@ -222,7 +222,17 @@ bool NRF24L01P::receive(std::uint8_t* data, std::uint8_t length)
     const bool success =
         spiSend(&command_value, 1U) && spiReceive(data, length);
     setChipSelect(false);
-    return success;
+    return success && clearStatus(0x40U);
+}
+
+bool NRF24L01P::hasReceivedPayload(bool& available)
+{
+    std::uint8_t fifo_status = 0U;
+    if (!readRegister(register_fifo_status, &fifo_status, 1U)) {
+        return false;
+    }
+    available = (fifo_status & 0x01U) == 0U;
+    return true;
 }
 
 bool NRF24L01P::readStatus(Status& status)
@@ -240,10 +250,9 @@ bool NRF24L01P::readStatus(Status& status)
     return true;
 }
 
-bool NRF24L01P::clearStatus()
+bool NRF24L01P::clearStatus(std::uint8_t flags)
 {
-    const std::uint8_t clear_all_interrupts = 0x70U;
-    return writeRegister(register_status, &clear_all_interrupts, 1U);
+    return flags == 0U || writeRegister(register_status, &flags, 1U);
 }
 
 bool NRF24L01P::handleIrq(Status& status)
@@ -252,10 +261,10 @@ bool NRF24L01P::handleIrq(Status& status)
         return false;
     }
 
-    bool success = clearStatus();
-    if (status.rx_ready) {
-        success = flushRx() && success;
-    }
+    // Leave RX data and RX_DR for receive(); never discard a car's reply here.
+    const std::uint8_t flags = (status.tx_sent ? 0x20U : 0U) |
+                               (status.max_retries ? 0x10U : 0U);
+    bool success = clearStatus(flags);
     if (status.max_retries) {
         success = flushTx() && success;
     }

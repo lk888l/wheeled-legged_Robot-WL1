@@ -36,6 +36,8 @@
 #include "CtrlAlgorithm/LQR.hpp"
 #include "CtrlAlgorithm/PID.hpp"
 #include "CtrlAlgorithm/LegKinematics.hpp"
+#include "CtrlAlgorithm/BalanceCompensation.hpp"
+#include "CtrlAlgorithm/BalanceStartupGate.hpp"
 //freeRTOS library include
 #include "FreeRTOS.h"
 #include "task.h"
@@ -51,7 +53,15 @@ volatile bool isShowMotorRAM;
 volatile float Angle_kp{70.0f};
 volatile float Angle_ki{};
 volatile float Angle_kd{60.0f};
-volatile float Angle_bias{12.6f};    //静态角度偏差（向前则减小）
+// anglebias commands calibrate the minimum-height baseline; only MotionControl
+// writes the effective bias used by the pitch PID (向前则减小).
+volatile float Angle_bias_min{BalanceCompensation::default_minimum_bias_degrees};
+volatile float Angle_bias{BalanceCompensation::default_minimum_bias_degrees};
+volatile bool Control_armed{};
+volatile bool Control_imu_valid{};
+volatile float Control_pitch_error{};
+volatile int Control_left_pwm{};
+volatile int Control_right_pwm{};
 // velocity-pid
 volatile float Velocity_kp{0.05f};
 volatile float Velocity_ki{0.008f};
@@ -68,9 +78,9 @@ volatile float Adapt_y_ki{-0.4};
 /// real Angle value
 volatile float EAngle_print[3]{};
 /// Leg height
-volatile float Left_Legheight{};
-volatile float Right_Legheight{};
-volatile float Target_height{44.5f};
+volatile float Left_Legheight{BalanceCompensation::minimum_leg_height_mm};
+volatile float Right_Legheight{BalanceCompensation::minimum_leg_height_mm};
+volatile float Target_height{BalanceCompensation::minimum_leg_height_mm};
 volatile float Roll_Target{};
 volatile float LWheel_x{};
 volatile float RWheel_x{};
@@ -295,8 +305,8 @@ TaskFunction_t LEDBlinkFunc(){
             }},
             {"anglebias",[](etl::string_view args){
                 float bias{};
-                if(TaskReactor::parseStrArg(args,bias)){
-                    Angle_bias = bias;
+                if(TaskReactor::parseStrArg(args,bias) && BalanceCompensation::isFiniteBias(bias)){
+                    Angle_bias_min = bias;
                 }
             }},
     };
@@ -461,11 +471,13 @@ TaskFunction_t MotionControlFunc_PID(){
     PID Velocity_PID(0.04,0.006,0,-10,10,-100,100);
     PID Differ_PID(0,0,0,-500,500,-100,100);
     PID AdaptY_PID(0,0,0,-78,78,-100,100);
+    BalanceStartupGate startup_gate;
     float Differ_RPM, Angle_target{},DifferPWM{};
+    float last_target_roll = 0;
     //sensor
     MPU6050 IMU_Main(&hi2c1,{MPU6050::GyroRange_t::G1000,MPU6050::AccRange_t::A4,static_cast<uint16_t>(MPU6050::ms_toHZ(xFrequency)),{0,0,0}});
-    MPU6050::EulerAngle MAngle;
-    double IMU_Gyro[3];
+    MPU6050::EulerAngle MAngle{};
+    double IMU_Gyro[3]{};
     HallEncoder Enc_Left(&htim2,HallEncoder::InitConfig_t{7, 50, 4, 50});
     HallEncoder Enc_Right(&htim3,HallEncoder::InitConfig_t{7, 50, 4, 50});
     // Motor derive
@@ -477,7 +489,8 @@ TaskFunction_t MotionControlFunc_PID(){
     TB6_wheel.setA_DeadZone(50);TB6_wheel.setB_DeadZone(50);
     //IMU --> MPU6050Init
     IMU_Main.setGyroOffset(2.5,0.7,0.9);
-    if(IMU_Main.Init()){
+    const bool imu_initialized = IMU_Main.Init();
+    if(imu_initialized){
         Uart1.print("MPU: success\n");
     }
     else{
@@ -487,14 +500,13 @@ TaskFunction_t MotionControlFunc_PID(){
     Enc_Right.clearCounter();
     xLastWakeTime = xTaskGetTickCount();        //get now system tick to delay a period
     while(1){
-        taskENTER_CRITICAL();
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        // read now Leg height to calculate pitch angle compensate and angle_kp
-        float Y_avg = (Left_Legheight + Left_Legheight) / 2.0f;
-        Angle_bias = (0.01026f * Y_avg * Y_avg) - (1.258f * Y_avg) + 48.24f;
-        Angle_kp = (0.3f*Y_avg) + 56.9;
-        // get IMU euler angle
-        IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro);
+        // Keep the scheduler and HAL timeout ticks running during sensor I/O.
+        const bool imu_valid = imu_initialized && IMU_Main.getEulerAngleGyro(MAngle,IMU_Gyro) &&
+            std::isfinite(MAngle.Roll) && std::isfinite(MAngle.Pitch) && std::isfinite(MAngle.Yaw) &&
+            std::isfinite(IMU_Gyro[0]) && std::isfinite(IMU_Gyro[1]) && std::isfinite(IMU_Gyro[2]);
+        taskENTER_CRITICAL();
+        Control_imu_valid = imu_valid;
         EAngle_print[0] = static_cast<volatile float>(MAngle.Roll); EAngle_print[1] = static_cast<volatile float>(MAngle.Pitch);EAngle_print[2] = static_cast<volatile float>(MAngle.Yaw);
         if(isShowIMUData) {
             Uart1.print("{:07.3f},{:07.3f},{:07.3f}\n", MAngle.Roll, MAngle.Pitch, MAngle.Yaw);
@@ -504,6 +516,41 @@ TaskFunction_t MotionControlFunc_PID(){
 //            TB6_wheel.setBVel_raw(static_cast<int16_t>(notifiedValue_0>>14));
 //            TB6_wheel.setAVel_raw(static_cast<int16_t>(notifiedValue_0 & 0xFFFF));
 //        }
+        const float common_height = BalanceCompensation::clampLegHeight(Target_height);
+        const float gate_height = Control_armed
+            ? BalanceCompensation::averageLegHeight(Left_Legheight, Right_Legheight) : common_height;
+        const float corrected_pitch = static_cast<float>(MAngle.Pitch) +
+            BalanceCompensation::pitchBias(Angle_bias_min, gate_height);
+        const float gyro_rate = static_cast<float>(std::sqrt(
+            IMU_Gyro[0]*IMU_Gyro[0] + IMU_Gyro[1]*IMU_Gyro[1] + IMU_Gyro[2]*IMU_Gyro[2]) * 57.295779513);
+        Control_armed = startup_gate.update(imu_valid, corrected_pitch, static_cast<float>(MAngle.Roll),
+                                           gyro_rate, Velocity_Target, Differ_Target);
+        if (!Control_armed) {
+            Angle_PID.reset();
+            Velocity_PID.reset();
+            Differ_PID.reset();
+            AdaptY_PID.reset();
+            Angle_target = DifferPWM = 0.0f;
+            last_target_roll = Roll_Target;
+            Left_Legheight = common_height;
+            Right_Legheight = common_height;
+            Angle_bias = BalanceCompensation::pitchBias(Angle_bias_min, common_height);
+            Angle_kp = 0.3f * common_height + 56.9f;
+            Control_pitch_error = static_cast<float>(MAngle.Pitch) + Angle_bias;
+            Control_left_pwm = 0;
+            Control_right_pwm = 0;
+            TB6_wheel.setAVel_raw(0);
+            TB6_wheel.setBVel_raw(0);
+            if (++vel_loop_cnt >= 5) {
+                vel_loop_cnt = 0;
+                // Consume encoder deltas while idle so re-entry has no stale velocity sample.
+                Enc_Left.getRPM();
+                Enc_Right.getRPM();
+                xTaskNotifyGive(Handle_ServoControlFunc);
+            }
+            taskEXIT_CRITICAL();
+            continue;
+        }
         vel_loop_cnt++;
         if(vel_loop_cnt >= 5){
             vel_loop_cnt = 0;
@@ -522,7 +569,6 @@ TaskFunction_t MotionControlFunc_PID(){
             //roll pid
             AdaptY_PID.setTunings(Adapt_y_kp,Adapt_y_ki,0);
             float roll_error = Roll_Target - MAngle.Roll;
-            static float last_target_roll = 0;
             // 检测目标角度是否跨越零点（正负号改变）
             if ((last_target_roll > 0 && Roll_Target < 0) || (last_target_roll < 0 && Roll_Target > 0)) {
                 AdaptY_PID.reset(); // 清除旧的增量累加值 last_out_ 和积分项
@@ -542,16 +588,23 @@ TaskFunction_t MotionControlFunc_PID(){
                 geometric_comp_y = K_COMP * 55.0 * std::sin((roll_error + THRESHOLD_DEG) * 0.0174532925f);
                 adjust_y += geometric_comp_y;
             }
-            Left_Legheight = (Target_height - adjust_y);
-            Right_Legheight = Target_height + adjust_y;
+            // Publish bounded targets before either balance or servo calculations.
+            Left_Legheight = BalanceCompensation::clampLegHeight(Target_height - adjust_y);
+            Right_Legheight = BalanceCompensation::clampLegHeight(Target_height + adjust_y);
             xTaskNotifyGive(Handle_ServoControlFunc);
         }
+        const float Y_avg = BalanceCompensation::averageLegHeight(Left_Legheight, Right_Legheight);
+        Angle_bias = BalanceCompensation::pitchBias(Angle_bias_min, Y_avg);
+        Angle_kp = (0.3f * Y_avg) + 56.9f;
         Angle_PID.setTunings(Angle_kp,Angle_ki,Angle_kd);
         float EvenPWM = Angle_PID.update(Angle_target,MAngle.Pitch + Angle_bias);
+        Control_pitch_error = static_cast<float>(MAngle.Pitch) + Angle_bias;
         int Left_PWM = static_cast<int>(std::round((EvenPWM + DifferPWM)));
         int Right_PWM = static_cast<int>(std::round((EvenPWM - DifferPWM)));
         Left_PWM = TB6612::clamp(Left_PWM,1000,-1000);
         Right_PWM = TB6612::clamp(Right_PWM,1000,-1000);
+        Control_left_pwm = Left_PWM;
+        Control_right_pwm = Right_PWM;
         TB6_wheel.setAVel_raw(Left_PWM);
         TB6_wheel.setBVel_raw(Right_PWM);
         taskEXIT_CRITICAL();
@@ -597,12 +650,13 @@ TaskFunction_t ServoControlFunc(){
 //        }
         if(ulTaskNotifyTake(pdTRUE, portMAX_DELAY)){
             float L_x,R_x;
-            if(Left_Legheight>78.5)     {Left_Legheight=78.5;}
-            else if(Left_Legheight<44.5){Left_Legheight=44.5;}
-            if(Right_Legheight>78.5)    {Right_Legheight=78.5;}
-            else if(Right_Legheight<44.5){Right_Legheight=44.5;}
-            Left_deg = LegKinematics::getMotorAngleForHeight(Left_Legheight,&L_x);
-            Right_deg = LegKinematics::getMotorAngleForHeight(Right_Legheight,&R_x);
+            // Take a consistent pair; MotionControl owns target updates and limits.
+            taskENTER_CRITICAL();
+            const float left_height = Left_Legheight;
+            const float right_height = Right_Legheight;
+            taskEXIT_CRITICAL();
+            Left_deg = LegKinematics::getMotorAngleForHeight(left_height,&L_x);
+            Right_deg = LegKinematics::getMotorAngleForHeight(right_height,&R_x);
             Ser_Lift.setAngle_Smooth(Left_deg-10.0f,1000);
             Ser_Right.setAngle_Smooth(Right_deg-10.0f,1000);
 //        Uart1.print("servoTask: {}, {}\n",Left_deg,Right_deg);

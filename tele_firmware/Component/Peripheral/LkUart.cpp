@@ -1,5 +1,7 @@
 #include "LkUart.hpp"
 
+#include <algorithm>
+
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -105,6 +107,99 @@ void LkUart::handleTxCompleteFromIsr(UART_HandleTypeDef* uart) noexcept
     }
 }
 
+bool LkUart::armReceive() noexcept
+{
+    if (HAL_UARTEx_ReceiveToIdle_DMA(
+            uart_, rx_dma_.data(), static_cast<std::uint16_t>(rx_dma_.size())) != HAL_OK) {
+        return false;
+    }
+    // HT is not a completed buffer in normal DMA mode.
+    __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
+    return true;
+}
+
+bool LkUart::startReceive(TaskHandle_t receiver) noexcept
+{
+    taskENTER_CRITICAL();
+    receiver_ = receiver;
+    const bool success = uart_->RxState == HAL_UART_STATE_BUSY_RX || armReceive();
+    taskEXIT_CRITICAL();
+    return success;
+}
+
+bool LkUart::readReceived(ReceivedData& data) noexcept
+{
+    taskENTER_CRITICAL();
+    if (rx_count_ == 0U) {
+        taskEXIT_CRITICAL();
+        return false;
+    }
+    data = rx_ready_[rx_head_];
+    rx_head_ = static_cast<std::uint8_t>((rx_head_ + 1U) % rx_ready_.size());
+    --rx_count_;
+    taskEXIT_CRITICAL();
+    return true;
+}
+
+std::uint32_t LkUart::receiveErrors() const noexcept
+{
+    taskENTER_CRITICAL();
+    const std::uint32_t errors = rx_errors_;
+    taskEXIT_CRITICAL();
+    return errors;
+}
+
+void LkUart::notifyReceiverFromIsr() noexcept
+{
+    if (receiver_ != nullptr) {
+        BaseType_t higher_priority_task_woken = pdFALSE;
+        vTaskNotifyGiveFromISR(receiver_, &higher_priority_task_woken);
+        portYIELD_FROM_ISR(higher_priority_task_woken);
+    }
+}
+
+void LkUart::receiveFromIsr(std::uint16_t size) noexcept
+{
+    if (HAL_UARTEx_GetRxEventType(uart_) == HAL_UART_RXEVENT_HT) {
+        return;
+    }
+    if (size > 0U && size <= rx_dma_.size() && rx_count_ < rx_ready_.size()) {
+        ReceivedData& received = rx_ready_[rx_tail_];
+        std::copy_n(rx_dma_.begin(), size, received.data.begin());
+        received.length = size;
+        rx_tail_ = static_cast<std::uint8_t>((rx_tail_ + 1U) % rx_ready_.size());
+        ++rx_count_;
+    } else {
+        ++rx_errors_;
+    }
+    // Copy before rearming: DMA must never overwrite a queued command.
+    if (!armReceive()) {
+        ++rx_errors_;
+    }
+    notifyReceiverFromIsr();
+}
+
+void LkUart::handleRxEventFromIsr(UART_HandleTypeDef* uart, std::uint16_t size) noexcept
+{
+    if (instance_ != nullptr && instance_->uart_ == uart) {
+        instance_->receiveFromIsr(size);
+    }
+}
+
+void LkUart::handleErrorFromIsr(UART_HandleTypeDef* uart) noexcept
+{
+    if (instance_ == nullptr || instance_->uart_ != uart) {
+        return;
+    }
+    ++instance_->rx_errors_;
+    // A framing/overrun error aborts RX only. Do not release an active TX buffer.
+    if (uart->gState == HAL_UART_STATE_READY) {
+        instance_->completeTransferFromIsr();
+    }
+    // The task rearms RX after HAL finishes its DMA abort callback.
+    instance_->notifyReceiverFromIsr();
+}
+
 extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef* uart)
 {
     LkUart::handleTxCompleteFromIsr(uart);
@@ -112,5 +207,10 @@ extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef* uart)
 
 extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef* uart)
 {
-    LkUart::handleTxCompleteFromIsr(uart);
+    LkUart::handleErrorFromIsr(uart);
+}
+
+extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* uart, std::uint16_t size)
+{
+    LkUart::handleRxEventFromIsr(uart, size);
 }

@@ -127,12 +127,52 @@ The SSD1306 128×64 OLED uses u8g2 software I²C:
 
 | Function | MCU pin | Parameters |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200, 8-N-1 |
-| USART1 RX | PA10 | Reception is not enabled by the current application |
+| USART1 TX | PA9 / PA15 | Both output the same UART data, 115200, 8-N-1 |
+| USART1 RX | PA10 | Serial commands through DMA + IDLE reception |
 | Activity LED | PC13 | Toggles whenever a wireless transmission is submitted |
 
-PA15 is not the usual default USART1_TX pin. When connecting a serial adapter,
-follow this table and `Core/Src/usart.c`.
+PA9 supports the common USB serial wiring; PA15 retains the original remote
+board wiring. The PA9 mapping lives in the USER CODE section of
+`Core/Src/usart.c` so CubeMX regeneration preserves it.
+
+Connect the USB adapter's **TXD to PA10, RXD to PA9 (or PA15), and GND to GND**.
+Use 115200, 8-N-1, with no flow control. With only TXD connected, commands may
+execute even though the PC cannot receive their replies.
+
+## Serial Commands and Feedback
+
+The legacy `nrfsend <car command>` forwards a 1–32 byte ASCII payload, padded
+with zeroes to 32 bytes. The prefix does not count toward that limit. Oversized
+commands are rejected, never silently truncated. End commands with CR, LF, or
+CRLF. For serial assistants without line endings, 50 ms of idle time also ends
+a command; keep pauses between fragments shorter than 50 ms.
+The queue holds eight commands and processes at most one every 50 ms; keep
+sustained input at or below 20 commands per second.
+
+| Command | Behavior |
+| --- | --- |
+| `nrfsend R 0 0 0 61.5` | Send zero turn, speed, and roll with a 61.5 mm leg height |
+| `R 0 0 0 61.5` | Shorthand for the previous command |
+| `nrfsend nrfshow -mr 0` | Ask the car to enable radio telemetry |
+| `nrfsend nrfshow -nn` | Ask the car to disable radio telemetry |
+| `joystick off` | Pause automatic joystick packets for manual serial control |
+| `joystick on` | Resume 50 ms joystick packets; enabled by default after reset |
+| `status` | Report ACK, retry, receive, driver, UART, and stack counters |
+| `help` | Show serial command help |
+
+For manual control, send `joystick off`, then `nrfsend R 0 0 0 61.5` on separate
+lines. Pausing joystick packets does not stop the car: it retains its last
+target. Serial `R` values follow the car's Turn, Speed, Roll, Leg order without
+an additional speed sign inversion. Send `joystick on` after debugging.
+The OLED continues to show joystick values and locks; inspect serial feedback
+for the payload sent manually.
+
+`uart: sending ...` reports submission. `nRF: send success [uart]: ...` is
+printed only after `TX_DS` confirms an auto ACK. Joystick packets report
+`nRF: send success [joystick]: ...`. Exhausted retries report
+`nRF: send fail [uart]: no ACK; ...`, and car replies report `receive: ...`.
+An ACK confirms radio delivery; command execution also depends on the car's
+parser and operating state.
 
 ## Wireless Protocol
 

@@ -53,7 +53,7 @@ public:
         float total_out = kp_ * error
                         + integral_ * ki_
 //                        + kd_ * (error - prev_error_);
-                        - kd_ * (measured - prev_actual);   //微分先行计算公式
+                        - (has_previous_measurement_ ? kd_ * (measured - prev_actual) : 0.0f);
 
         if (total_out > max_out_) total_out = max_out_;
         else if (total_out < min_out_) total_out = min_out_;
@@ -61,6 +61,7 @@ public:
         // 保存状态
         prev_error_ = error;
         prev_actual = measured;
+        has_previous_measurement_ = true;
         return total_out;
     }
 
@@ -88,6 +89,7 @@ public:
         prevTWO_error_ = prev_error_;
         prev_error_ = error;
         prev_actual = measured;
+        has_previous_measurement_ = true;
         return last_out_;
     }
 
@@ -100,6 +102,7 @@ public:
         prevTWO_error_ = 0.0f;
         last_out_ = 0.0f;
         prev_actual = 0.0f;
+        has_previous_measurement_ = false;
     }
 
     /**
@@ -119,8 +122,9 @@ private:
     float integral_;
     float prev_error_;
     float prevTWO_error_;
-    float prev_actual;
+    float prev_actual{};
     float last_out_{};
+    bool has_previous_measurement_{};
 };
 
 
