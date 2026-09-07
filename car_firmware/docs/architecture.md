@@ -176,9 +176,9 @@ classDiagram
 
 实际创建的是 `MotionControlTask`，保留原串级 PID 算法。每 10 ms：
 
-1. 根据腿高重新计算俯仰静态偏置和姿态环 `Kp`；
-2. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw；
-3. 更新姿态 PID；
+1. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw；
+2. 到达 50 ms 周期时更新速度、转向和横滚/腿高控制；
+3. 根据当前限幅后双腿目标的平均高度计算俯仰偏置和姿态环 `Kp`，更新姿态 PID；
 4. 组合直行和差速 PWM，限幅后写入 TB6612。
 
 每累计 5 次，即每 50 ms：
@@ -202,6 +202,21 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 
 横滚误差绝对值超过 3° 时，会叠加正弦几何补偿。左右腿目标随后被限制到
 `44.5..78.5 mm`。
+
+`ControlParameters::angle_bias` 保存双腿最低高度 `44.5 mm` 时的重心俯仰基准，
+默认 `9.5°`，可通过 `anglebias <degrees>` 在运行时更新。每个 10 ms 周期使用
+该周期限幅后的双腿目标（初始左右均为 `44.5 mm`）计算：
+
+```text
+h = (legs.left + legs.right) / 2
+f(h) = 0.01026 * h * h - 1.258 * h + 48.24
+feedback.angle_bias = parameters.angle_bias + f(h) - f(44.5)
+feedback.angle_kp = 0.3 * h + 56.9
+```
+
+这里的 `h` 是舵机目标高度，不是测得的实际腿高。高度补偿只写入反馈，不会覆盖
+参数中的基准；后续 `R`、`legheight` 命令也不会覆盖它。基准仅保存在 RAM 中，
+复位恢复默认值。`anglepid -p` 的存储值仍不参与自动生成的 `Kp`。
 
 ### ServoControl
 
@@ -233,7 +248,7 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
 | Angle `Kp / Ki / Kd` | `70 / 0 / 60` | 姿态环；运行时 `Kp` 会随腿高重算 |
-| Angle bias | `12.6°` | 运行时会随腿高重算 |
+| Angle bias baseline | `9.5°` | 双腿均为 `44.5 mm` 时的基准；运行时可调，并叠加高度补偿 |
 | Velocity `Kp / Ki / Kd` | `0.05 / 0.008 / 0` | 平均轮速到俯仰目标 |
 | Difference `Kp / Ki / Kd` | `2 / 0.001 / 0` | 左右轮速差到差速 PWM |
 | Roll `Kp / Ki` | `0 / -0.4` | 横滚到左右腿高度差 |
@@ -331,9 +346,8 @@ MotionControl 的休眠、I2C、VQF、PID 和日志均不在临界区内。临�
 
 以下是阅读代码或调参时必须知道的当前行为：
 
-- angle Kp 和 bias 每 10 ms 根据腿高重算，当前自动校准不使用对应命令的存储值；
-- 当前校准腿高表达式仍为 `(legs.left + legs.left) / 2`，没有读取
-  右腿高度；若依赖左右腿平均值，应先修正并重新标定；
+- angle Kp 每 10 ms 根据限幅后双腿目标的平均高度重算，`anglepid -p` 的存储值仍不参与计算；
+- angle bias 使用 `anglebias` 设置的最低腿高基准加上同一平均高度的补偿；改变腿高不会覆盖基准；
 - `rollpid -p` 与 `-i` 已分别正确写入横滚 Kp 和 Ki；
 - `motor` 在当前 PID 模式明确拒绝，避免应答一个不执行的原始 PWM 请求；
 - 电机、编码器和舵机没有器件身份反馈，初始化成功只证明对应 MCU 定时器成功；

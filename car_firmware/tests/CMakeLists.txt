@@ -47,6 +47,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(button_event_queue_test PRIVATE Threads::Threads)
 add_wl1_test(telemetry_frame_test)
 add_wl1_test(pid_test)
+add_wl1_test(balance_compensation_test)
 add_wl1_test(app_task_test ../Component/Application/AppTask.cpp)
 add_wl1_test(task_reactor_test)
 add_wl1_test(runtime_state_test
@@ -61,6 +62,11 @@ add_wl1_test(command_service_test
 add_wl1_test(motion_control_task_test
     ../Component/Application/AppTask.cpp ../Component/Application/RuntimeStatus.cpp
     ../Component/UserApp/ControlState.cpp ../Component/UserApp/Tasks/MotionControlTask.cpp)
+add_wl1_test(runtime_balance_test
+    ../Component/Application/AppTask.cpp ../Component/Application/Button.cpp
+    ../Component/Application/RuntimeStatus.cpp ../Component/UserApp/ControlState.cpp
+    ../Component/UserApp/Tasks/ButtonTask.cpp ../Component/UserApp/Tasks/CommandServiceTask.cpp
+    ../Component/UserApp/Tasks/MotionControlTask.cpp)
 add_wl1_test(startup_test
     ../Component/Application/AppTask.cpp ../Component/Application/Button.cpp
     ../Component/Application/RuntimeStatus.cpp ../Component/UserApp/ControlState.cpp
@@ -81,6 +87,6 @@ add_test(NAME startup_no_command_channel COMMAND startup_test no-command-channel
 add_test(NAME startup_runtime_fault COMMAND startup_test runtime-fault)
 set_tests_properties(startup_no_command_channel startup_runtime_fault PROPERTIES TIMEOUT 20)
 
-foreach(name app_task_test task_reactor_test runtime_state_test button_task_test command_service_test motion_control_task_test startup_test)
+foreach(name app_task_test task_reactor_test runtime_state_test button_task_test command_service_test motion_control_task_test runtime_balance_test startup_test)
     target_include_directories(${name} BEFORE PRIVATE fakes)
 endforeach()

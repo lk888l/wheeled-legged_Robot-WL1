@@ -164,6 +164,7 @@ void CommandServiceTask::process_command(etl::string_view frame)
     } else if (name == "rollpid") {
         accepted = update_gains(args, parameters.roll, false);
     } else if (name == "anglebias") {
+        // This is the minimum-height baseline; MotionControl adds height compensation.
         accepted = parse_value(args, parameters.angle_bias);
     } else if (name == "legheight") {
         accepted = parse_value(args, parameters.leg_height);

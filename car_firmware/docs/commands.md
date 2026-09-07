@@ -40,7 +40,7 @@ payload 后，在任务上下文中使用与串口相同的解析器执行。
 | `VandD` | `<difference> <velocity>` | 更新左右轮速差和平均速度目标 |
 | `target_roll` | `<degrees>` | 更新横滚目标 |
 | `legheight` | `<millimetres>` | 更新共同腿高目标，并打印运动学计算结果 |
-| `anglebias` | `<degrees>` | 写入俯仰静态偏置 |
+| `anglebias` | `<degrees>` | 更新双腿最低高度 `44.5 mm` 时的重心俯仰基准 |
 
 推荐遥控帧：
 
@@ -62,8 +62,21 @@ R 0.0 -0.0 0.0 61.5
 `Servo angel` 诊断值是在限幅前计算的，因此越界输入只适合检查算法，不代表
 舵机实际会到达该位置。
 
-`anglebias` 仍接受存储值，但当前控制模式每 10 ms 自动按腿高校准 bias，
-不使用人工写入值；需要人工模式时应先实现模式切换。
+`anglebias` 设置的是双腿均为 `44.5 mm` 时的基准，默认 `9.5°`。命令处理后，
+后续 10 ms 控制周期会使用新基准，并按限幅后双腿目标的平均高度叠加高度补偿，
+计算方式见 [控制架构](architecture.md#motioncontrol)。`R` 或 `legheight` 改变腿高
+不会覆盖基准；基准保存在 RAM 中，复位后恢复默认值。没有 `anglebias auto`
+命令，也不需要切换人工/自动模式。
+
+当前分支的 `tele_firmware` 已提供串口调参桥接。在遥控器 USART1 串口发送以下
+一行并以 LF 结束，即可通过现有 32 字节无线帧更新车端基准：
+
+```text
+anglebias 10.5
+```
+
+直接连接车端 USART1 时也使用同一命令。遥控器桥接应直接发送 `anglebias`，
+不要加 `nrfsend` 前缀；`bridge: radio ACK` 仅表示无线送达，不是车端执行应答。
 
 ## PID 命令
 
@@ -89,7 +102,7 @@ velocitypid -p 0.04
 differpid -i 0.0008
 ```
 
-angle Kp 会每 10 ms 按校准腿高重算为 `0.3 * height + 56.9`，因此
+angle Kp 会每 10 ms 按限幅后双腿目标的平均高度重算为 `0.3 * height + 56.9`，因此
 `anglepid -p` 的存储值不参与当前自动校准。Angle `Ki`、`Kd` 和速度/差速参数会持续到
 下次复位。
 
@@ -164,6 +177,8 @@ receive: <original text>
 5. 最后调整横滚和腿高补偿；
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
-当前参数只存在 RAM 中。确认参数后，应修改
-`Component/UserApp/ControlState.hpp` 中的默认初始化值，重新构建并烧录。
+当前参数只存在 RAM 中。确认参数后，重心基准的默认值应修改
+`Component/UserApp/CtrlAlgorithm/BalanceCompensation.hpp` 中的
+`default_minimum_bias_degrees`；其他参数修改 `Component/UserApp/ControlState.hpp`
+中的默认初始化值，重新构建并烧录。
 

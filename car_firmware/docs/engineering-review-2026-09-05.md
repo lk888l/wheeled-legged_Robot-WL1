@@ -84,3 +84,21 @@ MISRA、AUTOSAR 或功能安全认证符合性。
 静态栈/TCB 使用方式核对了本地 FreeRTOS 10.3.1 实现及
 [FreeRTOS 任务创建文档](https://www.freertos.org/Documentation/02-Kernel/04-API-references/01-Task-creation/01-xTaskCreate)；
 缩小临界区参考 [FreeRTOS Kernel Book 第 8 章](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book/blob/main/ch08.md)。
+
+## 2026-09-07 跟进：C06 部分解决
+
+车端已移植主分支 `9b58e9e` 的运行时重心基准语义：`anglebias` 设置双腿最低
+`44.5 mm` 时的基准（默认 `9.5°`），控制反馈按该基准叠加腿高补偿。补偿和姿态
+`Kp` 均使用当周期限幅后的左右腿平均目标高度，初始双腿目标也统一为 `44.5 mm`。
+后续 `R`、`legheight` 命令不会覆盖 RAM 中的基准，复位恢复默认值。
+
+C06 中左腿单侧计算和 `anglebias` 不生效的问题已修复；`anglepid -p` 的存储值
+仍不参与自动生成的 `Kp`，未实现人工 Kp 模式。当前分支遥控器可直接通过串口
+桥接发送 `anglebias <degrees>` 加 LF，无线帧仍为 32 字节。上文保留为
+2026-09-05 的历史审查证据与验证记录；当前命令及计算方式见
+[命令参考](commands.md#控制命令) 和 [控制架构](architecture.md#motioncontrol)。
+
+本次车端 Debug、Release 构建通过；主机 Debug 和显式 `-Ofast` 配置各 30 项
+CTest 通过。新增回归连接真实命令与运动任务，验证 UART/无线修改基准后反馈偏置
+和 PWM 生效、同周期双腿限幅/平均高度、升降腿后保留基准和非法输入拒绝。
+本次未烧录，实车控制响应仍待验证。

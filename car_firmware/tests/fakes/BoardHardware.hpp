@@ -69,13 +69,14 @@ class MPU6050 {
 public:
     struct EulerAngle { double Roll{}, Pitch{}, Yaw{}; };
     bool healthy{true};
+    EulerAngle reading{0.0, -48.24, 0.0};
     std::vector<TickType_t> samples;
     bool getEulerAngleGyro(EulerAngle& angle, double* gyro)
     {
         assert(fake_rtos::critical_depth == 0); // HAL must run outside critical sections.
         samples.push_back(fake_rtos::now);
         if (!healthy) { return false; }
-        angle = {0.0, -48.24, 0.0};
+        angle = reading;
         std::fill_n(gyro, 3U, 0.0);
         return true;
     }

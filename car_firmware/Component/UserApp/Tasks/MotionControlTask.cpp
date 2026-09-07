@@ -1,10 +1,10 @@
 #include "MotionControlTask.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include "BoardHardware.hpp"
 #include "ControlState.hpp"
 #include "RuntimeStatus.hpp"
+#include "CtrlAlgorithm/BalanceCompensation.hpp"
 #include "CtrlAlgorithm/PID.hpp"
 
 namespace app {
@@ -39,11 +39,6 @@ void MotionControlTask::run()
             continue;
         }
         const ControlParameters parameters = control_.parameters();
-        // Preserve the existing left-leg calibration pending mechanical revalidation.
-        // See docs/engineering-review-2026-09-05.md (C06).
-        float calibrated_height = (legs.left + legs.left) / 2.0f;
-        feedback.angle_bias = (0.01026f * calibrated_height * calibrated_height) - (1.258f * calibrated_height) + 48.24f;
-        feedback.angle_kp = (0.3f*calibrated_height) + 56.9;
         // get IMU euler angle
         if (!imu.getEulerAngleGyro(angle,gyro)) {
 
@@ -101,11 +96,16 @@ void MotionControlTask::run()
             legs.left = (parameters.leg_height - adjust_y);
             legs.right = parameters.leg_height + adjust_y;
             // Clamp before publishing; motion is the sole writer of leg targets.
-            legs.left = std::clamp(legs.left, 44.5F, 78.5F);
-            legs.right = std::clamp(legs.right, 44.5F, 78.5F);
+            legs.left = BalanceCompensation::clampLegHeight(legs.left);
+            legs.right = BalanceCompensation::clampLegHeight(legs.right);
             control_.publish_leg_targets(legs);
             (void)servo_.notify_give();
         }
+        // Apply the saved minimum-height baseline on every valid control sample.
+        // Use both bounded leg targets, including updates from this same cycle.
+        const float calibrated_height = BalanceCompensation::averageLegHeight(legs.left, legs.right);
+        feedback.angle_bias = BalanceCompensation::pitchBias(parameters.angle_bias, calibrated_height);
+        feedback.angle_kp = 0.3F * calibrated_height + 56.9F;
         angle_pid.setTunings(feedback.angle_kp,parameters.angle.ki,parameters.angle.kd);
         float even_pwm = angle_pid.update(angle_target,angle.Pitch + feedback.angle_bias);
         int left_pwm = static_cast<int>(std::round((even_pwm + difference_pwm)));

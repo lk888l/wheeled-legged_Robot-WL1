@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include "CtrlAlgorithm/BalanceCompensation.hpp"
 
 namespace app {
 
@@ -11,21 +12,26 @@ struct ControlParameters {
     PidGains velocity{0.05F, 0.008F, 0.0F};
     PidGains difference{2.0F, 0.001F, 0.0F};
     PidGains roll{0.0F, -0.4F, 0.0F};
-    float angle_bias{12.6F};
+    // Remote-adjustable pitch baseline at minimum leg height; kept across R frames.
+    float angle_bias{BalanceCompensation::default_minimum_bias_degrees};
     float velocity_target{0.0F};
     float difference_target{0.0F};
-    float leg_height{44.5F};
+    float leg_height{BalanceCompensation::minimum_leg_height_mm};
     float roll_target{0.0F};
     bool show_imu{false};
     bool show_rpm{false};
 };
 
-struct LegTargets { float left{0.0F}; float right{0.0F}; };
+struct LegTargets {
+    float left{BalanceCompensation::minimum_leg_height_mm};
+    float right{BalanceCompensation::minimum_leg_height_mm};
+};
 
 struct ControlFeedback {
     std::array<float, 3U> euler{};
     float angle_kp{70.0F};
-    float angle_bias{12.6F};
+    // Effective pitch bias after applying compensation for the current leg targets.
+    float angle_bias{BalanceCompensation::default_minimum_bias_degrees};
 };
 
 // Value types above are portable; the snapshot implementation is single-core

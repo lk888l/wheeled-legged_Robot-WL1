@@ -44,6 +44,24 @@ int main()
         CHECK(fake_rtos::critical_depth == 0);
     };
 
+    CHECK(control.parameters().angle_bias == 9.5F);
+    // Both command transports must preserve the last valid baseline on every
+    // rejected number, including numeric overflow and extra arguments.
+    for (const bool radio : {false, true}) {
+        dispatch(radio ? "anglebias -3.5" : "anglebias 11.25", radio);
+        const float baseline = radio ? -3.5F : 11.25F;
+        CHECK(control.parameters().angle_bias == baseline);
+        for (const char* invalid : {"anglebias", "anglebias invalid", "anglebias nan",
+                 "anglebias NaN", "anglebias inf", "anglebias -inf", "anglebias Infinity",
+                 "anglebias 1e39", "anglebias -1e999", "anglebias 12junk",
+                 "anglebias 12 13", "anglebias auto"}) {
+            dispatch(invalid, radio);
+            CHECK(control.parameters().angle_bias == baseline);
+        }
+        dispatch("R 0 0 0 55", radio);
+        CHECK(control.parameters().angle_bias == baseline);
+    }
+
     dispatch("R 10 20 5 60\r\n");
     auto parameters = control.parameters();
     CHECK(parameters.difference_target == 10.0F && parameters.velocity_target == 20.0F);
