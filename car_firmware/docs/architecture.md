@@ -243,7 +243,7 @@ Release/RelWithDebInfo 使用 `-O3 -fno-fast-math`，VQF 编译保护会拒绝 f
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
 | Angle `Kp / Ki / Kd` | `70 / 0 / 60` | 默认自动 Kp；`anglepid -p` 切换到命令指定的固定 Kp |
-| Angle bias | `9.5°` | 44.5 mm 的重心基准；实际 bias 叠加双腿平均高度补偿 |
+| Angle bias | `7.0°` | 44.5 mm 的重心基准；实际 bias 叠加双腿平均高度补偿 |
 | Velocity `Kp / Ki / Kd` | `0.05 / 0.008 / 0` | 平均轮速到俯仰目标 |
 | Difference `Kp / Ki / Kd` | `2 / 0.001 / 0` | 左右轮速差到差速 PWM |
 | Roll `Kp / Ki / Kd` | `0 / -0.4 / 0` | 横滚到左右腿高度差 |

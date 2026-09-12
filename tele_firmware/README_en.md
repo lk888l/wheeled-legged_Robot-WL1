@@ -128,7 +128,7 @@ The SSD1306 128×64 OLED uses u8g2 software I²C:
 | Function | MCU pin | Parameters |
 | --- | --- | --- |
 | USART1 TX | PA15 | 115200, 8-N-1 |
-| USART1 RX | PA10 | Reception is not enabled by the current application |
+| USART1 RX | PA10 | Wireless tuning command input (ASCII + LF) |
 | Activity LED | PC13 | Toggles whenever a wireless transmission is submitted |
 
 PA15 is not the usual default USART1_TX pin. When connecting a serial adapter,

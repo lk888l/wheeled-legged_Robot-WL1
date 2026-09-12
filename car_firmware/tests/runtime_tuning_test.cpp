@@ -134,7 +134,9 @@ void test_calibration_and_recovery()
         }
         if (tick == 560U) {
             CHECK(f.control.feedback().angle_kp == 80);
-            CHECK(std::fabs(f.control.feedback().angle_bias - 6.60252F) < 0.0001F);
+            CHECK(std::fabs(f.control.feedback().angle_bias -
+                BalanceCompensation::pitchBias(
+                    BalanceCompensation::default_minimum_bias_degrees, 61.5F)) < 0.0001F);
             f.send("anglebias 10.5", false);
             f.board.imu().reading.Roll = 4;
         }

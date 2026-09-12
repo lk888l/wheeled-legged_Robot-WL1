@@ -13,6 +13,9 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 - A 50 ms loop for speed, steering, roll, and leg-height control;
 - Bluetooth UART at 115200 8N1 by default; optional 32-byte nRF24L01+ commands;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
+- Runtime center-of-gravity pitch baseline tuning with `anglebias` over the car UART or
+  the remote's serial bridge, with compensation based on the mean of both clamped leg targets
+  (see the [command reference](docs/commands.md#控制命令));
 - Fixed-capacity ETL containers for command queues and UART buffers;
 - Explicit, ordered hardware initialization calls in `main.cpp`, with a lightweight
   report that records every result without skipping later modules;

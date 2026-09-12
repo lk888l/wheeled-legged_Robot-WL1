@@ -118,11 +118,20 @@ SSD1306 128×64 OLED 使用 u8g2 软件 I²C：
 | 功能 | MCU 引脚 | 参数 |
 | --- | --- | --- |
 | USART1 TX | PA15 | 115200, 8-N-1 |
-| USART1 RX | PA10 | 当前应用未启动接收 |
+| USART1 RX | PA10 | 无线调参命令输入（ASCII + LF） |
 | Activity LED | PC13 | 每次提交无线发送时翻转 |
 
 PA15 不是常见的 USART1_TX 默认引脚；接串口工具时请以本表和
 `Core/Src/usart.c` 为准。
+
+### 通过上位机无线调参
+
+将 3.3 V USB-UART 的 TX 接 PA10、RX 接 PA15、GND 共地，在 WL1 Studio
+中选择“连接遥控器”，使用 115200、8-N-1。遥控器将完整的 PID / anglebias
+命令通过 nRF24L01+ 转发给小车；摇杆仍控制速度、转向、横滚和腿高。
+
+需烧录包含 `bridge: ready v1` 启动标识的本版固件，旧版只输出调试日志。
+命令格式、投递日志含义和验证方法见 [串口无线调参协议](docs/serial-bridge.md)。
 
 ## 无线协议
 

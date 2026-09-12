@@ -30,7 +30,7 @@ FreeRTOS tick 为 1 kHz，任务栈单位是 32-bit word。
 
 | 任务 | 优先级 | 栈 | 周期/唤醒源 | 主要职责 |
 | --- | ---: | ---: | --- | --- |
-| Radio | idle + 4 | 768 words | 50 ms / nRF IRQ | 编码、发送、IRQ 处理、故障恢复 |
+| Radio | idle + 4 | 768 words | 25 ms / nRF IRQ | 50 ms 摇杆帧、串口调参转发、IRQ 处理、故障恢复 |
 | Input | idle + 3 | 256 words | 50 ms / ADC DMA | 启动 ADC、等待采样、标定并更新状态 |
 | Buttons | idle + 2 | 256 words | 5 ms | GPIO 采样、去抖和按键动作 |
 | Display | idle + 1 | 512 words | 100 ms | 获取快照并刷新 OLED |
@@ -42,13 +42,14 @@ FreeRTOS tick 为 1 kHz，任务栈单位是 32-bit word。
 
 1. 上电等待 100 ms；
 2. 初始化 nRF，失败时每 1 s 重试；
-3. 等待 IRQ 或下一次 50 ms 发送截止时间；
-4. IRQ 中读取并清除 `STATUS`；
-5. 编码最新状态快照并写入 32 字节 TX payload；
+3. 等待 IRQ 或下一次 25 ms 服务截止时间；
+4. 在任务中读取并清除 `STATUS`，解析 UART 完整命令行；
+5. 每 50 ms 编码最新摇杆状态，间隔槽转发 PID 调参，一次只保留一个待完成发送；
 6. SPI 错误时退出当前循环，延时后重新初始化。
 
 `MAX_RT` 会清空 TX FIFO 并切回接收模式。初始化失败只打印第 1 次和每第 5
 次；无 ACK 只打印第 1 次和每第 100 次，避免故障时日志淹没实时任务。
+串口调参逐条输出无线投递结果，协议和队列边界见 [串口无线调参](serial-bridge.md)。
 
 ### Input
 
@@ -94,6 +95,7 @@ ADC 失败时停止 DMA 并保留上一份有效控制状态。错误日志同�
 | SPI2 error | 5 | 释放 SPI 等待者并由任务检查错误码 |
 | ADC1 DMA | 5 | direct-to-task notification |
 | USART1 TX DMA | 5 | 释放日志缓冲并启动下一帧 |
+| USART1 RX | 5 | 单字节 IT 接收到固定环形缓冲，由 Radio 任务解析 |
 | nRF IRQ / EXTI15_10 | 6 | direct-to-task notification |
 
 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` 为 5。调用 FreeRTOS ISR API

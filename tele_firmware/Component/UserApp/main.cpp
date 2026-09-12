@@ -11,6 +11,7 @@
 #include "RemoteCommandCodec.hpp"
 #include "RemoteControlState.hpp"
 #include "RemoteDisplay.hpp"
+#include "SerialCommandBridge.hpp"
 #include "adc.h"
 #include "cpp_Interface.h"
 #include "main.h"
@@ -19,6 +20,7 @@
 
 namespace {
 constexpr TickType_t radio_period = pdMS_TO_TICKS(50U);
+constexpr TickType_t radio_service_period = pdMS_TO_TICKS(25U);
 constexpr TickType_t radio_retry_period = pdMS_TO_TICKS(1000U);
 constexpr TickType_t input_period = pdMS_TO_TICKS(50U);
 constexpr TickType_t adc_timeout = pdMS_TO_TICKS(5U);
@@ -36,6 +38,7 @@ constexpr std::uint16_t button_stack_words = 256U;
 constexpr std::uint16_t display_stack_words = 512U;
 
 LkUart debug_uart(&huart1);
+SerialCommandBridge serial_bridge(&huart1);
 NRF24L01P radio(
     &hspi2,
     GPIOA,
@@ -59,6 +62,13 @@ struct RadioCounters {
     std::uint32_t max_retries = 0U;
     std::uint32_t driver_errors = 0U;
     std::uint32_t encoding_errors = 0U;
+};
+
+struct RadioTransmission {
+    bool pending = false;
+    bool tuning = false;
+    TickType_t started = 0U;
+    RemoteCommandCodec::Payload payload{};
 };
 
 void notifyTaskFromIsr(TaskHandle_t task) noexcept
@@ -85,7 +95,7 @@ bool initializeRadio(std::uint32_t attempt)
     return false;
 }
 
-bool processRadioIrq(RadioCounters& counters)
+bool processRadioIrq(RadioCounters& counters, RadioTransmission& transmission)
 {
     NRF24L01P::Status status;
     if (!radio.handleIrq(status)) {
@@ -104,12 +114,22 @@ bool processRadioIrq(RadioCounters& counters)
                 "radio: no ACK (count {})\n", counters.max_retries);
         }
     }
+    if (transmission.pending && (status.tx_sent || status.max_retries)) {
+        if (transmission.tuning) {
+            // This confirms radio delivery only; the car has no command ACK.
+            debug_uart.print("bridge: {} {}\n",
+                status.max_retries ? "no ACK" : "radio ACK",
+                reinterpret_cast<const char*>(transmission.payload.data()));
+        }
+        transmission.pending = false;
+    }
     return true;
 }
 
 bool transmitRemoteCommand(
-    RemoteCommandCodec::Payload& payload, RadioCounters& counters)
+    RemoteCommandCodec::Payload& payload, RadioCounters& counters, bool& submitted)
 {
+    submitted = false;
     if (!RemoteCommandCodec::encode(remote_state.snapshot(), payload)) {
         ++counters.encoding_errors;
         debug_uart.print("radio: command encoding failed\n");
@@ -123,6 +143,7 @@ bool transmitRemoteCommand(
     }
 
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    submitted = true;
     return true;
 }
 
@@ -132,36 +153,70 @@ void radioTask(void*)
     vTaskDelay(pdMS_TO_TICKS(100U));
 
     RadioCounters counters;
-    RemoteCommandCodec::Payload payload{};
+    RadioTransmission transmission;
     std::uint32_t initialization_attempt = 0U;
 
+    if (serial_bridge.start()) {
+        debug_uart.print("bridge: ready v1 (PID/anglebias, LF, max 31 ASCII bytes)\n");
+    } else {
+        debug_uart.print("bridge: UART RX start failed\n");
+        serial_bridge.onErrorFromIsr();
+    }
+
     for (;;) {
-        while (!initializeRadio(++initialization_attempt)) {
+        for (;;) {
+            // Never replay tuning received while the radio was unavailable.
+            serial_bridge.service(debug_uart, false);
+            if (initializeRadio(++initialization_attempt)) { break; }
             vTaskDelay(radio_retry_period);
         }
         initialization_attempt = 0U;
         static_cast<void>(ulTaskNotifyTake(pdTRUE, 0U));
+        transmission.pending = false;
 
         TickType_t last_transmit = xTaskGetTickCount();
+        TickType_t last_service = last_transmit;
         bool driver_healthy = true;
         while (driver_healthy) {
             const TickType_t now = xTaskGetTickCount();
-            const TickType_t elapsed = now - last_transmit;
+            const TickType_t elapsed = now - last_service;
             const TickType_t wait =
-                elapsed >= radio_period ? 0U : radio_period - elapsed;
+                elapsed >= radio_service_period ? 0U : radio_service_period - elapsed;
 
-            if (ulTaskNotifyTake(pdTRUE, wait) > 0U) {
-                driver_healthy = processRadioIrq(counters);
-            }
+            static_cast<void>(ulTaskNotifyTake(pdTRUE, wait));
+            // Poll STATUS after the bounded wait too, so a missed IRQ cannot
+            // leave a packet in flight forever or overwrite an unacknowledged TX.
+            driver_healthy = processRadioIrq(counters, transmission);
+            serial_bridge.service(debug_uart);
 
             const TickType_t after_wait = xTaskGetTickCount();
-            if (driver_healthy &&
-                static_cast<TickType_t>(after_wait - last_transmit) >= radio_period) {
-                last_transmit = after_wait;
-                driver_healthy = transmitRemoteCommand(payload, counters);
+            const bool service_due =
+                static_cast<TickType_t>(after_wait - last_service) >= radio_service_period;
+            if (service_due) { last_service = after_wait; }
+            if (transmission.pending &&
+                static_cast<TickType_t>(after_wait - transmission.started) >= radio_period) {
+                if (transmission.tuning) { debug_uart.print("bridge: radio timeout\n"); }
+                driver_healthy = false;
             }
+            if (!driver_healthy || transmission.pending || !service_due) {
+                continue;
+            }
+            if (static_cast<TickType_t>(after_wait - last_transmit) >= radio_period) {
+                last_transmit = after_wait;
+                transmission.tuning = false;
+                driver_healthy = transmitRemoteCommand(
+                    transmission.payload, counters, transmission.pending);
+            } else if (serial_bridge.take(transmission.payload)) {
+                transmission.tuning = true;
+                driver_healthy = radio.send(transmission.payload.data(),
+                    static_cast<std::uint8_t>(transmission.payload.size()));
+                transmission.pending = driver_healthy;
+                if (!driver_healthy) { debug_uart.print("bridge: SPI transmit failed\n"); }
+            }
+            transmission.started = after_wait;
         }
 
+        serial_bridge.clear();
         vTaskDelay(radio_retry_period);
     }
 }
@@ -346,4 +401,19 @@ extern "C" void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* adc)
     if (adc == &hadc1) {
         notifyTaskFromIsr(input_task_handle);
     }
+}
+
+extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef* uart)
+{
+    if (uart == &huart1) { serial_bridge.onReceiveFromIsr(); }
+}
+
+extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef* uart)
+{
+    // RX framing/overrun must not release the DMA logger's active TX buffer.
+    const std::uint32_t error = uart->ErrorCode;
+    if ((error & HAL_UART_ERROR_DMA) != 0U) {
+        LkUart::handleTxCompleteFromIsr(uart);
+    }
+    if (uart == &huart1) { serial_bridge.onErrorFromIsr(); }
 }
