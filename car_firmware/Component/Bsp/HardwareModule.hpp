@@ -25,8 +25,13 @@ constexpr uint8_t module_id(HardwareModuleId id)
 
 inline constexpr uint8_t kHardwareModuleCount = module_id(HardwareModuleId::count);
 static_assert(kHardwareModuleCount > 0U && kHardwareModuleCount <= 32U);
-inline constexpr uint32_t kRequiredHardwareMask =
+inline constexpr uint32_t kAllHardwareMask =
     UINT32_MAX >> (32U - kHardwareModuleCount);
+inline constexpr uint32_t kOptionalCommunicationMask =
+    (1UL << module_id(HardwareModuleId::command_uart)) |
+    (1UL << module_id(HardwareModuleId::radio));
+inline constexpr uint32_t kRequiredHardwareMask =
+    kAllHardwareMask & ~kOptionalCommunicationMask;
 
 constexpr const char* module_name(HardwareModuleId id)
 {

@@ -12,13 +12,14 @@ inline constexpr AppTaskConfig motion{TaskId::motion_control, "MotionControl", 2
 inline constexpr AppTaskConfig button{TaskId::button, "ButtonA0", 128U, 1U};
 
 inline constexpr TickType_t motion_period = pdMS_TO_TICKS(10U);
+inline constexpr TickType_t remote_timeout = pdMS_TO_TICKS(500U);
+inline constexpr TickType_t uart_frame_timeout = pdMS_TO_TICKS(300U);
 inline constexpr TickType_t button_period = pdMS_TO_TICKS(5U);
 inline constexpr Button::Timing button_timing{
     pdMS_TO_TICKS(20U), pdMS_TO_TICKS(300U), pdMS_TO_TICKS(1000U)};
 
 inline constexpr uint32_t required_task_mask =
     (1UL << static_cast<uint8_t>(TaskId::heartbeat)) |
-    (1UL << static_cast<uint8_t>(TaskId::command_service)) |
     (1UL << static_cast<uint8_t>(TaskId::servo_control)) |
     (1UL << static_cast<uint8_t>(TaskId::motion_control));
 

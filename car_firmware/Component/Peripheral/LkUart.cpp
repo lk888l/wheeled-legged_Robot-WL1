@@ -17,3 +17,8 @@ extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t s
     LkUart<>::isRxComplete(huart, size);
 }
 
+extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef* huart)
+{
+    LkUart<>::isrError(huart);
+}
+

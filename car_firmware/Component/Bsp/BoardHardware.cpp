@@ -5,6 +5,7 @@
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
+#include "communication_config.h"
 
 namespace {
 
@@ -60,7 +61,9 @@ BoardHardware::BoardHardware()
     wheel_motor_.setB_DeadZone(50);
     left_servo_.setLimit(0.0F, 50.0F);
     right_servo_.setLimit(0.0F, 50.0F);
+#if WL1_ENABLE_NRF24
     g_radio_for_isr = &radio_;
+#endif
 }
 
 bool BoardHardware::initialize_command_uart()

@@ -4,7 +4,7 @@
 区分大小写，参数之间可以使用空格或制表符。数值 token 必须完整，拒绝 NaN、
 Inf、溢出和数字后的杂字符；多字段命令全部解析成功后才一起发布目标。
 
-初始化失败进入安全模式后，只要 USART1 或 nRF 至少一条命令通道初始化成功，
+控制必需硬件初始化失败进入安全模式后，只要 USART1 或 nRF 至少一条命令通道初始化成功，
 命令服务仍会运行。参数写入和诊断应答会保留，但平衡任务不会运行，执行器输出
 请求会被安全门控拒绝。
 
@@ -15,17 +15,20 @@ Inf、溢出和数字后的杂字符；多字段命令全部解析成功后才�
 | 项目 | 设置 |
 | --- | --- |
 | TX / RX | PA15 / PA10 |
-| 格式 | 115200, 8-N-1 |
+| 格式 | 默认 115200, 8-N-1；CMake `WL1_COMMAND_UART_BAUD` 可配置 |
 | 流控 | 无 |
 | 接收 | DMA receive-to-idle |
 | 单次缓冲 | 128 字节 |
 | 实际入命令队列 | 不超过 32 字节；超长帧整帧拒绝 |
 
-串口工具应启用发送行结束符（LF 或 CRLF 均可用于带参数命令）。建议每次只发
-一条短于 32 字节的命令，并等待其处理完成。
+蓝牙客户端推荐发送 `@<命令>\n`（例如 `@anglepid -p 75\n`）：支持任意分包、
+LF/CRLF、同一接收块内多条命令；命令正文最多 32 字节。`@` 为重新同步标记。
+旧格式仍兼容“一次 UART 空闲事件对应一条完整命令”，但没有标记的命令不能跨
+空闲事件拼接。不要混用旧协议与分包。详见 [蓝牙串口](bluetooth-uart.md)。
 
 ### nRF24L01+
 
+默认跳过 nRF 初始化。用 `-DWL1_ENABLE_NRF24=ON` 恢复可选无线通道。
 无线 payload 固定为 32 字节。有效 ASCII 文本之后应补 `0x00`。车端收到
 payload 后，在任务上下文中使用与串口相同的解析器执行。
 
@@ -40,7 +43,7 @@ payload 后，在任务上下文中使用与串口相同的解析器执行。
 | `VandD` | `<difference> <velocity>` | 更新左右轮速差和平均速度目标 |
 | `target_roll` | `<degrees>` | 更新横滚目标 |
 | `legheight` | `<millimetres>` | 更新共同腿高目标，并打印运动学计算结果 |
-| `anglebias` | `<degrees>` | 写入俯仰静态偏置 |
+| `anglebias` | `<degrees>` | 设置最小腿高 44.5 mm 的俯仰重心基准；无参数查询基准和实际补偿值 |
 
 推荐遥控帧：
 
@@ -62,12 +65,20 @@ R 0.0 -0.0 0.0 61.5
 `Servo angel` 诊断值是在限幅前计算的，因此越界输入只适合检查算法，不代表
 舵机实际会到达该位置。
 
-`anglebias` 仍接受存储值，但当前控制模式每 10 ms 自动按腿高校准 bias，
-不使用人工写入值；需要人工模式时应先实现模式切换。
+`anglebias` 与 `main` 保持相同含义：设置 44.5 mm 腿高的基准角，默认 9.5°。
+运动任务使用已限幅的左右腿目标平均值 `h` 计算：
+
+```text
+effective_bias = base_bias + (h - 44.5) * (0.01026 * (h + 44.5) - 1.258)
+```
+
+例如 `anglebias 10.5` 后，44.5 mm 时实际 bias 为 10.5°，61.5 mm 时约为
+7.60252°。变更腿高或接收后续 `R` 帧不会覆盖这个基准。这里使用的是目标腿高，
+没有实际腿高传感器反馈。输入 `anglebias` 可查询两种数值。
 
 ## PID 命令
 
-三组常规 PID 使用统一格式：
+四组 PID 使用统一格式，USART1 与 nRF 接收路径均支持：
 
 ```text
 <name> -p <value>
@@ -80,6 +91,7 @@ R 0.0 -0.0 0.0 61.5
 | `anglepid` | 俯仰姿态到共同 PWM | `70 / 0 / 60` |
 | `velocitypid` | 平均轮速到俯仰目标 | `0.05 / 0.008 / 0` |
 | `differpid` | 左右轮速差到差速 PWM | `2 / 0.001 / 0` |
+| `rollpid` | 横滚到左右腿高度差 | `0 / -0.4 / 0` |
 
 示例：
 
@@ -89,18 +101,27 @@ velocitypid -p 0.04
 differpid -i 0.0008
 ```
 
-angle Kp 会每 10 ms 按校准腿高重算为 `0.3 * height + 56.9`，因此
-`anglepid -p` 的存储值不参与当前自动校准。Angle `Ki`、`Kd` 和速度/差速参数会持续到
-下次复位。
+上电默认保留自动姿态增益 `Kp = 0.3 * average_leg_height + 56.9`，与 `main`
+一致：44.5 mm 时为 70.25，61.5 mm 时为 75.35。`anglepid -p 80` 会切换到
+手动 Kp，并持续使用 80；后续 `R`、`legheight` 或横滚补偿不会覆盖它。
+`anglepid -auto` 恢复按平均腿高计算 Kp。`-i`、`-d` 不改变 Kp 模式。
+
+姿态参数在下一次有效 10 ms 控制循环生效，速度、差速、横滚参数在下一次
+50 ms 外环生效。未解锁时轮 PWM 保持 0，设置值仍保留。所有参数只保存在 RAM，
+复位后恢复默认值。
+
+输入 `anglepid`、`velocitypid`、`differpid`、`rollpid`（无参数）查询当前参数。
+`anglepid` 还返回 `mode=auto/manual` 和上次控制循环使用的 `effective_p`。
 
 横滚控制提供：
 
 ```text
 rollpid -p <value>
 rollpid -i <value>
+rollpid -d <value>
 ```
 
-`-p` 更新横滚 Kp，`-i` 更新横滚 Ki；已修复旧实现将两者都写入 Ki 的问题。
+三项分别更新对应横滚参数；仅启用 Kd 时也参与增量式 PID 计算。
 
 ## 观测和诊断
 
@@ -108,6 +129,7 @@ rollpid -i <value>
 | --- | --- |
 | `ping` | 返回 `pong`、当前状态和控制开关，检查命令服务存活 |
 | `status` | 返回状态、控制开关、硬件失败位图和任务失败位图 |
+| `controlstate` | 返回平衡解锁、IMU 有效性、补偿后俯仰、左右 PWM、循环次数及采样间隔 |
 | `button` | 返回 PA0 任务状态、click/double/long 计数、丢事件数和最大扫描间隔 |
 | `showimu -y` | 以约 100 Hz 输出 `Roll,Pitch,Yaw` |
 | `showimu -n` | 停止 IMU 连续输出 |
@@ -136,6 +158,14 @@ status=init-failed control=off hw_fail=130 task_fail=0
 轮电机 PWM、左舵机、右舵机、nRF24L01+。任务位从 bit 0 起依次表示
 Heartbeat、CommandService、ServoControl、MotionControl、ButtonA0。ButtonA0
 是可选业务任务，其失败 bit 4 不阻止控制任务运行。按键接入见 [PA0 按键](button-a0.md)。
+
+`control=on` 表示硬件/任务允许控制；`armed=1` 才表示轮平衡已解锁。启动需连续
+50 个 10 ms 有效样本满足：补偿后俯仰绝对值 ≤8°、横滚 ≤5°、角速度 ≤20°/s、
+速度/转向目标绝对值 <1。俯仰或横滚超过 30°、IMU 读取失败或非有限值立即取消
+解锁并清除 PID 历史。连续三次 IMU 异常进入锁存的 `runtime-fault`。
+
+`controlstate` 的 `gap` 是历史最大采样间隔（tick，当前 1 tick=1 ms），`missed`
+统计间隔超过 10 tick 的次数；这些统计会受调试器暂停影响，不代表纯计算耗时或包含暂停时长的墙上时间。
 
 ## 兼容/实验命令
 

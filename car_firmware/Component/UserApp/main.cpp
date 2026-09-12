@@ -1,4 +1,5 @@
 #include "cpp_Interface.h"
+#include "communication_config.h"
 
 #include "BoardHardware.hpp"
 #include "ButtonEventQueue.hpp"
@@ -64,7 +65,11 @@ void CPP_Main()
     record_init(HardwareModuleId::wheel_motor,   board.initialize_wheel_motor());
     record_init(HardwareModuleId::left_servo,    board.initialize_left_servo());
     record_init(HardwareModuleId::right_servo,   board.initialize_right_servo());
+#if WL1_ENABLE_NRF24
     record_init(HardwareModuleId::radio,         board.initialize_radio());
+#else
+    board.command_uart().print("[init][SKIP] radio-nrf24: disabled\n");
+#endif
     status.publish_initialization_report(report);
     const bool hardware_ready = report.all_succeeded(bsp::kRequiredHardwareMask);
 
@@ -72,9 +77,8 @@ void CPP_Main()
     const bool command_channel_available =
         status.hardware_ready(bsp::module_id(bsp::HardwareModuleId::command_uart)) ||
         status.hardware_ready(bsp::module_id(bsp::HardwareModuleId::radio));
-    bool command_started = true;
     if (command_channel_available) {
-        command_started = start_task(command, board, status);
+        (void)start_task(command, board, status);
     } else {
         board.command_uart().print("[task][SKIP] CommandService: no command channel\n");
     }
@@ -82,7 +86,7 @@ void CPP_Main()
     // 5. Start control only after all required hardware and tasks succeed.
     bool servo_started = false;
     bool motion_started = false;
-    const bool may_start_control = hardware_ready && heartbeat_started && command_started;
+    const bool may_start_control = hardware_ready && heartbeat_started;
     if (may_start_control) {
         servo_started = start_task(servo, board, status);
         if (servo_started) {

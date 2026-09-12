@@ -5,6 +5,7 @@
 #include "AppTask.hpp"
 #include "ButtonEventQueue.hpp"
 #include "TaskConfig.hpp"
+#include "UartCommandFramer.hpp"
 #include "etl/queue.h"
 #include "etl/string.h"
 #include "etl/string_view.h"
@@ -37,6 +38,7 @@ private:
     ButtonTask& button_;
     ButtonEventQueue& events_;
     etl::queue<etl::string<32U>, 4U> commands_{};
+    UartCommandFramer uart_framer_{};
     std::array<uint8_t, 32U> radio_tx_{};
     std::array<uint8_t, 32U> radio_rx_{};
     std::array<uint8_t, 4U> telemetry_sources_{0U, 1U, 2U, 3U};

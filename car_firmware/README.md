@@ -4,24 +4,25 @@
 
 `car_firmware` 是 WL1 轮腿机器人的车体端固件，目标芯片为
 STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID 控制，
-驱动 TB6612 双路直流电机与两路腿部舵机，并通过 nRF24L01+ 接收遥控器命令。
+驱动 TB6612 双路直流电机与两路腿部舵机，默认通过 USART1 蓝牙串口接收遥控命令，nRF24L01+ 可选。
 
 当前运行路径使用 STM32 HAL、FreeRTOS 和 C++23：
 
 - 10 ms 姿态环，计算左右轮 PWM；
 - 50 ms 速度、转向和横滚/腿高控制；
-- nRF24L01+ 固定 32 字节无线命令；
+- 默认使用 115200 波特率的 HC-05/JDY-31 或 BLE 串口透传；nRF24L01+ 默认关闭；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
 - ETL 固定容量容器，用于命令队列和 UART 缓冲；
 - PA0 板载 KEY 单击、双击和长按，5 ms 低优先级扫描、静态任务和有界事件队列；
 - 心跳、命令、舵机、运动和按键业务分别封装为继承 `AppTask` 的任务类；
 - 在 `main.cpp` 中逐个显式初始化硬件模块，用轻量报告记录全部结果；
-- 任一硬件初始化失败时进入安全模式：不创建平衡任务，轮电机 PWM 保持为 0，
-  同时尽可能保留串口或无线命令应答。
+- IMU、编码器、电机和舵机是控制必需硬件；串口、nRF 和命令任务失败不阻止平衡启动；
+- 运动指令 500 ms 超时后，速度、转向、横滚目标归零，保持腿高并继续平衡计算。
 
 进一步阅读：
 
 - [软件架构](docs/architecture.md)：启动流程、任务、控制环和并发模型；
+- [蓝牙串口适配与验证](docs/bluetooth-uart.md)：接线、微信 BLE/SPP 区别、分帧协议与实测范围；
 - [命令参考](docs/commands.md)：串口/无线命令、默认参数和调参顺序；
 - [PA0 按键](docs/button-a0.md)：事件时序、内存、业务接入及实时性边界；
 - [2026-09-05 工程审查](docs/engineering-review-2026-09-05.md)：已修复问题、验证结果和待整改项；
@@ -29,7 +30,7 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
   CubeMX 重新生成检查项。
 
 > [!WARNING]
-> 只有全部硬件模块和必要应用任务均启动成功后，固件才允许创建并运行平衡任务。
+> 控制必需硬件与任务通过检查后启动平衡；通信模块是否存在、是否配对不参与门控。
 > 这道门控不能替代物理安全措施；首次烧录、修改控制方向或调整 PID 时，仍应
 > 架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
 
@@ -90,8 +91,8 @@ ctest --test-dir build/host-tests --output-on-failure
 | `CMAKE_BUILD_TYPE` | 编译选项 | 用途 |
 | --- | --- | --- |
 | `Debug` 或未指定 | `-Og -g` | 调试、单步和变量观察 |
-| `Release` | `-Ofast` | 实际运行 |
-| `RelWithDebInfo` | `-Ofast -g` | 优化运行并保留调试信息 |
+| `Release` | `-O3 -fno-fast-math` | 实际运行，保留 VQF 初始化所需的 NaN 语义 |
+| `RelWithDebInfo` | `-O3 -fno-fast-math -g` | 优化运行并保留调试信息 |
 | `MinSizeRel` | `-Os` | 优先减小镜像 |
 
 工程固定使用 Cortex-M4F 硬浮点 ABI（`fpv4-sp-d16`）、C11 和 C++23。
@@ -110,10 +111,11 @@ openocd -f STlink.cfg \
 
 ```sh
 openocd -f STlink_hla.cfg \
-  -c "adapter speed 400; init; halt; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+  -c "init; reset halt; adapter speed 1800; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
 ```
 
-400 kHz 已完成整片写入与校验；配置文件会在复位时降回 100 kHz，供稳定调试。
+本次 V2J48M35 探头使用 1800 kHz 完成写入与校验；400 kHz 会映射到 240 kHz，
+可能导致 Flash 算法超时。配置文件在复位时降回 100 kHz，供稳定调试。
 HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 ST-Link 仍优先使用
 `STlink.cfg` 的标准 SWD 后端。
 
@@ -168,6 +170,11 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 `g_app_hardware_failed_mask`、`g_app_task_failed_mask` 和
 `g_app_control_enabled`。位定义与上述初始化顺序一致，从 bit 0 开始。
 
+`control=on` 表示硬件与任务就绪。轮电机还需满足与 `main` 相同的 500 ms 稳定
+姿态门控，`status` / `controlstate` 中的 `armed=1` 才表示平衡解锁。`anglebias`
+设置最小腿高重心基准；四组 PID 可用原有 `-p/-i/-d` 命令在线调整。
+`anglepid -p` 指定固定 Kp，`anglepid -auto` 恢复腿高增益。详见命令参考。
+
 ## 首次上电
 
 建议按以下顺序缩小故障范围：
@@ -188,8 +195,8 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 
 | 功能 | MCU 引脚 | 参数 |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200, 8-N-1，DMA2 Stream 7 |
-| USART1 RX | PA10 | 115200, 8-N-1，DMA2 Stream 5，Receive-to-idle |
+| USART1 TX | PA15 | 115200（可配置）, 8-N-1，DMA2 Stream 7 |
+| USART1 RX | PA10 | 115200（可配置）, 8-N-1，DMA2 Stream 5，Receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
 | Status LED | PC13 | 低有效；模式见“启动、安全门控与 LED 心跳” |

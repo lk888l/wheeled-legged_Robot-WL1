@@ -18,6 +18,14 @@ project(WL1_F411CEU6 C CXX ASM)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 11)
 
+set(WL1_COMMAND_UART_BAUD "115200" CACHE STRING "Bluetooth/command UART baud rate")
+if(NOT WL1_COMMAND_UART_BAUD MATCHES "^(9600|19200|38400|57600|115200|128000)$")
+    message(FATAL_ERROR "Unsupported WL1_COMMAND_UART_BAUD")
+endif()
+option(WL1_ENABLE_NRF24 "Enable the optional SPI radio remote" OFF)
+add_compile_definitions(WL1_COMMAND_UART_BAUD=${WL1_COMMAND_UART_BAUD}
+    WL1_ENABLE_NRF24=$<BOOL:${WL1_ENABLE_NRF24}>)
+
 #Uncomment for hardware floating point
 add_compile_definitions(ARM_MATH_CM4;ARM_MATH_MATRIX_CHECK;ARM_MATH_ROUNDING)
 add_compile_options(-mfloat-abi=hard -mfpu=fpv4-sp-d16)
@@ -37,10 +45,11 @@ add_compile_options($<$<COMPILE_LANGUAGE:ASM>:-x$<SEMICOLON>assembler-with-cpp>)
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     message(STATUS "Maximum optimization for speed")
-    add_compile_options(-Ofast)
+    # VQF uses NaN filter-state sentinels; fast-math breaks its initialization.
+    add_compile_options(-O3 -fno-fast-math)
 elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
     message(STATUS "Maximum optimization for speed, debug info included")
-    add_compile_options(-Ofast -g)
+    add_compile_options(-O3 -fno-fast-math -g)
 elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "MinSizeRel")
     message(STATUS "Maximum optimization for size")
     add_compile_options(-Os)

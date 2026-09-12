@@ -10,8 +10,8 @@
 3. ST-Link、串口、nRF、传感器和电机驱动共地；
 4. nRF24L01+ 只接 3.3 V，并在模块附近放置去耦电容；
 5. 烧录后执行 verify，再复位运行；
-6. USART1 使用 PA15/PA10、115200, 8-N-1；
-7. 启动日志列出 8 个 `[init]` 结果，并以 `[app] state=...` 结束；
+6. USART1 使用 PA15/PA10、默认 115200, 8-N-1（模块与固件必须一致）；
+7. 默认 7 个初始化结果与 nRF 的 `[init][SKIP]`；以 `[app] state=...` 结束；
 8. 暂不开启电机功率，分别检查 IMU、编码器和舵机。
 
 ## 启动日志
@@ -23,13 +23,14 @@
 | `[task][ OK ] <name>` | 对应应用任务创建成功 |
 | `[task][FAIL] <name>` | 任务创建失败，优先检查 FreeRTOS heap 和任务栈 |
 | `[app] state=ready control=on ...` | 所有启动门控通过，平衡控制已启用 |
-| `[app] state=init-failed control=off ...` | 至少一个硬件步骤失败，执行器保持安全状态 |
+| `[app] state=init-failed control=off ...` | 至少一个控制必需硬件步骤失败，执行器保持安全状态 |
 | `[runtime][FAIL] imu read; control stopped` | 连续 3 次 IMU 读取失败，已在运行期关断输出 |
 | `nRF: send success` | TX 完成且收到 ACK |
 | `nRF: send fail` | 达到最大自动重发次数 |
 | `receive: ...` | 收到无法匹配的文本命令 |
 
-nRF 初始化会回读 RF channel 和 address width；SPI DMA 虽然完成但模块缺失、
+nRF 默认关闭；显式启用后才回读 RF channel 和 address width。通信失败不阻止平衡。
+nRF 启用时，SPI DMA 虽然完成但模块缺失、
 MISO 悬空或寄存器值不匹配时，`radio-nrf24` 仍会报告失败。
 
 ## 常见现象
@@ -44,7 +45,9 @@ MISO 悬空或寄存器值不匹配时，`radio-nrf24` 仍会报告失败。
 | 电机一上电就全速 | 反馈符号、Pitch 偏置、编码器左右映射、PWM 方向 |
 | 左右轮纠偏方向相反 | TB6612 B 反相配置、左右电机接线、差速符号 |
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
-| 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
+| 遥控器有发送但小车不响应 | 默认关闭 nRF；启用后检查地址、频道、速率、payload 长度、PA12 IRQ |
+| 微信搜不到 HC-05/JDY-31 | 经典 SPP 模块不能连接 BLE 接口；需要 BLE UART 模块 |
+| 蓝牙串口无数据 | 模块 TX→PA10、RX→PA15，共地，波特率与当前构建一致 |
 | 串口偶尔少日志 | UART 固定发送缓冲已满；高频日志会被丢弃 |
 | PC13 连闪 2 次 | 硬件初始化失败；执行 `status` 或读失败位图 |
 | PC13 连闪 3 次 | 应用任务创建失败；检查 heap 和任务栈 |
@@ -71,8 +74,9 @@ showimu -n
 X = 2.5, Y = 0.7, Z = 0.9
 ```
 
-更换 MPU6050 或机械安装后应重新标定。控制代码还会根据腿高动态计算
-`Angle_bias`；不要只通过 `anglebias` 命令判断持久偏置。
+更换 MPU6050 或机械安装后应重新标定。`anglebias <值>` 设置最小腿高的持久运行时
+基准，`anglebias` 查询基准和实际补偿值；重启后恢复 9.5° 默认基准。
+使用 `controlstate` 区分控制任务已运行和姿态已满足启动门控。
 
 ## 编码器和电机排查
 
@@ -263,7 +267,8 @@ TB6612 方向位仍为低电平。
 若 OpenOCD 报告 target voltage 过低，应先用万用表确认目标板 VCC 和 ST-Link
 Vref，不能仅凭“仍能识别芯片”忽略欠压。若已独立确认供电正常且该探头属于
 已知测量误报，可改用 `STlink_hla.cfg`：复位和寄存器调试使用 100 kHz，整片
-Flash 写入显式切换为已实测的 400 kHz，避免 100 kHz 下 Flash 算法超时。本项目
+Flash 写入在 `reset halt` 后显式切换到 1800 kHz；本次 V2J48M35 在此速度完成
+校验，400 kHz 会映射到 240 kHz 并出现算法超时。本项目
 所连接的 ST-LINK/V2 已通过 CPUID 读取、ELF 写入校验和多次复位运行验证。
 标准探头仍应优先使用 `STlink.cfg`。
 

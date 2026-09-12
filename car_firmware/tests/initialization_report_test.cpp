@@ -59,5 +59,7 @@ int main()
     app::InitializationReport extra_failure;
     extra_failure.record(0U, true);
     extra_failure.record(1U, false);
-    CHECK(!extra_failure.all_succeeded(1U)); // Do not hide other failures.
+    CHECK(extra_failure.all_succeeded(1U)); // Optional failures do not gate control.
+    CHECK(extra_failure.failed_mask == 2U && !extra_failure.succeeded(1U));
+    CHECK(!extra_failure.all_succeeded(3U));
 }

@@ -53,7 +53,7 @@ public:
         float total_out = kp_ * error
                         + integral_ * ki_
 //                        + kd_ * (error - prev_error_);
-                        - kd_ * (measured - prev_actual);   //微分先行计算公式
+                        - (has_previous_measurement_ ? kd_ * (measured - prev_actual) : 0.0f);
 
         if (total_out > max_out_) total_out = max_out_;
         else if (total_out < min_out_) total_out = min_out_;
@@ -61,6 +61,7 @@ public:
         // 保存状态
         prev_error_ = error;
         prev_actual = measured;
+        has_previous_measurement_ = true;
         return total_out;
     }
 
@@ -72,7 +73,7 @@ public:
      * @return
      */
     float updateIncremental(float target, float measured){
-        if(kp_==0 && ki_==0)    {return 0.0f;}
+        if(kp_==0 && ki_==0 && kd_==0) { reset(); return 0.0f; }
         float error = target - measured;
         // 计算增量 Δu
         float delta_out = kp_ * (error - prev_error_)
@@ -88,6 +89,7 @@ public:
         prevTWO_error_ = prev_error_;
         prev_error_ = error;
         prev_actual = measured;
+        has_previous_measurement_ = true;
         return last_out_;
     }
 
@@ -100,6 +102,7 @@ public:
         prevTWO_error_ = 0.0f;
         last_out_ = 0.0f;
         prev_actual = 0.0f;
+        has_previous_measurement_ = false;
     }
 
     /**
@@ -121,6 +124,7 @@ private:
     float prevTWO_error_;
     float prev_actual{}; // Deterministic first derivative sample; never read stack garbage.
     float last_out_{};
+    bool has_previous_measurement_{};
 };
 
 

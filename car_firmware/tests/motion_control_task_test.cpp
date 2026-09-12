@@ -42,7 +42,7 @@ int main()
         CHECK(board.imu().samples[i] == (i + 1U) * 10U);
     }
     CHECK(fake_rtos::notifications == 2U); // 50 ms and 100 ms servo updates.
-    CHECK(board.wheel_motor().writes == 20U); // Only the ten valid IMU samples.
+    CHECK(board.wheel_motor().writes == 0U); // 100 ms cannot satisfy the 500 ms startup gate.
     CHECK(board.wheel_motor().left == 0 && board.wheel_motor().right == 0);
     CHECK(status.state() == app::SystemState::runtime_fault && !status.control_enabled());
     CHECK(board.safe_stops == 1U && fake_rtos::critical_depth == 0);

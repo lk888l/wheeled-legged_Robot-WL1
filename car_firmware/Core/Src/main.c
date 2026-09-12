@@ -29,6 +29,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "communication_config.h"
 
 /* USER CODE END Includes */
 
@@ -101,7 +102,9 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM9_Init();
   MX_RTC_Init();
+#if WL1_ENABLE_NRF24
   MX_SPI2_Init();
+#endif
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 

@@ -5,6 +5,7 @@
 #include "BoardHardware.hpp"
 #include "RuntimeStatus.hpp"
 #include "Tasks/TaskConfig.hpp"
+#include "communication_config.h"
 #include "test_check.hpp"
 
 extern "C" void CPP_Main(void);
@@ -13,6 +14,10 @@ namespace {
 
 std::string failed_task;
 bool inject_motion_fault{};
+constexpr bool radio_enabled = WL1_ENABLE_NRF24 != 0;
+constexpr uint32_t attempted_hardware = bsp::kAllHardwareMask &
+    (radio_enabled ? UINT32_MAX : ~(1UL << bsp::module_id(bsp::HardwareModuleId::radio)));
+constexpr size_t initialized_modules = radio_enabled ? 8U : 7U;
 
 constexpr std::array<const char*, 8U> module_names{
     "command-uart", "imu-mpu6050", "left-encoder", "right-encoder",
@@ -50,9 +55,9 @@ bool create_task(const char* task_name)
         CHECK(fake_board::initializations.empty());
         CHECK(g_app_control_enabled == 0U);
     } else {
-        CHECK(fake_board::initializations.size() == bsp::kHardwareModuleCount);
-        CHECK(g_app_hardware_attempted_mask == bsp::kRequiredHardwareMask);
-        CHECK(g_app_hardware_failed_mask == fake_board::failed_initialization_mask);
+        CHECK(fake_board::initializations.size() == initialized_modules);
+        CHECK(g_app_hardware_attempted_mask == attempted_hardware);
+        CHECK(g_app_hardware_failed_mask == (fake_board::failed_initialization_mask & attempted_hardware));
     }
     if (name == "CommandService" || name == "ServoControl") {
         CHECK(g_app_control_enabled == 0U);
@@ -92,18 +97,17 @@ int main(int argc, char** argv)
         const auto id = static_cast<unsigned>(std::stoul(argv[2]));
         CHECK(id < bsp::kHardwareModuleCount);
         fake_board::failed_initialization_mask = uint32_t{1} << id;
-        expected_tasks = {"Heartbeat", "CommandService", "ButtonA0"};
-        expected_state = app::SystemState::initialization_failed;
-        expected_control = false;
-        expected_safe_stops = 2U;
+        if ((fake_board::failed_initialization_mask & bsp::kRequiredHardwareMask) != 0U) {
+            expected_tasks = {"Heartbeat", "CommandService", "ButtonA0"};
+            expected_state = app::SystemState::initialization_failed;
+            expected_control = false;
+            expected_safe_stops = 2U;
+        }
     } else if (scenario == "no-command-channel") {
         fake_board::failed_initialization_mask =
             (uint32_t{1} << bsp::module_id(bsp::HardwareModuleId::command_uart)) |
             (uint32_t{1} << bsp::module_id(bsp::HardwareModuleId::radio));
-        expected_tasks = {"Heartbeat", "ButtonA0"};
-        expected_state = app::SystemState::initialization_failed;
-        expected_control = false;
-        expected_safe_stops = 2U;
+        expected_tasks = {"Heartbeat", "ServoControl", "MotionControl", "ButtonA0"};
         skip_command = true;
     } else if (scenario == "task") {
         CHECK(argc == 3);
@@ -111,12 +115,12 @@ int main(int argc, char** argv)
         CHECK(id < task_names.size());
         failed_task = task_names[id];
         expected_task_failures = uint32_t{1} << id;
-        if (id < 2U) {
+        if (id == 0U) {
             expected_tasks = {"Heartbeat", "CommandService", "ButtonA0"};
         } else if (id == 2U) {
             expected_tasks = {"Heartbeat", "CommandService", "ServoControl", "ButtonA0"};
         }
-        if (id != 4U) {
+        if (id != 1U && id != 4U) {
             expected_state = app::SystemState::task_failed;
             expected_control = false;
             expected_safe_stops = 2U;
@@ -130,21 +134,25 @@ int main(int argc, char** argv)
         CHECK(scenario == "success");
     }
 
+    if (!radio_enabled && (fake_board::failed_initialization_mask & 1U) != 0U) {
+        expected_tasks.erase(std::remove(expected_tasks.begin(), expected_tasks.end(), "CommandService"), expected_tasks.end());
+        skip_command = true;
+    }
     fake_board::on_initialize = check_initialization;
     fake_rtos::on_create = create_task;
     CPP_Main();
 
     const auto& board = *fake_board::instance;
-    CHECK(g_app_hardware_attempted_mask == bsp::kRequiredHardwareMask);
-    CHECK(g_app_hardware_failed_mask == fake_board::failed_initialization_mask);
+    CHECK(g_app_hardware_attempted_mask == attempted_hardware);
+    CHECK(g_app_hardware_failed_mask == (fake_board::failed_initialization_mask & attempted_hardware));
     CHECK(g_app_task_failed_mask == expected_task_failures);
     CHECK(g_app_system_state == static_cast<uint32_t>(expected_state));
     CHECK((g_app_control_enabled != 0U) == expected_control);
     CHECK(board.safe_stops == expected_safe_stops);
     CHECK(fake_rtos::critical_depth == 0 && fake_rtos::scheduler_depth == 0U);
 
-    CHECK(fake_board::initializations.size() == bsp::kHardwareModuleCount);
-    for (size_t i = 0U; i < bsp::kHardwareModuleCount; ++i) {
+    CHECK(fake_board::initializations.size() == initialized_modules);
+    for (size_t i = 0U; i < initialized_modules; ++i) {
         CHECK(bsp::module_id(fake_board::initializations[i]) == i);
         CHECK(fake_board::initialization_ticks[i] == pdMS_TO_TICKS(3U * (i + 1U)));
     }
@@ -161,7 +169,7 @@ int main(int argc, char** argv)
         CHECK(creation.stack_depth == stack_depths[id]);
         CHECK(creation.priority == priorities[id]);
         CHECK(creation.uses_static_storage == (id == 4U));
-        CHECK(creation.tick == (i == 0U ? 0U : pdMS_TO_TICKS(3U * (8U + i))));
+        CHECK(creation.tick == (i == 0U ? 0U : pdMS_TO_TICKS(3U * (initialized_modules + i))));
     }
     CHECK(g_app_task_attempted_mask == expected_attempts);
     CHECK(fake_rtos::static_creates == 1U);
@@ -169,17 +177,18 @@ int main(int argc, char** argv)
 
     // The real entry point must still report every result in declaration order
     // and yield between bursts so startup does not overflow the UART buffer.
-    CHECK(fake_rtos::delays.size() == bsp::kHardwareModuleCount + expected_tasks.size());
+    CHECK(fake_rtos::delays.size() == initialized_modules + expected_tasks.size());
     for (const auto delay : fake_rtos::delays) { CHECK(delay == pdMS_TO_TICKS(3U)); }
     const auto& logs = fake_board::instance->command_uart().logs;
     size_t line = 0U;
-    CHECK(logs.size() == 2U + bsp::kHardwareModuleCount + expected_tasks.size() + (skip_command ? 1U : 0U));
+    CHECK(logs.size() == 2U + initialized_modules + expected_tasks.size() + (skip_command ? 1U : 0U) + (radio_enabled ? 0U : 1U));
     CHECK(logs[line++] == "[app] WL1 startup begin\n");
     CHECK(logs[line++] == result_log("task", "Heartbeat", failed_task != "Heartbeat"));
-    for (size_t i = 0U; i < module_names.size(); ++i) {
+    for (size_t i = 0U; i < initialized_modules; ++i) {
         CHECK(logs[line++] == result_log("init", module_names[i],
               (fake_board::failed_initialization_mask & (uint32_t{1} << i)) == 0U));
     }
+    if (!radio_enabled) { CHECK(logs[line++] == "[init][SKIP] radio-nrf24: disabled\n"); }
     if (skip_command) { CHECK(logs[line++] == "[task][SKIP] CommandService: no command channel\n"); }
     for (size_t i = 1U; i < expected_tasks.size(); ++i) {
         CHECK(logs[line++] == result_log("task", expected_tasks[i].c_str(), expected_tasks[i] != failed_task));

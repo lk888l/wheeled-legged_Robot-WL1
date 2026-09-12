@@ -25,6 +25,7 @@ public:
     template<typename Signal>
     bool bindReactor(Signal, TaskHandle_t, uint32_t) { return true; }
     void signal_RxComplete(std::function<void(etl::string<128U>&)> slot) { slot(received); }
+    void service_receive() {}
 };
 
 class NRF24L01P {
@@ -69,14 +70,16 @@ class MPU6050 {
 public:
     struct EulerAngle { double Roll{}, Pitch{}, Yaw{}; };
     bool healthy{true};
+    EulerAngle reading{0.0, -9.5, 0.0};
+    std::array<double, 3U> gyro_reading{};
     std::vector<TickType_t> samples;
     bool getEulerAngleGyro(EulerAngle& angle, double* gyro)
     {
         assert(fake_rtos::critical_depth == 0); // HAL must run outside critical sections.
         samples.push_back(fake_rtos::now);
         if (!healthy) { return false; }
-        angle = {0.0, -48.24, 0.0};
-        std::fill_n(gyro, 3U, 0.0);
+        angle = reading;
+        std::copy(gyro_reading.begin(), gyro_reading.end(), gyro);
         return true;
     }
 };
@@ -94,7 +97,8 @@ public:
 
 class HallEncoder {
 public:
-    double getRPM() { return 0.0; }
+    double rpm{};
+    double getRPM() { return rpm; }
 };
 
 class Servo {

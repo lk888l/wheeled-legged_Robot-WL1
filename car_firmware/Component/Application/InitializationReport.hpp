@@ -43,7 +43,7 @@ struct InitializationReport {
     [[nodiscard]] bool all_succeeded(uint32_t required_mask) const
     {
         // Missing an explicit call in main must never enable robot control.
-        return configuration_valid && required_mask != 0U && failed_mask == 0U &&
+        return configuration_valid && required_mask != 0U && (failed_mask & required_mask) == 0U &&
                (attempted_mask & required_mask) == required_mask;
     }
 };

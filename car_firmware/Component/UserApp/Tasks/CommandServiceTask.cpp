@@ -39,7 +39,13 @@ void CommandServiceTask::run()
     if (status_.hardware_ready(bsp::module_id(bsp::HardwareModuleId::command_uart))) {
         const bool connected = reactor.connect(&board_.command_uart(),
             &LkUart<>::signal_RxComplete,
-            [this](etl::string<128U>& frame) { enqueue_command(frame); });
+            [this](etl::string<128U>& bytes) {
+                // An empty event reports a receive error or dropped UART data.
+                if (bytes.empty()) { uart_framer_.discard_partial(); return; }
+                const auto tick = xTaskGetTickCount();
+                uart_framer_.expire(tick, task_config::uart_frame_timeout);
+                uart_framer_.feed(bytes, [this](etl::string_view frame) { enqueue_command(frame); }, tick);
+            });
         configASSERT(connected);
     }
     if (status_.hardware_ready(bsp::module_id(bsp::HardwareModuleId::radio))) {
@@ -98,10 +104,22 @@ void CommandServiceTask::process_command(etl::string_view frame)
         return;
     }
     if (name == "status") {
-        uart.print("status={} control={} hw_fail={} task_fail={}\n",
+        const auto feedback = control_.feedback();
+        uart.print("status={} control={} hw_fail={} task_fail={} armed={} imu={}\n",
                    system_state_name(status_.state()),
                    status_.control_enabled() ? "on" : "off",
-                   status_.hardware_failed_mask(), status_.task_failed_mask());
+                   status_.hardware_failed_mask(), status_.task_failed_mask(),
+                   feedback.armed ? 1 : 0, feedback.imu_valid ? 1 : 0);
+        return;
+    }
+    if (name == "controlstate") {
+        const auto f = control_.feedback();
+        uart.print("armed={} imu={} pitch={:.3f} pwm={},{}\n", f.armed ? 1 : 0,
+                   f.imu_valid ? 1 : 0, f.pitch_error, f.left_pwm, f.right_pwm);
+        uart.print("loops={} tick={} gap={} missed={}\n", f.loop_count, f.sample_tick,
+                   f.max_sample_gap_ticks, f.deadline_misses);
+        uart.print("remote_timeout={} velocity={:.1f} turn={:.1f} roll={:.1f}\n",
+                   f.remote_timed_out ? 1 : 0, f.velocity_target, f.difference_target, f.roll_target);
         return;
     }
     if (name == "button") {
@@ -150,19 +168,54 @@ void CommandServiceTask::process_command(etl::string_view frame)
     }
 
     auto parameters = control_.parameters();
+    if ((name == "R" || name == "VandD" || name == "target_roll") &&
+        parameters.motion_command_received &&
+        static_cast<TickType_t>(xTaskGetTickCount() - parameters.motion_command_tick) >=
+            task_config::remote_timeout) {
+        // A new roll-only command cannot revive an expired driving target.
+        parameters.velocity_target = parameters.difference_target = parameters.roll_target = 0.0F;
+    }
+    if (args.empty()) {
+        const PidGains* gains = name == "anglepid" ? &parameters.angle :
+            name == "velocitypid" ? &parameters.velocity :
+            name == "differpid" ? &parameters.difference :
+            name == "rollpid" ? &parameters.roll : nullptr;
+        if (gains != nullptr) {
+            uart.print("{} p={:.4f} i={:.4f} d={:.4f}\n", name, gains->kp, gains->ki, gains->kd);
+            if (name == "anglepid") {
+                uart.print("anglepid mode={} effective_p={:.4f}\n",
+                    parameters.angle_kp_auto ? "auto" : "manual", control_.feedback().angle_kp);
+            }
+            return;
+        }
+        if (name == "anglebias") {
+            uart.print("anglebias base={:.4f} effective={:.4f}\n",
+                       parameters.angle_bias, control_.feedback().angle_bias);
+            return;
+        }
+    }
     bool accepted = false;
     if (name == "showimu" || name == "showrpm") {
         accepted = args == "-y" || args == "-n";
         if (name == "showimu") { parameters.show_imu = args == "-y"; }
         else { parameters.show_rpm = args == "-y"; }
     } else if (name == "anglepid") {
-        accepted = update_gains(args, parameters.angle, true);
+        if (args == "-auto") {
+            parameters.angle_kp_auto = true;
+            accepted = true;
+        } else {
+            accepted = update_gains(args, parameters.angle, true);
+            text_command::ParsedCommand option;
+            if (accepted && text_command::parse(args, option) && option.command == "-p") {
+                parameters.angle_kp_auto = false;
+            }
+        }
     } else if (name == "velocitypid") {
         accepted = update_gains(args, parameters.velocity, true);
     } else if (name == "differpid") {
         accepted = update_gains(args, parameters.difference, true);
     } else if (name == "rollpid") {
-        accepted = update_gains(args, parameters.roll, false);
+        accepted = update_gains(args, parameters.roll, true);
     } else if (name == "anglebias") {
         accepted = parse_value(args, parameters.angle_bias);
     } else if (name == "legheight") {
@@ -190,6 +243,17 @@ void CommandServiceTask::process_command(etl::string_view frame)
     }
 
     if (accepted) {
+        if (name == "R" || name == "VandD" || name == "target_roll") {
+            parameters.motion_command_tick = xTaskGetTickCount();
+            parameters.motion_command_received = true;
+            // Match the physical remote and mini-program limits on the MCU too.
+            parameters.velocity_target = std::clamp(parameters.velocity_target, -100.0F, 100.0F);
+            parameters.difference_target = std::clamp(parameters.difference_target, -100.0F, 100.0F);
+            parameters.roll_target = std::clamp(parameters.roll_target, -18.0F, 18.0F);
+        }
+        if (name == "R" || name == "legheight") {
+            parameters.leg_height = BalanceCompensation::clampLegHeight(parameters.leg_height);
+        }
         // One short, coherent publication: R cannot expose half-updated targets.
         control_.set_parameters(parameters);
     } else {
@@ -199,6 +263,9 @@ void CommandServiceTask::process_command(etl::string_view frame)
 
 void CommandServiceTask::service_periodic()
 {
+    if (status_.hardware_ready(bsp::module_id(bsp::HardwareModuleId::command_uart))) {
+        board_.command_uart().service_receive();
+    }
     drain_button_events();
     if (telemetry_enabled_ &&
         status_.hardware_ready(bsp::module_id(bsp::HardwareModuleId::radio))) {

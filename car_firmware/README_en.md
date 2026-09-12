@@ -5,19 +5,19 @@
 `car_firmware` is the vehicle-side firmware for the WL1 wheeled-legged robot. It
 targets the STM32F411CEU6. The firmware reads the MPU6050 and the left and right
 wheel encoders, runs cascaded PID control, drives two DC motors through a TB6612
-and two leg servos, and receives remote-control commands over an nRF24L01+.
+and two leg servos, and receives remote commands over a Bluetooth UART, with optional nRF24L01+ support.
 
 The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
-- Fixed 32-byte wireless commands over the nRF24L01+;
+- Bluetooth UART at 115200 8N1 by default; optional 32-byte nRF24L01+ commands;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
 - Fixed-capacity ETL containers for command queues and UART buffers;
 - Explicit, ordered hardware initialization calls in `main.cpp`, with a lightweight
   report that records every result without skipping later modules;
 - A fail-safe gate that keeps wheel PWM at zero and does not create balancing
-  tasks if any hardware initialization step fails, while preserving available
+  tasks if required control hardware initialization fails, while preserving available
   command channels.
 
 Further reading:
@@ -27,8 +27,8 @@ Further reading:
 - [Debugging and troubleshooting](docs/troubleshooting.md): power-on checks, common faults, and CubeMX regeneration checks.
 
 > [!WARNING]
-> Balancing is enabled only after every hardware module and required application
-> task starts successfully. This software gate does not replace physical safety:
+> Balancing is enabled after the required control hardware and application
+> tasks start successfully. This software gate does not replace physical safety:
 > raise the wheels, disconnect motor power, or use a current-limited supply during
 > initial flashing and tuning.
 
@@ -40,6 +40,12 @@ injects their dependencies. The existing 10/50 ms control periods and priorities
 Use the `button` command to inspect counts, dropped events, and the maximum sampling gap.
 See [button integration](docs/button-a0.md) and the [engineering review](docs/engineering-review-2026-09-05.md)
 for timing semantics, validation, and outstanding runtime risks (Chinese).
+
+The Bluetooth build defaults to USART1 at 115200 8N1 and disables nRF initialization.
+UART/radio availability and command-task creation do not gate balancing. Motion commands
+expire after 500 ms: speed, turn and roll return to zero while balancing and leg-height
+control continue. WeChat requires a BLE UART module; classic HC-05/JDY-31 SPP cannot
+connect directly. See [Bluetooth UART setup and validation](docs/bluetooth-uart.md).
 
 ## Quick Start
 
@@ -99,8 +105,8 @@ Build configurations:
 | `CMAKE_BUILD_TYPE` | Compiler options | Purpose |
 | --- | --- | --- |
 | `Debug` or unspecified | `-Og -g` | Debugging, stepping, and variable inspection |
-| `Release` | `-Ofast` | Normal operation |
-| `RelWithDebInfo` | `-Ofast -g` | Optimized execution with debug information |
+| `Release` | `-O3 -fno-fast-math` | Normal operation; preserves VQF NaN initialization semantics |
+| `RelWithDebInfo` | `-O3 -fno-fast-math -g` | Optimized execution with debug information |
 | `MinSizeRel` | `-Os` | Minimize image size |
 
 The project always uses the Cortex-M4F hard-float ABI (`fpv4-sp-d16`), C11, and
@@ -120,10 +126,10 @@ probe still reports a false low Vref, use the tested 100 kHz compatibility path:
 
 ```sh
 openocd -f STlink_hla.cfg \
-  -c "adapter speed 400; init; halt; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+  -c "init; reset halt; adapter speed 1800; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
 ```
 
-Full-image write and verification were tested at 400 kHz; reset returns to the
+Full-image write and verification were tested at 1800 kHz; reset returns to the
 100 kHz debugging speed. The deprecated HLA backend is only a compatibility
 fallback for a confirmed measurement fault; use `STlink.cfg` for normal probes.
 
@@ -181,8 +187,8 @@ For detailed checks, see [Debugging and troubleshooting](docs/troubleshooting.md
 
 | Function | MCU pin | Parameters |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200, 8-N-1, DMA2 Stream 7 |
-| USART1 RX | PA10 | 115200, 8-N-1, DMA2 Stream 5, receive-to-idle |
+| USART1 TX | PA15 | 115200 (configurable), 8-N-1, DMA2 Stream 7 |
+| USART1 RX | PA10 | 115200 (configurable), 8-N-1, DMA2 Stream 5, receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
 | Status LED | PC13 | Active-low; state-dependent heartbeat above |

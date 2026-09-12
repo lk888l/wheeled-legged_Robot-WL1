@@ -55,14 +55,14 @@ sequenceDiagram
 
     Reset->>C: startup_stm32f411ceux.s
     C->>C: HAL_Init + 100 MHz clock
-    C->>C: GPIO, DMA, UART, I2C, TIM, RTC, SPI
+    C->>C: GPIO, DMA, UART, I2C, TIM, RTC（SPI 按配置启用）
     C->>RTOS: osKernelInitialize()
     C->>RTOS: MX_FREERTOS_Init() 仅创建 AppBootstrap
     C->>RTOS: osKernelStart()
     RTOS->>Boot: 执行 bootstrap 任务
     Boot->>Main: CPP_Main()
     Main->>Tasks: 创建 Heartbeat
-    loop main 中按序显式调用 8 项，失败也继续
+    loop 按序初始化 7 项；启用 nRF 时增加第 8 项，失败也继续
         Main->>Board: initialize_模块名()
         Board-->>Main: bool 成功结果
         Main->>Report: record(id, succeeded)
@@ -71,9 +71,9 @@ sequenceDiagram
     Main->>Main: 将报告发布到 RuntimeStatus
     Main->>Report: all_succeeded(required_mask)
     Main->>Tasks: 可用时创建 CommandService
-    alt 所有硬件和必要任务成功
+    alt 控制必需硬件和必要任务成功
         Main->>Tasks: 创建 ServoControl、MotionControl
-    else 任一失败
+    else 控制必需项失败
         Main->>Board: force_safe_outputs()
     end
     Main->>Tasks: 创建低优先级静态 ButtonTask（非必要任务）
@@ -89,13 +89,14 @@ sequenceDiagram
 
 ### 显式初始化与故障聚合
 
-打开 `Component/UserApp/main.cpp` 即可按执行顺序看到八个
+打开 `Component/UserApp/main.cpp` 即可按执行顺序看到七个默认步骤及可选 nRF 的
 `board.initialize_*()` 调用，不需要追踪工厂、函数指针表或观察回调。
 每项初始化返回 `bool`，入口将结果交给 `InitializationReport::record(id, succeeded)`，
 同时打印模块日志并保留原有 3 ms 节流。单项失败只记录结果，不短路后续调用。
 
 `Bsp/HardwareModule.hpp` 集中声明稳定 ID、日志名称、`kHardwareModuleCount` 和
-`kRequiredHardwareMask`；现有八个硬件模块均为必要模块。`InitializationReport`
+`kRequiredHardwareMask`（0x7E）；串口与 nRF 为可选项，默认跳过 nRF。命令任务
+创建失败也不参与控制门控。`InitializationReport`
 是无 HAL、RTOS 和板级依赖的结果记录类型，不执行初始化或日志回调。
 `all_succeeded(required_mask)` 在检查失败的同时，要求必要模块已全部尝试并成功，
 且报告有效，避免漏写一项初始化时错误地放行控制。BSP 只提供硬件能力与结果，
@@ -113,13 +114,13 @@ sequenceDiagram
 | 7 | radio-nrf24 | SPI 配置完成且 RF_CH/SETUP_AW 回读匹配 |
 
 定时器步骤只能证明 MCU 外设可用，不能检测没有识别/反馈信号的板外电机、编码器
-或舵机是否真实连接。MPU6050 和 nRF 有可验证身份/寄存器，因此主控板单独上电
-时通常得到失败位图 `0x82`。
+或舵机是否真实连接。MPU6050 和 nRF 有可验证身份/寄存器；默认关闭 nRF 时，
+缺少 IMU 的失败位图为 `0x02`。启用 nRF 且两者均缺失时才会得到 `0x82`。
 
-安全门控要求硬件报告全成功、Heartbeat/CommandService 创建成功，并且
+安全门控要求控制必需硬件、Heartbeat 创建成功，并且
 ServoControl 创建成功后，才临时打开 `control_enabled` 并创建 MotionControl。
 必要任务失败都会调用 `BoardHardware::force_safe_outputs()`。ButtonTask 的创建失败
-仅记入任务失败 bit 4，不影响控制许可。运行期间连续 3 次 IMU
+仅记入任务失败 bit 4，CommandService 失败记入 bit 1，两者均不影响控制许可。运行期间连续 3 次 IMU
 读取失败会关闭控制许可、把状态锁存为 `runtime_fault` 并安全停机，启动尾部不能覆盖它。
 
 ### 参考框架的适配
@@ -132,7 +133,7 @@ ServoControl 创建成功后，才临时打开 `control_enabled` 并创建 Motio
 WL1 借鉴入口组合、模块封装和职责分层，并按机器人现有运行方式作以下适配：
 
 - 初始化编排直接写在 `main.cpp`，模块顺序和依赖关系可直接审阅；轻量报告只负责结果。
-- 模块失败后继续初始化，以保留可用串口、无线应答和独立心跳；控制输出由最终门控关闭。
+- 模块失败后继续初始化，以保留可用串口、无线应答和独立心跳；控制必需项失败时才关闭门控。
 - 持久任务仍封装为 `AppTask` 子类，通过构造函数注入依赖，由 FreeRTOS 按原周期、
   栈和优先级调度，不引入 `process_all()` 轮询。
 - BSP、共享状态和任务对象在入口使用静态生命周期，不引入动态模块所有权、销毁或回滚。
@@ -176,9 +177,9 @@ classDiagram
 
 实际创建的是 `MotionControlTask`，保留原串级 PID 算法。每 10 ms：
 
-1. 根据腿高重新计算俯仰静态偏置和姿态环 `Kp`；
-2. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw；
-3. 更新姿态 PID；
+1. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw，并检查姿态和角速度有限；
+2. 按重心基准和左右腿平均目标高度计算实际偏置，检查连续 500 ms 的启动门控；
+3. 使用运行时参数更新姿态 PID（自动 Kp 或命令指定的固定 Kp）；
 4. 组合直行和差速 PWM，限幅后写入 TB6612。
 
 每累计 5 次，即每 50 ms：
@@ -202,6 +203,15 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 
 横滚误差绝对值超过 3° 时，会叠加正弦几何补偿。左右腿目标随后被限制到
 `44.5..78.5 mm`。
+
+未解锁时清除 PID 历史、保持轮 PWM 为 0，每 50 ms 消费编码器差值并把双腿
+更新到共同目标高度。解锁阈值与 `main` 一致；姿态超限或 IMU 失败立即取消解锁，
+连续三次 IMU 失败仍保留本分支的故障锁存与安全输出。PID 首次测量不产生微分冲击。
+腿高补偿使用当前已限幅的双腿目标，初值为 44.5 mm，不再从 0 mm 或单侧腿高计算。
+
+Release/RelWithDebInfo 使用 `-O3 -fno-fast-math`，VQF 编译保护会拒绝 fast-math，
+以保留其 NaN 初始化标记语义。状态、参数和实际反馈通过各自快照发布，腿高计算
+不会回写遥控参数。
 
 ### ServoControl
 
@@ -232,11 +242,11 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
-| Angle `Kp / Ki / Kd` | `70 / 0 / 60` | 姿态环；运行时 `Kp` 会随腿高重算 |
-| Angle bias | `12.6°` | 运行时会随腿高重算 |
+| Angle `Kp / Ki / Kd` | `70 / 0 / 60` | 默认自动 Kp；`anglepid -p` 切换到命令指定的固定 Kp |
+| Angle bias | `9.5°` | 44.5 mm 的重心基准；实际 bias 叠加双腿平均高度补偿 |
 | Velocity `Kp / Ki / Kd` | `0.05 / 0.008 / 0` | 平均轮速到俯仰目标 |
 | Difference `Kp / Ki / Kd` | `2 / 0.001 / 0` | 左右轮速差到差速 PWM |
-| Roll `Kp / Ki` | `0 / -0.4` | 横滚到左右腿高度差 |
+| Roll `Kp / Ki / Kd` | `0 / -0.4 / 0` | 横滚到左右腿高度差 |
 | Velocity target | `0` | RPM 目标 |
 | Difference target | `0` | 左右 RPM 差目标 |
 | Roll target | `0°` | 车体横滚目标 |
@@ -331,10 +341,9 @@ MotionControl 的休眠、I2C、VQF、PID 和日志均不在临界区内。临�
 
 以下是阅读代码或调参时必须知道的当前行为：
 
-- angle Kp 和 bias 每 10 ms 根据腿高重算，当前自动校准不使用对应命令的存储值；
-- 当前校准腿高表达式仍为 `(legs.left + legs.left) / 2`，没有读取
-  右腿高度；若依赖左右腿平均值，应先修正并重新标定；
-- `rollpid -p` 与 `-i` 已分别正确写入横滚 Kp 和 Ki；
+- 自动 angle Kp 使用双腿平均目标高度；手动 Kp 及所有 I/D 参数持续使用命令设置值；
+- anglebias 是最小腿高基准，与腿高补偿叠加；实际腿高没有传感器反馈；
+- 四组 PID 都支持 `-p/-i/-d`，不带参数可查询；
 - `motor` 在当前 PID 模式明确拒绝，避免应答一个不执行的原始 PWM 请求；
 - 电机、编码器和舵机没有器件身份反馈，初始化成功只证明对应 MCU 定时器成功；
 - nRF 遥测命令会临时把车端从 RX 切到 TX，发送完成或失败后才恢复 RX；
