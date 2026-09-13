@@ -30,15 +30,20 @@ bool MPU6050::Init() {
     uint8_t check{};
     uint8_t Data{};
 
-    HAL_I2C_Mem_Read(Hi2c,MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, MPU6050_TIME_OUT);
+    if (HAL_I2C_Mem_Read(Hi2c, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1,
+                        MPU6050_TIME_OUT) != HAL_OK) {
+        return false;
+    }
     if(check == 0x68)
     {
 
         // power management register 0X6B we should write all 0's to wake the sensor up
         Data = 0x01;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
         Data = 0x00;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
 
         // Set DATA RATE of 4 - 1000Hz by writing SMPLRT_DIV register
         if(M650_cfg.SampleRate>1000)
@@ -46,7 +51,8 @@ bool MPU6050::Init() {
         else if(M650_cfg.SampleRate<4)
         {M650_cfg.SampleRate=4;}
         Data = 1000/M650_cfg.SampleRate - 1;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
 
         //  MPU_CFG_REG
         /*
@@ -78,7 +84,8 @@ bool MPU6050::Init() {
 //            Data = 0x06; // 5Hz Bandwidth
 //        }
         Data = 0x00;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
 
         // Set accelerometer configuration in ACCEL_CONFIG Register
         /**
@@ -93,7 +100,8 @@ bool MPU6050::Init() {
          * +------------------------+--------------------------+
          */
         Data = (static_cast<uint8_t>(M650_cfg.AccRange))<<3;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
         if(M650_cfg.AccRange == AccRange_t::A2)
         {AccCoefficient = 32768 / 2.0;}
         else if(M650_cfg.AccRange == AccRange_t::A4)
@@ -116,7 +124,8 @@ bool MPU6050::Init() {
          * +------------------------+--------------------------+
          */
         Data = (static_cast<uint8_t>(M650_cfg.GyroRange))<<3;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
         if(M650_cfg.GyroRange == GyroRange_t::G250)
         {GyroCoefficient = 32768 / 250.0;}
         else if(M650_cfg.GyroRange == GyroRange_t::G500)
@@ -127,7 +136,8 @@ bool MPU6050::Init() {
         { GyroCoefficient = 32768 / 2000.0;}
         //set MPU INT PIN Config
         Data = 0x80;
-        HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_INTBP_CFG_REG, 1, &Data, 1, MPU6050_TIME_OUT);
+        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_INTBP_CFG_REG, 1, &Data, 1,
+                              MPU6050_TIME_OUT) != HAL_OK) return false;
 
         // Init VQF ---- Attitude calculation algorithm
 //        vqf = VQF((1.0/M650_cfg.SampleRate));

@@ -10,8 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
-#ifndef __LEGKINEMATICS_HPP
-#define ___LEGKINEMATICS_HPP
+#pragma once
 
 
 class LegKinematics {
@@ -108,6 +107,3 @@ public:
         return mid_angle;
     }
 };
-
-
-#endif //__LEGKINEMATICS_HPP

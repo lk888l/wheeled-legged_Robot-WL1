@@ -21,7 +21,7 @@ static void require(bool condition, const char* scenario)
 
 static bool same(const MS::Parameters& a, const MS::Parameters& b)
 {
-    return MS::encode(a) == MS::encode(b);
+    return MS::sameParameters(a, b);
 }
 
 // A small NOR flash enforces alignment, bounds and one-way programming. Faults
@@ -190,6 +190,48 @@ static void testJournal()
     require(Journal(flash).load(restored) && same(fourth, restored), "recycled journal restores newest settings");
 }
 
+static void testLegacyJournal()
+{
+    FakeFlash flash;
+    // Construct the original on-device v1 schema explicitly, including its
+    // old 15-float payload/count and 84-byte stride.
+    Journal::Record legacy{};
+    legacy[0] = 0x574C3150U;
+    legacy[1] = 1U;
+    legacy[2] = 15U;
+    legacy[3] = 7U;
+    MS::Parameters original;
+    original.angle.kp = 80;
+    original.minimum_pitch_bias = 10.5F;
+    const auto words = MS::encode(original);
+    std::copy(words.begin(), words.end(), legacy.begin() + 4);
+    legacy[19] = Journal::crc(legacy);
+    legacy[20] = 0x434F4D54U;
+    std::copy(legacy.begin(), legacy.end(), flash.words.begin());
+    MS::Parameters restored;
+    require(Journal(flash).load(restored) && same(original, restored), "v1 restores midpoint mode and all gains");
+    require(Journal(flash).save(original) == MS::SaveResult::unchanged && flash.writes == 0,
+            "reading legacy settings does not force a migration write");
+    auto manual = original;
+    manual.angle_kp_auto = false;
+    require(Journal(flash).save(manual) == MS::SaveResult::saved && flash.erases == 0,
+            "mode-only change appends v2 without erasing legacy record");
+    require(flash.words[21] == 0x574C3150U && flash.words[22] == 2U,
+            "v2 keeps v1 physical record stride");
+    require(Journal(flash).load(restored) && same(manual, restored), "manual mode survives new boot");
+    auto damaged = flash;
+    damaged.words[41] = 0xFFFFFFFFU;
+    require(Journal(damaged).load(restored) && same(original, restored), "torn v2 falls back to v1");
+    Journal::Record invalid{};
+    std::copy_n(flash.words.begin() + 21, invalid.size(), invalid.begin());
+    invalid[2] |= 1U << 17;
+    invalid[19] = Journal::crc(invalid);
+    std::copy(invalid.begin(), invalid.end(), damaged.words.begin() + 21);
+    require(Journal(damaged).load(restored) && same(original, restored), "unknown v2 flags rejected despite valid CRC");
+    require(Journal(flash).save(original) == MS::SaveResult::saved &&
+            Journal(flash).load(restored) && restored.angle_kp_auto, "returning to auto also persists");
+}
+
 static void testStorageInterlock()
 {
     MotionStorageInterlock interlock;
@@ -219,6 +261,7 @@ int main()
 {
     testCommandsAndCompensation();
     testJournal();
+    testLegacyJournal();
     testStorageInterlock();
     std::puts("PASS: motion commands, height gains, flash recovery/readback/recycling and storage interlock");
 }

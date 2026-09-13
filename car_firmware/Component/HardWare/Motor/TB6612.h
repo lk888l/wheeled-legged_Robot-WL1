@@ -64,7 +64,8 @@ public:
     TB6612(const TB6612&) = delete;
     TB6612& operator=(const TB6612&) = delete;
     /// member function
-    bool Init() const;
+    bool Init();
+    void forceStop();
     void setAPWM(uint16_t _value);
     void setBPWM(uint16_t _value);
     void setDirection_Cfg(uint8_t target, Direction dirParam);

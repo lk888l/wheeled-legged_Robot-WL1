@@ -10,41 +10,48 @@
 3. ST-Link、串口、nRF、传感器和电机驱动共地；
 4. nRF24L01+ 只接 3.3 V，并在模块附近放置去耦电容；
 5. 烧录后执行 verify，再复位运行；
-6. USART1 使用 PA15/PA10、115200, 8-N-1；
-7. 启动日志包含 `CPPMain: success` 和 `MPU: success`；
+6. USART1 使用 PA15/PA10、默认 9600, 8-N-1（模块与固件必须一致）；
+7. 默认 7 个初始化结果与 nRF 的 `[init][SKIP]`；以 `[app] state=...` 结束；
 8. 暂不开启电机功率，分别检查 IMU、编码器和舵机。
 
 ## 启动日志
 
 | 日志 | 含义 |
 | --- | --- |
-| `CPPMain: success` | 任务创建状态检查通过，但当前 OR 累积逻辑不能证明三个任务都成功 |
-| `CPPMain: fail` | 创建状态检查失败，优先检查 FreeRTOS heap 和任务栈 |
-| `MPU: success` | MPU6050 初始化事务成功 |
-| `MPU: fail` | I2C、地址、供电或器件身份检查失败 |
+| `[init][ OK ] <name>` | 该硬件步骤完成；固件继续下一项 |
+| `[init][FAIL] <name>` | 该硬件步骤失败；固件记录失败位并继续下一项 |
+| `[task][ OK ] <name>` | 对应应用任务创建成功 |
+| `[task][FAIL] <name>` | 任务创建失败，优先检查 FreeRTOS heap 和任务栈 |
+| `[app] state=ready control=on ...` | 所有启动门控通过，平衡控制已启用 |
+| `[app] state=init-failed control=off ...` | 至少一个控制必需硬件步骤失败，执行器保持安全状态 |
+| `[runtime][FAIL] imu read; control stopped` | 连续 3 次 IMU 读取失败，已在运行期关断输出 |
 | `nRF: send success` | TX 完成且收到 ACK |
 | `nRF: send fail` | 达到最大自动重发次数 |
 | `receive: ...` | 收到无法匹配的文本命令 |
 
-当前 nRF 初始化返回值没有启动日志，因此“没有 nRF 日志”不能证明初始化成功。
+nRF 默认关闭；显式启用后才回读 RF channel 和 address width。通信失败不阻止平衡。
+nRF 启用时，SPI DMA 虽然完成但模块缺失、
+MISO 悬空或寄存器值不匹配时，`radio-nrf24` 仍会报告失败。
 
 ## 常见现象
 
 | 现象 | 优先检查 |
 | --- | --- |
 | 无任何日志、LED 不翻转 | 供电、BOOT0、复位、时钟、HardFault、镜像地址 |
-| `CPPMain: fail` | 32 KiB FreeRTOS heap、任务栈、重复创建对象 |
-| `MPU: fail` | PB6/PB7、0x68 地址、上拉、电源和共地 |
+| `[task][FAIL] ...` | 32 KiB FreeRTOS heap、任务栈、重复创建对象 |
+| `[init][FAIL] imu-mpu6050` | PB6/PB7、0x68 地址、上拉、电源和共地 |
 | IMU 值跳变或缓慢漂移 | 安装方向、振动、陀螺零偏、采样周期 |
 | 手转轮子但 RPM 为 0 | TIM2/TIM3 引脚、编码器供电、相线和计数器 |
 | 电机一上电就全速 | 反馈符号、Pitch 偏置、编码器左右映射、PWM 方向 |
-| 静止时 Roll 在 0°/180° 间跳变，两腿走向两端 | 检查是否误用 `-Ofast` / `-ffast-math`，这会破坏 VQF 的 NaN 初始化判断 |
-| 轮子保持零输出 | 查看 `Control_armed`、`Control_imu_valid`、`Control_pitch_error`；回中摇杆，扶到平衡附近稳定 500 ms |
 | 左右轮纠偏方向相反 | TB6612 B 反相配置、左右电机接线、差速符号 |
 | 舵机顶到机械限位 | PA2/PA3 映射、舵机装配零位、`-10°` 偏置、连杆尺寸 |
-| 遥控器有发送但小车不响应 | 地址、频道、速率、payload 长度、PA12 IRQ |
+| 遥控器有发送但小车不响应 | 默认关闭 nRF；启用后检查地址、频道、速率、payload 长度、PA12 IRQ |
+| 微信搜不到 HC-05/JDY-31 | 经典 SPP 模块不能连接 BLE 接口；需要 BLE UART 模块 |
+| 蓝牙串口无数据 | 模块 TX→PA10、RX→PA15，共地，波特率与当前构建一致 |
 | 串口偶尔少日志 | UART 固定发送缓冲已满；高频日志会被丢弃 |
-| PC13 翻转不稳定 | Reactor 被高频事件唤醒、控制临界区过长 |
+| PC13 连闪 2 次 | 硬件初始化失败；执行 `status` 或读失败位图 |
+| PC13 连闪 3 次 | 应用任务创建失败；检查 heap 和任务栈 |
+| PC13 连续快闪 | 运行期 IMU 读取故障，输出已关闭 |
 
 ## IMU 排查
 
@@ -61,21 +68,15 @@ showimu -y
 showimu -n
 ```
 
-当前陀螺零偏在 `MotionControlFunc_PID()` 中固定为：
+当前陀螺零偏在 `BoardHardware` 构造函数中固定为：
 
 ```text
 X = 2.5, Y = 0.7, Z = 0.9
 ```
 
-更换 MPU6050 或机械安装后应重新标定。`anglebias <degrees>` 设置最低腿高
-`44.5 mm` 的 `Angle_bias_min`，先在 RAM 生效，执行 `save` 后掉电保留。实时 `Angle_bias` 每 10 ms
-按 `Angle_bias_min + f(平均腿高) - f(44.5)` 计算，在较高位置可能与基准不同。
-遥控器串口需使用 `nrfsend anglebias <degrees>`。基准不会被后续 `R` 帧覆盖。
-
-调试器中同时观察 `Angle_bias_min`、`Angle_bias`、`Left_Legheight` 和
-`Right_Legheight`，核对限幅后的左右腿平均高度；只看到无线 ACK 不能证明
-命令已被小车应用。数值示例见[命令参考](commands.md#最低腿高的重心标定)，
-回归检查和板上验证流程见[标定测试说明](../tests/README.md)。
+更换 MPU6050 或机械安装后应重新标定。`anglebias <值>` 设置最小腿高的持久运行时
+基准，`anglebias` 查询基准和实际补偿值；执行 `save` 后重启恢复已保存基准；无有效记录时使用 9.5° 默认值。
+使用 `controlstate` 区分控制任务已运行和姿态已满足启动门控。
 
 ## 编码器和电机排查
 
@@ -98,10 +99,8 @@ showrpm -y
 应向前追赶重心；若相反，应先修正 IMU/PWM 方向，不能靠增大 PID 解决。
 
 `motor` 命令在当前 PID 路径中不会直接驱动电机，不能用它作为硬件点动测试。
-TB6612 零命令直接保持 PWM 为 0。启动等待或姿态/IMU 异常退出时，
-`Control_left_pwm`、`Control_right_pwm` 以及 TIM1 的 CCR1/CCR2 都应为 0。
-正常使能后，电机断开或车体被固定时无法消除姿态误差，PID 仍可能输出较大的
-纠偏量；应结合真实 Pitch、重心补偿和使能状态判断，不能只看 PWM 大小。
+TB6612 的零命令有独立安全分支，compare 保持 0，不再重新应用 50 counts
+死区。进入安全模式时还会把四个方向脚拉低。
 
 ## 舵机与腿部机构
 
@@ -139,7 +138,7 @@ legheight 60
 5. auto ACK 开启；
 6. payload 是补零的 ASCII 文本；
 7. 字段顺序为 Turn、Velocity、Roll、Height；
-8. 小车 PA12 配置为下降沿 EXTI；
+8. 小车 PA12 配置为上拉输入、下降沿 EXTI；
 9. SPI2 RX/TX DMA 中断和 EXTI15_10 中断正常。
 
 典型中心帧：
@@ -221,39 +220,86 @@ load
 monitor reset run
 ```
 
+没有连接串口或外部模块时，等待约 1 秒后中断目标并读取启动状态：
+
+```gdb
+monitor reset run
+shell sleep 1
+monitor halt
+p g_app_system_state
+p/x g_app_hardware_attempted_mask
+p/x g_app_hardware_failed_mask
+p/x g_app_task_failed_mask
+p g_app_control_enabled
+```
+
+仅连接主控板时，MPU6050（bit 1）和 nRF24L01+（bit 7）应检测失败，因此典型
+`g_app_hardware_failed_mask` 为 `0x82`，状态为 `initialization_failed`（数值 3），
+`g_app_control_enabled` 必须为 0。编码器、电机和舵机步骤只能验证 MCU 定时器
+是否成功启动，无法在没有反馈/识别引脚的情况下判断板外器件是否物理存在。
+
+以下为本次任务类/按键改造之前的历史上板记录，连续 3 次复位结果一致。
+2026-09-05 改造仅做软件验证；这些数值不能作为新版的上板证明。新版无外部模块时
+还应创建 ButtonA0，任务尝试位图预计为 `0x13`；`motor` 拒绝文本也已更新。
+
+| 检查项 | 实测值 | 结论 |
+| --- | --- | --- |
+| 硬件尝试 / 失败位图 | `0xFF / 0x82` | 8 项全部执行；IMU、nRF 失败后仍继续 |
+| 任务尝试 / 失败位图 | `0x03 / 0x00` | 仅 Heartbeat、CommandService 创建成功 |
+| 系统状态 / 控制门 | `3 / 0` | `initialization_failed`，控制关闭 |
+| TIM1 CCR1 / CCR2 | `0 / 0` | 左右轮 PWM 为零 |
+| PA6、PA7、PB0、PB1 | 全部低电平 | TB6612 四个方向输入关闭 |
+| TIM9 CCER、CCR1、CCR2 | `0 / 0 / 0` | 两路舵机 PWM 已停止 |
+| PC13 LED | 两次约 120 ms 点亮，随后约 640 ms 熄灭 | `init-failed` 心跳符合设计 |
+
+ST-Link VCP（COM22，115200 8-N-1）串口实测同时覆盖 LF 和 CRLF 帧：
+
+| 输入 | 实测应答 |
+| --- | --- |
+| `ping` | `pong state=init-failed control=off` |
+| `status` | `status=init-failed control=off hw_fail=130 task_fail=0` |
+| `motor 100 100` | `motor rejected: control is in safe mode` |
+| `unknown_probe` | `receive: unknown_probe` |
+
+执行被拒绝的 `motor` 命令后再次读取寄存器，TIM1/TIM9 CCR 仍全部为 0，四个
+TB6612 方向位仍为低电平。
+
 若 OpenOCD 报告 target voltage 过低，应先用万用表确认目标板 VCC 和 ST-Link
-Vref，不能仅凭“仍能识别芯片”忽略欠压。
+Vref，不能仅凭“仍能识别芯片”忽略欠压。若已独立确认供电正常且该探头属于
+已知测量误报，可改用 `STlink_hla.cfg`：复位和寄存器调试使用 100 kHz，整片
+Flash 写入在 `reset halt` 后显式切换到 1800 kHz；本次 V2J48M35 在此速度完成
+校验，400 kHz 会映射到 240 kHz 并出现算法超时。本项目
+所连接的 ST-LINK/V2 已通过 CPUID 读取、ELF 写入校验和多次复位运行验证。
+标准探头仍应优先使用 `STlink.cfg`。
 
 ## CubeMX 重新生成检查项
 
 使用 `WL1_F411CEU6.ioc` 重新生成后至少检查：
 
+PA0 必须保留 `KEY_A0` 上拉输入及低有效配置，不开启 EXTI；PC13 仍是低有效 LED。
+
 1. MCU 仍为 STM32F411CEU6，HSE 25 MHz，SYSCLK 100 MHz；
-2. `Core/Src/freertos.c` 的 USER CODE 中仍调用 `CPP_Main()`；
+2. `Core/Src/freertos.c` 的 `StartAppBootstrap()` USER CODE 中仍在调度器启动后
+   调用 `CPP_Main()`，而 `MX_FREERTOS_Init()` 不提前调用它；
 3. FreeRTOS tick 仍为 1 kHz、heap 仍满足任务创建需求；
 4. USART1 仍映射 PA15/PA10，RX/TX DMA 分别为 Stream 5/7；
 5. SPI2 仍映射 PB13/PB14/PB15，DMA 分别为 Stream 3/4；
-6. PA12 仍为下降沿 EXTI，优先级为 6；
+6. PA12 仍为上拉输入、下降沿 EXTI，优先级为 6；
 7. SPI/UART DMA 中断优先级仍为 5；
 8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
 9. I2C1 仍为 PB6/PB7、400 kHz；
-10. CMake 中的应用 include 和 source glob 仍完整；
+10. CMake 中 `Component/Application`、`Component/Bsp` 和 UserApp 的 include/source
+    glob 仍完整；
 11. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。
 
+## 保存失败或重启参数不符
 
-## 运动参数保存问题
+先发 `params` 查看 `flash_valid/unsaved/armed/enabled`。`save: busy` 不会延迟补写，
+需 `control off` 并等待 armed=false 后重试；初始化或 IMU 故障不能用 control on 绕过。
+`save: unchanged` 代表当前设置已经持久化。`full` 需显式 `save recycle`，擦除期间
+断电可能丢失历史记录。烧录前确认没有整片擦除，链接脚本和 CubeMX 模板均保留
+0x08060000 起的 128 KiB 参数区。
 
-- `save: busy`：静止平衡仍是使能状态。扶稳车体后发 `control off`，等待 `params`
-  显示 `armed=false` 再保存，完成后发 `control on`。
-- 上电没有恢复：查看小车 USART1 的 `params: loaded from flash` / `compiled defaults`
-  启动日志；确认之前收到了小车的 `save: ok`，遥控器的无线 ACK 不代表 Flash 写入成功。
-- 改变腿高后 Kp 不等于设定值：查看 `params` 的 `p_mid` 与 `p_effective`。
-  `anglepid -p` 是 61.5 mm 的基准，实际增益仍随平均腿高每毫米改变 0.3。
-- `params` 的 `unsaved` 再次变为 true：自动 `R` 帧可能改变了腿高/横滚目标；
-  固定保存姿态前用遥控器 `joystick off` 并发送明确目标。
-- `save: full`：参数日志已满。先记录 `params` 输出，再在稳定供电、轮子未使能时
-  发 `save recycle`；擦除和重新提交之间断电可能丢失历史配置。
-- 更新固件后参数消失：检查下载器是否全片擦除，以及是否仍使用预留扇区 7 的链接布局。
-  重新生成链接脚本时保留 `PARAMS` 区和 `__motion_params_start__/end__` 符号。
-- `save: flash error`：RAM 调参仍保留。检查写保护、供电、实际 MCU 型号及 Flash 布局，
-  不要把重复无线 ACK 当成保存成功。
+旧文档中 `anglepid -p` 的固定模式已改为中间腿高基准调节；固定值请使用
+`anglepid -manual <value>`。旧实板报告只证明各报告指定的历史镜像，不代表合并后
+模块化持久化版本已重新完成实板验证。当前协议以 [命令参考](commands.md) 为准。

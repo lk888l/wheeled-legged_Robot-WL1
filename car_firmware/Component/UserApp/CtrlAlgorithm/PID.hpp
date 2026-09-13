@@ -73,7 +73,7 @@ public:
      * @return
      */
     float updateIncremental(float target, float measured){
-        if(kp_==0 && ki_==0 && kd_==0)    {return 0.0f;}
+        if(kp_==0 && ki_==0 && kd_==0) { reset(); return 0.0f; }
         float error = target - measured;
         // 计算增量 Δu
         float delta_out = kp_ * (error - prev_error_)
@@ -122,7 +122,7 @@ private:
     float integral_;
     float prev_error_;
     float prevTWO_error_;
-    float prev_actual{};
+    float prev_actual{}; // Deterministic first derivative sample; never read stack garbage.
     float last_out_{};
     bool has_previous_measurement_{};
 };

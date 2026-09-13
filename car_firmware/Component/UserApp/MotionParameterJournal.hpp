@@ -5,7 +5,7 @@
 
 namespace MotionSettings {
 
-enum class SaveResult { saved, unchanged, full, invalid, io_error };
+enum class SaveResult { saved, unchanged, full, invalid, io_error, busy };
 
 // A record becomes valid only after its final commit word has been programmed.
 // Never reuse a partially programmed slot. Normal saves never erase old records.
@@ -13,7 +13,10 @@ template<class Flash>
 class ParameterJournal {
 public:
     static constexpr std::uint32_t magic = 0x574C3150U; // WL1P
-    static constexpr std::uint32_t version = 1;
+    // Keep the 84-byte stride so existing version-1 records remain readable.
+    // Version 2 uses bit 16 of the field-count word for fixed/manual angle Kp.
+    static constexpr std::uint32_t version = 2;
+    static constexpr std::uint32_t manual_kp_flag = 1U << 16;
     static constexpr std::uint32_t committed = 0x434F4D54U;
     static constexpr std::size_t header_words = 4;
     static constexpr std::size_t crc_index = header_words + parameter_count;
@@ -35,7 +38,7 @@ public:
     {
         if (!valid(parameters)) return SaveResult::invalid;
         const auto state = scan();
-        if (state.latest != no_slot && encode(parametersFrom(state.record)) == encode(parameters))
+        if (state.latest != no_slot && sameParameters(parametersFrom(state.record), parameters))
             return SaveResult::unchanged;
         auto slot = state.next;
         if (slot >= slotCount()) {
@@ -48,7 +51,7 @@ public:
         Record record{};
         record[0] = magic;
         record[1] = version;
-        record[2] = parameter_count;
+        record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag);
         record[3] = state.latest == no_slot ? 1U : state.record[3] + 1U;
         const auto words = encode(parameters);
         std::copy(words.begin(), words.end(), record.begin() + header_words);
@@ -104,12 +107,16 @@ private:
     {
         ParameterWords words{};
         std::copy_n(record.begin() + header_words, parameter_count, words.begin());
-        return decode(words);
+        auto parameters = decode(words);
+        parameters.angle_kp_auto = record[1] == 1U || (record[2] & manual_kp_flag) == 0U;
+        return parameters;
     }
 
     static bool validRecord(const Record& record)
     {
-        return record[0] == magic && record[1] == version && record[2] == parameter_count &&
+        const bool supported = (record[1] == 1U && record[2] == parameter_count) ||
+            (record[1] == version && (record[2] & ~manual_kp_flag) == parameter_count);
+        return record[0] == magic && supported &&
             record[commit_index] == committed && record[crc_index] == crc(record) &&
             valid(parametersFrom(record));
     }

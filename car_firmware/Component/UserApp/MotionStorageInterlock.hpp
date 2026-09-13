@@ -15,6 +15,7 @@ public:
     bool busy() const noexcept { return busy_; }
     bool enabled() const noexcept { return enabled_; }
     bool canRun() const noexcept { return enabled_ && !busy_; }
+    void requestReset() noexcept { reset_required_ = true; }
     void setEnabled(bool enabled) noexcept
     {
         if (enabled_ != enabled) reset_required_ = true;

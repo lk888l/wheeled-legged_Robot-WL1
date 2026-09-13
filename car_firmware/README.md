@@ -4,27 +4,38 @@
 
 `car_firmware` 是 WL1 轮腿机器人的车体端固件，目标芯片为
 STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID 控制，
-驱动 TB6612 双路直流电机与两路腿部舵机，并通过 nRF24L01+ 接收遥控器命令。
+驱动 TB6612 双路直流电机与两路腿部舵机，默认通过 USART1 蓝牙串口接收遥控命令，nRF24L01+ 可选。
 
 当前运行路径使用 STM32 HAL、FreeRTOS 和 C++23：
 
+- `save` 一键将全部运动调参及 Kp 模式保存到内部 Flash，断电恢复；姿态 P 按 61.5 mm 基准线性补偿腿高，见 [保存命令](docs/commands.md#flash-参数保存)；
 - 10 ms 姿态环，计算左右轮 PWM；
 - 50 ms 速度、转向和横滚/腿高控制；
-- nRF24L01+ 固定 32 字节无线命令；
+- 默认使用 ZX-D30 BLE 串口透传，9600 8N1；nRF24L01+ 默认关闭；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
-- `save` 一次保存重心、四组 PID 及腿高/横滚目标，开机自动恢复；
-- ETL 固定容量容器，用于命令队列和 UART 缓冲。
+- `anglebias` 可经车端串口或遥控器串口桥接运行时调整最低腿高的重心基准，
+  并按限幅后双腿平均目标高度补偿，见 [命令参考](docs/commands.md#控制命令)；
+- ETL 固定容量容器，用于命令队列和 UART 缓冲；
+- PA0 板载 KEY 单击、双击和长按，5 ms 低优先级扫描、静态任务和有界事件队列；
+- 心跳、命令、舵机、运动和按键业务分别封装为继承 `AppTask` 的任务类；
+- 在 `main.cpp` 中逐个显式初始化硬件模块，用轻量报告记录全部结果；
+- IMU、编码器、电机和舵机是控制必需硬件；串口、nRF 和命令任务失败不阻止平衡启动；
+- 运动指令 500 ms 超时后，速度、转向、横滚目标归零，保持腿高并继续平衡计算。
 
 进一步阅读：
 
 - [软件架构](docs/architecture.md)：启动流程、任务、控制环和并发模型；
+- [蓝牙串口适配与验证](docs/bluetooth-uart.md)：接线、微信 BLE/SPP 区别、分帧协议与实测范围；
 - [命令参考](docs/commands.md)：串口/无线命令、默认参数和调参顺序；
+- [PA0 按键](docs/button-a0.md)：事件时序、内存、业务接入及实时性边界；
+- [2026-09-05 工程审查](docs/engineering-review-2026-09-05.md)：已修复问题、验证结果和待整改项；
 - [调试与故障排查](docs/troubleshooting.md)：上电检查、常见故障和
   CubeMX 重新生成检查项。
 
 > [!WARNING]
-> 轮腿自平衡控制在姿态满足启动条件后自动输出电机 PWM。首次烧录、修改控制方向或
-> 调整 PID 时，应架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
+> 控制必需硬件与任务通过检查后启动平衡；通信模块是否存在、是否配对不参与门控。
+> 这道门控不能替代物理安全措施；首次烧录、修改控制方向或调整 PID 时，仍应
+> 架空车轮、断开电机功率或使用限流电源，并确保可以立即断电。
 
 ## 快速开始
 
@@ -60,6 +71,14 @@ cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Release --parallel
 ```
 
+初始化、按键、任务生命周期、命令业务与 PID 等回归测试可在主机独立运行：
+
+```sh
+cmake -S tests -B build/host-tests -G Ninja
+cmake --build build/host-tests --parallel
+ctest --test-dir build/host-tests --output-on-failure
+```
+
 如果系统没有 Ninja，可将 `-G Ninja` 换成可用生成器，例如 Windows 上的
 `-G "MinGW Makefiles"`。切换生成器时使用新的构建目录。
 
@@ -75,13 +94,11 @@ cmake --build build/Release --parallel
 | `CMAKE_BUILD_TYPE` | 编译选项 | 用途 |
 | --- | --- | --- |
 | `Debug` 或未指定 | `-Og -g` | 调试、单步和变量观察 |
-| `Release` | `-O3 -fno-fast-math` | 实际运行，保留 VQF 所需的 NaN 语义 |
+| `Release` | `-O3 -fno-fast-math` | 实际运行，保留 VQF 初始化所需的 NaN 语义 |
 | `RelWithDebInfo` | `-O3 -fno-fast-math -g` | 优化运行并保留调试信息 |
 | `MinSizeRel` | `-Os` | 优先减小镜像 |
 
 工程固定使用 Cortex-M4F 硬浮点 ABI（`fpv4-sp-d16`）、C11 和 C++23。
-VQF 用 NaN 标记滤波器初始化状态，禁止使用 `-Ofast` / `-ffast-math`；
-这类优化会破坏初始化，可能让静止姿态在 0° 和 180° 之间跳变。
 
 ### 3. 使用 ST-Link 烧录
 
@@ -92,8 +109,75 @@ openocd -f STlink.cfg \
   -c "program build/Release/WL1_F411CEU6.elf verify reset exit"
 ```
 
-烧录后，USART1 应输出 `CPPMain: success`，MPU6050 初始化成功时输出
-`MPU: success`。PC13 活动指示灯约每 100 ms 翻转一次。
+若已经用万用表确认主控板供电正常，但特定 ST-Link 仍误报低 Vref，可使用仓库内
+经过本板验证的 100 kHz HLA 兼容配置：
+
+```sh
+openocd -f STlink_hla.cfg \
+  -c "init; reset halt; adapter speed 1800; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+```
+
+本次 V2J48M35 探头使用 1800 kHz 完成写入与校验；400 kHz 会映射到 240 kHz，
+可能导致 Flash 算法超时。配置文件在复位时降回 100 kHz，供稳定调试。
+HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 ST-Link 仍优先使用
+`STlink.cfg` 的标准 SWD 后端。
+
+烧录后，USART1 会按顺序输出每个初始化步骤，例如：
+
+```text
+[app] WL1 startup begin
+[task][ OK ] Heartbeat
+[init][ OK ] command-uart
+[init][FAIL] imu-mpu6050
+...
+[app] state=init-failed control=off hw_fail=... task_fail=0
+```
+
+每个失败都会立即输出，但不会中断后续初始化。最终只有
+`state=ready control=on` 才表示平衡与电机输出已获准运行。
+
+## 启动、安全门控与 LED 心跳
+
+FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口 `CPP_Main()`。
+`Component/UserApp/main.cpp` 直接按以下顺序调用 8 个模块的初始化方法：
+
+1. USART1 命令接收；
+2. MPU6050；
+3. 左编码器；
+4. 右编码器；
+5. TB6612 轮电机 PWM；
+6. 左舵机 PWM；
+7. 右舵机 PWM；
+8. nRF24L01+。
+
+每次调用后记录结果、输出日志并延时 3 ms，失败时继续初始化后续模块。
+`InitializationReport::all_succeeded(bsp::kRequiredHardwareMask)` 统一检查报告有效、
+必要模块全部尝试且全部成功；漏掉必要模块也不能通过门控。检查未通过时，
+不创建 `ServoControl` 和 `MotionControl`，
+强制轮电机 compare 为 0、方向脚为低，并停止两路舵机 PWM。独立的
+`Heartbeat` 仍运行；USART1 或 nRF 中任一可用时，`CommandService` 仍运行，
+可使用 `ping`、`status` 和原有参数命令。会导致输出的请求在安全模式下会被拒绝。
+
+PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式如下：
+
+| 状态 | LED 模式 | 周期 | 含义 |
+| --- | --- | ---: | --- |
+| `booting` | 100 ms 亮 / 100 ms 灭连续交替 | 200 ms | 正在逐项初始化 |
+| `ready` | 80 ms 亮 / 920 ms 灭 | 1 s | 全部初始化成功，控制已启用 |
+| `init-failed` | 连闪 2 次后停顿 | 1 s | 至少一个硬件步骤失败，安全模式 |
+| `task-failed` | 连闪 3 次后停顿 | 1.12 s | FreeRTOS 应用任务创建失败，安全模式 |
+| `runtime-fault` | 80 ms 亮 / 80 ms 灭连续快闪 | 160 ms | 运行期 IMU 连续读取失败，输出已关闭 |
+
+没有串口适配器时，可通过 ST-Link/GDB 读取
+`g_app_system_state`、`g_app_hardware_attempted_mask`、
+`g_app_hardware_failed_mask`、`g_app_task_failed_mask` 和
+`g_app_control_enabled`。位定义与上述初始化顺序一致，从 bit 0 开始。
+
+`control=on` 表示硬件与任务就绪。轮电机还需满足与 `main` 相同的 500 ms 稳定
+姿态门控，`status` / `controlstate` 中的 `armed=1` 才表示平衡解锁。`anglebias`
+设置最小腿高重心基准；四组 PID 可用原有 `-p/-i/-d` 命令在线调整。
+`anglepid -p` 调整中间腿高的 Kp 基准，`-manual` 指定固定 Kp，`-auto` 恢复补偿。
+确认参数后用 `save` 保存，断电恢复。详见命令参考。
 
 ## 首次上电
 
@@ -109,35 +193,18 @@ openocd -f STlink.cfg \
 
 详细检查方法见 [调试与故障排查](docs/troubleshooting.md)。
 
-## 在线调参与保存
-
-`anglepid -p` 现在设置 61.5 mm 中间腿高的基准 Kp，默认 `75.35`。
-实际 Kp 使用 `基准 + 0.3*(左右腿平均高度 - 61.5)`，保持原默认增益曲线，
-同时避免升降腿覆盖调参。`rollpid -p` 已修复；`legpid` 是横滚/腿部 PID 的别名，
-四组 PID 都支持 `-p/-i/-d`。重心继续使用最低腿高基准，编译默认 `9.5°`。
-
-调参可在运行时进行。调好后扶稳车体，发送 `control off`，等待 `params` 显示
-`armed=false`，再发送 `save`。收到 `save: ok` 后即可掉电保留；发送 `control on`
-重新进入原有的稳定启动流程。`save all` 与 `save` 等价，`params` 查看全部参数和实际补偿值。
-遥控器串口转发小车命令时添加 `nrfsend` 前缀；执行结果在小车 USART1 输出。
-
-保存不包含速度、转向和电机输出，复位后这些行驶目标仍为零。程序区为 384 KB，
-最后 128 KB 扇区 7 为参数日志，普通保存只追加且相同参数不写入。
-日志写满后返回 `full`，可显式 `save recycle` 回收；回收时断电可能丢失全部历史配置。
-刷固件时避免全片擦除，保留链接脚本的参数区布局。
-完整保存范围、返回信息和操作例子见[命令参考](docs/commands.md#保存和查看参数)。
-
 ## 硬件连接
 
 ### 核心与调试接口
 
 | 功能 | MCU 引脚 | 参数 |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200, 8-N-1，DMA2 Stream 7 |
-| USART1 RX | PA10 | 115200, 8-N-1，DMA2 Stream 5，Receive-to-idle |
+| USART1 TX | PA15 | 9600（可配置）, 8-N-1，DMA2 Stream 7 |
+| USART1 RX | PA10 | 9600（可配置）, 8-N-1，DMA2 Stream 5，Receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
-| Activity LED | PC13 | 100 ms 周期翻转 |
+| Status LED | PC13 | 低有效；模式见“启动、安全门控与 LED 心跳” |
+| Onboard KEY | PA0 | 上拉输入、按下接地；5 ms 扫描，不启用 EXTI |
 | HSE | PH0/PH1 | 25 MHz |
 | LSE | PC14/PC15 | 32.768 kHz |
 
@@ -166,14 +233,8 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 | 右编码器 A / B | PB4 / PB5 | TIM3_CH1 / CH2 |
 
 当前 PID 路径将 TB6612 B 通道方向反相，并给两路 PWM 都配置 50 counts
-最小比较值。PWM 命令最终限幅为 `-1000..1000`，零命令保持 compare 为 0。
-
-上电先等待姿态就绪：重心补偿后的俯仰误差在 ±8° 内、横滚在 ±5° 内、
-角速度不超过 20°/s，速度和转向目标均小于 1（绝对值），连续保持 500 ms 后
-自动进入平衡控制。等待期间轮子 PWM 为 0，两腿保持限幅后的共同高度。
-IMU 读取失败、数据无效或俯仰/横滚超过 ±30° 时退出控制，清空 PID 历史；
-恢复到上述姿态并保持摇杆回中 500 ms 后重新进入控制。俯仰判断使用当前
-`anglebias` 基准和腿高补偿，IMU 轴向与符号沿用原程序。
+最小比较值。PWM 命令最终限幅为 `-1000..1000`；零命令是专门的安全分支，
+不会再应用死区，compare 保持为 0。
 
 ### 腿部舵机
 
@@ -195,7 +256,7 @@ TIM9 产生 100 Hz PWM。软件将目标腿高限制为 `44.5..78.5 mm`，经四
 | MOSI | PB15 | SPI2_MOSI |
 | CSN | PA4 | 软件片选，低有效 |
 | CE | PB12 | 收发模式控制 |
-| IRQ | PA12 | 下降沿 EXTI |
+| IRQ | PA12 | 上拉输入、下降沿 EXTI；模块缺失时避免悬空 |
 | VCC | 3.3 V | 不可接 5 V |
 | GND | GND | 与主控共地 |
 
@@ -214,8 +275,8 @@ OLED。CubeMX 保留了软件 I²C 引脚：
 
 ## 无线协议
 
-小车在上电后进入 nRF 接收模式。有效 payload 是以 `0x00` 补齐到 32 字节
-的 ASCII 命令，推荐控制帧为：
+nRF 初始化和寄存器回读验证成功后，小车进入接收模式。有效 payload 是以
+`0x00` 补齐到 32 字节的 ASCII 命令，推荐控制帧为：
 
 ```text
 R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
@@ -250,6 +311,8 @@ R 0.0 -0.0 0.0 61.5
 ```text
 car_firmware/
 ├── Component/
+│   ├── Application/               # 初始化报告、AppTask、运行状态、纯按键状态机
+│   ├── Bsp/                       # 板级硬件门面、稳定模块 ID 与名称
 │   ├── HardWare/
 │   │   ├── IMU/                  # MPU6050 与 VQF
 │   │   ├── Motor/                # 编码器、TB6612、舵机
@@ -261,29 +324,44 @@ car_firmware/
 │   ├── Peripheral/               # USART DMA 封装
 │   └── UserApp/
 │       ├── CtrlAlgorithm/        # PID、LQR、腿部运动学
-│       └── main.cpp              # 任务、命令与当前控制流程
+│       ├── Tasks/                # 五个继承 AppTask 的业务任务类
+│       ├── ControlState.hpp      # 参数、反馈及腿目标快照
+│       └── main.cpp              # 组合入口、初始化、安全门控
 ├── Core/                         # STM32CubeMX 生成代码
 ├── Drivers/                      # STM32 HAL / CMSIS
 ├── Middlewares/                  # FreeRTOS
 ├── CMakeLists.txt
 ├── CMakeLists_template.txt
 ├── STlink.cfg
+├── STlink_hla.cfg                 # Vref 已确认误报时的低速兼容配置
+├── tests/                          # 主机状态机、并发与业务回归测试
 └── WL1_F411CEU6.ioc
 ```
 
-C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 在调度器启动前调用
-`CPP_Main()`，再由 `Component/UserApp/main.cpp` 创建应用任务。
+C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 只创建 `AppBootstrap`；
+调度器启动后，该任务调用 `CPP_Main()` 进行硬件组合、逐项初始化和应用任务
+创建，随后删除自身。这与参考工程的 app-main task 模型一致，同时避免在
+调度器启动前创建软件定时器、信号量或调用会阻塞的初始化代码。
 
-`MotionControlFunc_PID()` 是当前被创建的控制任务。
-`MotionControlFunc()` 中的 LQR 路径仍保留作实验，但当前不会运行。
+这里借鉴 [esp_idf_template](https://github.com/lk888l/esp32_idf/tree/main/esp_idf_template)
+的入口组合、模块封装和分层思路，并按本项目需要调整启动方式：在 `main.cpp`
+逐模块调用初始化，失败后保留诊断通道，最后统一安全门控。初始化不再经过工厂、
+函数指针表或观察回调；业务仍由独立 FreeRTOS 任务运行。具体取舍和新增模块步骤见
+[软件架构](docs/architecture.md)。
+
+`MotionControlTask` 保留串级 PID、10 ms/50 ms 周期和原优先级，只在必要任务与
+硬件安全门控通过后启动。`LQR` 算法类保留作实验，未调度的旧入口循环已移除。
 `MainControl.*` 和 OLED 模块同样尚未接入应用路径。
 
 ## 开发约定
 
-- `Core/` 中的 CubeMX 文件只在 `USER CODE` 区域添加手写代码；
+- `Core/` 中手写逻辑放在 `USER CODE`；GPIO 声明和配置变更同步 `.ioc`，避免重新生成丢失；
 - `CMakeLists.txt` 标记为模板生成文件，持久修改应同步到
   `CMakeLists_template.txt`；
-- 在已有 `GLOB_RECURSE` 目录中添加源文件后需要重新运行 CMake；
+- 源文件 glob 使用 `CONFIGURE_DEPENDS`，新增任务文件会触发 CMake 重新检查；
+- 任务继承 `AppTask`，在组合入口注入依赖，禁止复制或销毁运行中的任务；
+- 新硬件在 `Bsp/HardwareModule.hpp` 分配稳定 ID，并在 `main.cpp` 显式初始化、记录结果；
+- 控制共享数据通过 `ControlState` 快照传递，不跨任务暴露可写引用；
 - 不要在 ISR 中调用普通 FreeRTOS API，只使用 `...FromISR` 版本；
 - 会调用 FreeRTOS ISR API 的中断，其 NVIC 数值优先级不得小于 5；
 - 控制任务中避免动态分配、阻塞式 I/O 和高频 UART 输出；

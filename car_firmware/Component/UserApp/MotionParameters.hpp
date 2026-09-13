@@ -24,6 +24,7 @@ struct Parameters {
     PidGains roll{0.0F, -0.4F, 0.0F};
     float leg_height = BalanceCompensation::minimum_leg_height_mm;
     float roll_target = 0.0F;
+    bool angle_kp_auto = true;
 };
 
 constexpr float effectiveAngleKp(float reference_kp, float average_height) noexcept
@@ -42,6 +43,11 @@ constexpr ParameterWords encode(const Parameters& p) noexcept
         p.difference.kp, p.difference.ki, p.difference.kd,
         p.roll.kp, p.roll.ki, p.roll.kd, p.leg_height, p.roll_target};
     return std::bit_cast<ParameterWords>(values);
+}
+
+constexpr bool sameParameters(const Parameters& a, const Parameters& b) noexcept
+{
+    return encode(a) == encode(b) && a.angle_kp_auto == b.angle_kp_auto;
 }
 
 constexpr Parameters decode(const ParameterWords& words) noexcept

@@ -1,7 +1,12 @@
 # 串口与无线命令参考
 
 `car_firmware` 的 USART1 和 nRF24L01+ 共用同一套文本命令解析器。命令名称
-区分大小写，参数之间使用一个或多个空格。
+区分大小写，参数之间可以使用空格或制表符。数值 token 必须完整，拒绝 NaN、
+Inf、溢出和数字后的杂字符；多字段命令全部解析成功后才一起发布目标。
+
+控制必需硬件初始化失败进入安全模式后，只要 USART1 或 nRF 至少一条命令通道初始化成功，
+命令服务仍会运行。参数写入和诊断应答会保留，但平衡任务不会运行，执行器输出
+请求会被安全门控拒绝。
 
 ## 传输方式
 
@@ -10,17 +15,20 @@
 | 项目 | 设置 |
 | --- | --- |
 | TX / RX | PA15 / PA10 |
-| 格式 | 115200, 8-N-1 |
+| 格式 | 默认 9600, 8-N-1（ZX-D30）；CMake `WL1_COMMAND_UART_BAUD` 可配置 |
 | 流控 | 无 |
 | 接收 | DMA receive-to-idle |
 | 单次缓冲 | 128 字节 |
-| 实际入命令队列 | 最多取前 32 字节 |
+| 实际入命令队列 | 不超过 32 字节；超长帧整帧拒绝 |
 
-串口工具应启用发送行结束符（LF 或 CRLF 均可用于命令）。建议每次只发
-一条短于 32 字节的命令，并等待其处理完成。
+蓝牙客户端推荐发送 `@<命令>\n`（例如 `@anglepid -p 75\n`）：支持任意分包、
+LF/CRLF、同一接收块内多条命令；命令正文最多 32 字节。`@` 为重新同步标记。
+旧格式仍兼容“一次 UART 空闲事件对应一条完整命令”，但没有标记的命令不能跨
+空闲事件拼接。不要混用旧协议与分包。详见 [蓝牙串口](bluetooth-uart.md)。
 
 ### nRF24L01+
 
+默认跳过 nRF 初始化。用 `-DWL1_ENABLE_NRF24=ON` 恢复可选无线通道。
 无线 payload 固定为 32 字节。有效 ASCII 文本之后应补 `0x00`。车端收到
 payload 后，在任务上下文中使用与串口相同的解析器执行。
 
@@ -35,8 +43,7 @@ payload 后，在任务上下文中使用与串口相同的解析器执行。
 | `VandD` | `<difference> <velocity>` | 更新左右轮速差和平均速度目标 |
 | `target_roll` | `<degrees>` | 更新横滚目标 |
 | `legheight` | `<millimetres>` | 更新共同腿高目标，并打印运动学计算结果 |
-| `anglebias` | `<degrees>` | 设置最低腿高 44.5 mm 时的俯仰偏置基准 |
-| `control` | `off` / `on` | 暂停轮子平衡控制 / 恢复原有稳定启动流程，不保存开关状态 |
+| `anglebias` | `<degrees>` | 设置最小腿高 44.5 mm 的俯仰重心基准；无参数查询基准和实际补偿值 |
 
 推荐遥控帧：
 
@@ -46,59 +53,31 @@ R 0.0 -0.0 0.0 61.5
 
 `R` 的字段顺序固定：
 
-1. `turn` → `Differ_Target`，目标左右 RPM 差；
-2. `velocity` → `Velocity_Target`，目标平均 RPM；
-3. `roll` → `Roll_Target`，单位为度；
-4. `height` → `Target_height`，单位为毫米。
+1. `turn` → `ControlParameters::difference_target`，目标左右 RPM 差；
+2. `velocity` → `velocity_target`，目标平均 RPM；
+3. `roll` → `roll_target`，单位为度；
+4. `height` → `leg_height`，单位为毫米。
 
 `tele_firmware` 会将摇杆速度取反后编码到第二个字段。只在一端修改符号会导致
 前进/后退方向反转。
 
-`legheight` 和 `R` 接收时先将共同腿高限制到 `44.5..78.5 mm`，控制任务生成
-左右腿目标后分别再次限幅。`Servo angel` 返回限幅后的运动学诊断值。
-运动参数和 `R` / `VandD` 的数值输入必须完整、有限；NaN、无穷大、尾随垃圾
-和多余参数会被拒绝，不会部分更新一条命令。
+`legheight` 输入先限制到 `44.5..78.5 mm`，诊断角度按限幅后的高度计算；
+运动任务再计算横滚补偿并分别限制两腿目标。
 
-### 最低腿高的重心标定
-
-`anglebias` 设置的是 `Angle_bias_min`，始终表示两腿均为最低高度
-`44.5 mm` 时的俯仰偏置基准，单位为度。编译默认值为 `9.5°`，运行时修改持续有效。
-执行 `save` 后复位自动恢复保存值；没有有效 Flash 记录时使用编译默认值。
-NaN 和无穷大输入不会修改基准。
-
-通过遥控器串口发送：
+`anglebias` 设置 44.5 mm 腿高的基准角，无有效 Flash 记录时默认 9.5°。
+运动任务使用已限幅的左右腿目标平均值 `h` 计算：
 
 ```text
-nrfsend anglebias 13.6
+effective_bias = base_bias + (h - 44.5) * (0.01026 * (h + 44.5) - 1.258)
 ```
 
-直接连接小车串口时发送 `anglebias 13.6`。无论当前腿高是多少，这条命令
-都把最低腿高的基准设为 `13.6°`。遥控 `R` 帧更新腿高等目标，不修改这个基准。
-
-控制任务每 10 ms 在姿态 PID 运算前计算实时 `Angle_bias`：
-
-```text
-h = (限幅后的左腿目标 + 限幅后的右腿目标) / 2
-f(h) = 0.01026 * h * h - 1.258 * h + 48.24
-Angle_bias = Angle_bias_min + f(h) - f(44.5)
-```
-
-以下是指定基准的计算示例（当前编译默认基准为 `9.5°`）：
-
-| 平均腿高 | 基准 12.6° 时的实时偏置 | 基准 13.6° 时的实时偏置 |
-| --- | ---: | ---: |
-| 44.5 mm | 12.6000° | 13.6000° |
-| 61.5 mm | 9.7025° | 10.7025° |
-| 78.5 mm | 12.7353° | 13.7353° |
-
-改变基准会整体平移原补偿曲线；升降腿部时基准保持不变，改变的是实时偏置。
-“重心”在此指 `Pitch + Angle_bias` 中的角度偏置；腿高采用限幅后的控制目标，
-并非传感器测得的实际腿高。算法回归检查及板上验证步骤见
-[标定测试说明](../tests/README.md)。
+例如 `anglebias 10.5` 后，44.5 mm 时实际 bias 为 10.5°，61.5 mm 时约为
+7.60252°。变更腿高或接收后续 `R` 帧不会覆盖这个基准。这里使用的是目标腿高，
+没有实际腿高传感器反馈。输入 `anglebias` 可查询两种数值。
 
 ## PID 命令
 
-四组控制参数使用统一格式，`legpid` 是 `rollpid` 的同义命令：
+四组 PID 使用统一格式，USART1 与 nRF 接收路径均支持：
 
 ```text
 <name> -p <value>
@@ -108,7 +87,7 @@ Angle_bias = Angle_bias_min + f(h) - f(44.5)
 
 | 命令名 | 控制环 | 默认 `Kp / Ki / Kd` |
 | --- | --- | --- |
-| `anglepid` | 俯仰姿态到共同 PWM | `75.35 / 0 / 60`（Kp 为中间腿高基准） |
+| `anglepid` | 俯仰姿态到共同 PWM | `75.35 / 0 / 60` |
 | `velocitypid` | 平均轮速到俯仰目标 | `0.05 / 0.008 / 0` |
 | `differpid` | 左右轮速差到差速 PWM | `2 / 0.001 / 0` |
 | `rollpid` / `legpid` | 横滚到左右腿高度差 | `0 / -0.4 / 0` |
@@ -121,129 +100,83 @@ velocitypid -p 0.04
 differpid -i 0.0008
 ```
 
-`anglepid -p` 修改 `Angle_kp_mid`，含义固定为 **61.5 mm 中间腿高的 Kp**。
-实际控制值仍每 10 ms 随左右腿平均高度线性变化：
+姿态 P 默认采用 61.5 mm 中间腿高的基准值，实际值按双腿平均目标高度线性补偿：
 
 ```text
-h = (限幅后的左腿目标 + 限幅后的右腿目标) / 2
-Angle_kp = Angle_kp_mid + 0.3 * (h - 61.5)
+effective_p = p_mid + 0.3 * (average_leg_height - 61.5)
 ```
 
-| 平均腿高 | 默认基准 75.35 | 设置 `anglepid -p 80` 后 |
-| --- | ---: | ---: |
-| 44.5 mm | 70.25 | 74.90 |
-| 61.5 mm | 75.35 | 80.00 |
-| 78.5 mm | 80.45 | 85.10 |
+默认 `p_mid=75.35`，仍与原曲线 `0.3*h+56.9` 一致。`anglepid -p 80`
+设置基准并启用自动补偿：44.5/61.5/78.5 mm 对应 74.9/80/85.1，腿高变化
+不会回写或覆盖基准。需要固定 Kp 时用 `anglepid -manual 80`；用 `anglepid -auto`
+重新启用补偿，保持当前基准数值。`-i`、`-d` 不改变模式。模式也随 `save` 保存。
 
-默认基准恢复原来的 `0.3*h + 56.9` 曲线，正常控制行为保持不变。
-修改基准会整体平移直线；升降腿、横滚造成左右腿不等高，都不会覆盖该基准。
-Flash 保存基准，绝不保存某个腿高临时算出的 `Angle_kp`。
+这是与此前模块化版本的语义调整：原先依赖 `anglepid -p` 固定 Kp 的客户端，
+应改发 `anglepid -manual <value>`；正常调参按钮继续用 `-p` 调整基准。
 
-只有姿态 Kp 和重心实时偏置在现有控制器中随腿高调度。
-姿态 Ki/Kd、速度、差速及横滚/腿部 PID 系数保持设定值；它们的实际控制效果仍可能
-随机构高度变化，因此需要实车复验。没有机械动力学依据时，不额外给其他增益套线性公式。
-`simulation/Leg_kinematics.py` 与固件使用相同连杆尺寸和装配支路；该文件描述的是运动学，
-不足以单独推导全部 PID 随腿高的动力学增益。重心沿用原二次补偿曲线。
+姿态参数在下一次有效 10 ms 控制循环生效，速度、差速、横滚参数在下一次
+50 ms 外环生效。未解锁时轮 PWM 保持 0，设置值仍保留。修改先在 RAM 生效，执行 `save` 才写入 Flash；
+复位或完全断电后恢复最后保存的一组值，没有有效记录才使用编译默认值。
 
-`rollpid -p` 已修复为修改比例项，`-i` 修改积分项，新增 `-d` 修改微分项。
-`legpid` 直接操作同一组参数；当前腿部通过舵机内置位置控制与逆运动学定位，
-固件没有另一组独立的“腿高 PID”。原横滚几何补偿、机械尺寸及舵机装配偏置保持原值。
+输入 `anglepid`、`velocitypid`、`differpid`、`rollpid`（无参数）查询当前参数。
+`anglepid` 还返回 `mode=auto/manual` 和上次控制循环使用的 `effective_p`。
 
-## 保存和查看参数
+横滚控制提供：
+
+```text
+rollpid -p <value>
+rollpid -i <value>
+rollpid -d <value>
+```
+
+三项分别更新对应横滚参数；仅启用 Kd 时也参与增量式 PID 计算。
+
+## Flash 参数保存
 
 | 命令 | 作用 |
 | --- | --- |
-| `save` / `save all` | 一次保存全部可持久化运动参数 |
-| `params` | 输出当前基准、有效值、目标、Flash 有效性、未保存状态和控制使能状态 |
-| `save recycle` | 日志写满时擦除参数扇区，再保存当前整组参数；未满时等同普通保存 |
+| `save` / `save all` | 一次保存全部运动参数，断电保留；相同值不重复写 Flash |
+| `params` | 查询参数、`flash_valid`、`unsaved`、`armed`、`enabled` 及补偿后的实际值 |
+| `control off` | 请求关闭轮平衡；等待 `params` 中 `armed=false` 后保存 |
+| `control on` | 系统 ready 时恢复正常启动门控，重新稳定 500 ms 才解锁；不能解除故障锁存 |
+| `save recycle` | 日志写满后，显式擦除参数扇区并保存当前值 |
 
-保存范围共 15 个浮点数：
+保存范围为重心基准、角度/速度/差速/横滚四组 PID 的 P/I/D、共同腿高、横滚目标，
+共 15 个浮点数，加上角度 Kp 自动/固定模式。`legpid` 是 `rollpid` 的别名。
+速度和转向指令、遥控超时计时、控制开关、PID 历史、诊断与遥测开关不保存。
+上电恢复保存的姿态目标，但新的遥控帧仍会更新它们；遥控超时保护继续生效。
 
-- 最低腿高重心基准 `anglebias`；
-- `anglepid`、`velocitypid`、`differpid`、`rollpid`/`legpid` 的 P/I/D；
-- 当前限幅后的共同腿高 `legheight` 与横滚目标 `target_roll`，作为下次上电姿态目标。
+小程序的“保存全部参数”按钮发送 ASCII **`@save\n`**（最后一个字节为 LF `0x0A`）。
+按行缓冲接收回包，允许 BLE 分片，再按以下前缀判断结果：
 
-`R` 中的腿高和横滚字段操作相同目标，所以也会进入这次保存快照。
-速度、转向、`VandD` 和 `motor` 输出是即时行驶指令，不保存，复位后速度/转向仍为零。
-`control off/on`、观测开关、无线遥测槽和 PID 积分/微分历史也不保存。
-开机在创建控制任务之前恢复整组配置；第一次使用、格式不兼容或没有完整有效记录时使用编译默认值。
+| 回包前缀 | 小程序处理 |
+| --- | --- |
+| `save: ok` | 保存成功 |
+| `save: unchanged` | 参数已保存，无需重复写入；按成功处理 |
+| `save: busy` | 当前已解锁、PWM 非零或系统启动中；停止控制后重试，不会排队自动保存 |
+| `save: full` | 提示日志已满；另设带说明的回收操作，发送 `@save recycle\n` |
+| `save: invalid` / `save: flash error` | 保存失败，显示错误；RAM 调参值仍保留 |
 
-可以在平衡运行时调参，但实际写 Flash 时要求 `Control_armed=false` 且左右 PWM 为零。
-静止平衡也属于已使能状态，`save` 会返回 `busy`，且不会延迟到以后自动执行。
-STM32F411 写/擦 Flash 时取指和数据读取会停顿，依据
-[ST RM0383 §3.5](https://www.st.com/resource/en/reference_manual/dm00119316.pdf)，
-保存期间禁止重新使能轮子；结束后重新计满正常启动所需的 500 ms。
+普通按钮不要自动追加 `control on` 或自动执行 `save recycle`。`control off` 是轮平衡
+开关，不等于切断所有舵机输出。默认按钮只发送保存请求；遇 busy 再由用户停止控制。
+命令应与周期遥控帧串行发送，避免字节交织。nRF 也接受相同命令正文，但执行结果
+当前输出到小车 USART1；遥控器的串口调参桥接白名单未开放 `save`，不能用无线 ACK
+代替保存成功确认。
 
-直接连接小车串口时，每条命令单独发送并等待返回。例如：
-
-```text
-anglebias 10.5
-anglepid -p 80
-velocitypid -p 0.04
-rollpid -i -0.3
-params
-```
-
-调参完成后，**先扶稳或支撑车体**，再发送：
-
-```text
-control off
-params
-save
-params
-control on
-```
-
-`control off` 在下一次控制更新关闭轮子输出；确认 `params` 中 `armed=false` 后再 `save`。
-它不会停止舵机位置保持。`control on` 恢复原来的姿态、角速度及摇杆回中检查。
-保存成功返回 `save: ok (all motion parameters)`；与上次保存完全相同则返回
-`save: unchanged (no flash write)`。Flash 错误不会撤销 RAM 中已调好的参数。
-
-通过遥控器串口发送时，小车命令加 `nrfsend` 前缀：
-
-```text
-nrfsend anglepid -p 80
-nrfsend control off
-nrfsend save
-nrfsend params
-nrfsend control on
-```
-
-命令之间等待处理完成。若需要保存指定腿高/横滚，先在遥控器执行 `joystick off`，
-再显式发送所需 `R` 帧，避免自动摇杆帧覆盖姿态目标；`joystick off` 本身不会清零目标。
-遥控器的 `nRF: send success` 是无线 ACK，**不是 Flash 保存成功回执**。
-本次命令结果和 `params` 多行文本仍输出到小车 USART1；可经现有 UART 透传蓝牙模块读取，
-没有新增原生 BLE 协议，也没有改变原来的 nRF 遥测格式。
-
-`params` 的 `p_mid` 表示持久化基准，`p_effective` 是控制任务最近一次计算值；
-刚修改参数后最多等一个控制周期再核对有效值。`flash_valid` 表示存在完整保存记录，
-`unsaved` 表示当前参数与该记录不同（没有记录时也为 true）。后续 `R` 帧改变姿态目标
-会使 `unsaved` 再次变为 true，但不会改掉已保存的 Flash 内容。
-
-### Flash 寿命、断电与更新固件
-
-链接脚本给程序保留前 384 KB，扇区 7（`0x08060000..0x0807FFFF`，128 KB）
-专用于参数，不放入生成的 ELF/HEX/BIN 镜像。每条记录 84 字节，可追加 1560 条；
-仅手动保存且参数有变化时写入，调参和遥控帧不会自动写 Flash。
-
-记录带版本、字段数、序号、CRC32，写入并回读验证数据后，最后写提交标记。
-启动扫描最新的有效记录，跳过写到一半或校验失败的记录。普通保存被中断时，
-上一条完整记录仍保留；首次保存尚未完成时使用编译默认值。
-
-写满后普通 `save` 返回 `full` 并保留旧记录。此时可在供电稳定、控制未使能时
-执行 `save recycle`。这是单扇区存储的显式维护操作：**擦除到重新提交之间断电，
-可能丢失全部历史保存值，下次上电回到编译默认值**。维护前用 `params` 留存参数。
-
-按项目默认的 ELF/HEX 范围烧录可以避开参数扇区；全片擦除、手工擦除扇区 7、
-使用旧链接布局的大镜像或启用下载器的全片擦除选项都会清掉参数。
-CubeMX 重新生成后必须保留两个链接脚本的 384 KB 程序限制和参数区符号。
-修改存储字段顺序或语义时必须升级 `MotionParameterJournal.hpp` 的 `version`，
-并明确决定迁移或回退默认值，不能直接把旧记录解释成新参数。
+参数使用 STM32 内部 Flash 扇区 7（`0x08060000..0x0807FFFF`），固件限制在前
+384 KiB。每条记录 84 字节，含版本、CRC32 和最后写入的提交标记；最多 1560 条。
+普通保存追加记录，途中掉电仍可恢复前一条有效数据。v2 保持 v1 的槽大小并兼容读取
+旧记录；v1 自动解释为中间腿高基准模式。`save recycle` 擦除窗口内掉电没有第二扇区
+备份，会回退编译默认值。整片擦除也会清除参数；正常只擦写固件占用扇区可保留参数。
 
 ## 观测和诊断
 
 | 命令 | 作用 |
 | --- | --- |
+| `ping` | 返回 `pong`、当前状态和控制开关，检查命令服务存活 |
+| `status` | 返回状态、控制开关、硬件失败位图和任务失败位图 |
+| `controlstate` | 返回平衡解锁、IMU 有效性、补偿后俯仰、左右 PWM、循环次数及采样间隔 |
+| `button` | 返回 PA0 任务状态、click/double/long 计数、丢事件数和最大扫描间隔 |
 | `showimu -y` | 以约 100 Hz 输出 `Roll,Pitch,Yaw` |
 | `showimu -n` | 停止 IMU 连续输出 |
 | `showrpm -y` | 以约 20 Hz 输出左右轮 RPM |
@@ -255,11 +188,30 @@ CubeMX 重新生成后必须保留两个链接脚本的 384 KB 程序限制和�
 | `nrfshow -nn` | 停止周期 nRF 遥测 |
 
 `showimu` 会在 10 ms 控制环内格式化并提交 UART 日志。长时间开启可能增加
-中断延迟和 UART 丢帧，只用于短时诊断。
+控制计算耗时和 UART 丢帧，只用于短时诊断；格式化已移出临界区。
 
 nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发送
 一次。车端发送期间不处于接收模式；发送成功或达到最大重试次数后才切回 RX。
 遥控闭环运行时不建议开启周期遥测。
+
+`status` 示例：
+
+```text
+status=init-failed control=off hw_fail=130 task_fail=0
+```
+
+硬件位从 bit 0 起依次表示 USART1 命令接收、MPU6050、左编码器、右编码器、
+轮电机 PWM、左舵机、右舵机、nRF24L01+。任务位从 bit 0 起依次表示
+Heartbeat、CommandService、ServoControl、MotionControl、ButtonA0。ButtonA0
+是可选业务任务，其失败 bit 4 不阻止控制任务运行。按键接入见 [PA0 按键](button-a0.md)。
+
+`control=on` 表示硬件/任务允许控制；`armed=1` 才表示轮平衡已解锁。启动需连续
+50 个 10 ms 有效样本满足：补偿后俯仰绝对值 ≤8°、横滚 ≤5°、角速度 ≤20°/s、
+速度/转向目标绝对值 <1。俯仰或横滚超过 30°、IMU 读取失败或非有限值立即取消
+解锁并清除 PID 历史。连续三次 IMU 异常进入锁存的 `runtime-fault`。
+
+`controlstate` 的 `gap` 是历史最大采样间隔（tick，当前 1 tick=1 ms），`missed`
+统计间隔超过 10 tick 的次数；这些统计会受调试器暂停影响，不代表纯计算耗时或包含暂停时长的墙上时间。
 
 ## 兼容/实验命令
 
@@ -267,9 +219,9 @@ nRF 遥测默认四个槽为 Roll、Pitch、Yaw、Angle `Kp`，约每 100 ms 发
 motor <left> <right>
 ```
 
-解析成功后会打印数值并通知 MotionControl。当前实际运行的
-`MotionControlFunc_PID()` 没有消费这条通知，因此该命令不会覆盖闭环 PWM；
-它只保留用于旧的 LQR/手动电机实验。
+当前 PID 路径不支持原始 PWM 点动，明确返回
+`motor rejected: raw PWM is unavailable in PID control mode`。
+旧版本只打印并发送一个无人消费的通知；现在不再给出已接受的假象，也不绕过闭环。
 
 未知命令不会返回 `Unknown command`，而是按以下格式回显：
 
@@ -288,8 +240,5 @@ receive: <original text>
 5. 最后调整横滚和腿高补偿；
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
-确认参数后，按上述步骤执行 `save`，不需要修改源码重新烧录。
-编译默认重心基准位于 `Component/UserApp/CtrlAlgorithm/BalanceCompensation.hpp` 的
-`default_minimum_bias_degrees`，其他可保存参数的默认值位于 `Component/UserApp/MotionParameters.hpp`。
-已有有效 Flash 记录时，修改编译默认值不会覆盖保存的参数。
+确认参数后使用 `save` 保存，无需重新构建或烧录。
 

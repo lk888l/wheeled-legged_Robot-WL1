@@ -22,7 +22,9 @@ NRF24L01P::NRF24L01P(SPI_HandleTypeDef *hspi,
 // 创建用于 SPI DMA 同步的二值信号量
     spiDmaSemaphore = xSemaphoreCreateBinary();
     // 确保初始状态是空的
-    xSemaphoreTake(spiDmaSemaphore, 0);
+    if (spiDmaSemaphore != nullptr) {
+        xSemaphoreTake(spiDmaSemaphore, 0);
+    }
 }
 
 /**
@@ -51,6 +53,7 @@ void NRF24L01P::write_ce(uint8_t gpio_status) {
 
 bool NRF24L01P::spiSend(const uint8_t *pData, uint16_t size) {
 //    return static_cast<bool>(HAL_SPI_Transmit(HSpi, pData, size, HAL_MAX_DELAY));
+    if (spiDmaSemaphore == nullptr) return false;
     if (HAL_SPI_Transmit_DMA(HSpi, (uint8_t*)pData, size) != HAL_OK) return false;
     // 挂起任务，等待 DMA 完成中断释放信号量。最大等待 100 滴答 (根据你的SPI速率调整)
     return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
@@ -58,12 +61,14 @@ bool NRF24L01P::spiSend(const uint8_t *pData, uint16_t size) {
 
 bool NRF24L01P::spiReceive(uint8_t *pData, uint16_t size) {
 //    return static_cast<bool>(HAL_SPI_Receive(HSpi, pData, size, HAL_MAX_DELAY));
+    if (spiDmaSemaphore == nullptr) return false;
     if (HAL_SPI_Receive_DMA(HSpi, pData, size) != HAL_OK) return false;
     return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
 }
 
 bool NRF24L01P::spiTransfer(const uint8_t *pTxData, uint8_t *pRxData, uint16_t size) {
 //    return static_cast<bool>(HAL_SPI_TransmitReceive(HSpi, pTxData, pRxData, size, HAL_MAX_DELAY));
+    if (spiDmaSemaphore == nullptr) return false;
     if (HAL_SPI_TransmitReceive_DMA(HSpi, (uint8_t*)pTxData, pRxData, size) != HAL_OK) return false;
     return (xSemaphoreTake(spiDmaSemaphore, pdMS_TO_TICKS(100)) == pdTRUE);
 }
@@ -114,6 +119,10 @@ bool NRF24L01P::Init() {
 //    csHigh();
 //    HAL_Delay(100); // Wait for Power on reset
 
+    if (HSpi == nullptr || spiDmaSemaphore == nullptr) {
+        return false;
+    }
+
     bool isSuccess = true;
     uint8_t command;
     // Set configuration: Enable 2 byte CRC, Power Up, PTX mode [cite: 770, 772]
@@ -141,10 +150,19 @@ bool NRF24L01P::Init() {
     isSuccess &= setRX_Addr(0,RxAddress_P0);
     isSuccess &= setRX_PW(0,PACKET_WIDTH);
     isSuccess &= setTX_Addr(TxAddress);
-    flushRx();
-    flushTx();
+    isSuccess &= flushRx();
+    isSuccess &= flushTx();
     command = 0x70;
     isSuccess &= writeRegister(REG_STATUS,&command,1);
+
+    // DMA completion only proves that the STM32 SPI peripheral ran. Verify
+    // configured register values so a missing or miswired radio is detected.
+    uint8_t verifiedChannel{};
+    uint8_t verifiedAddressWidth{};
+    isSuccess &= readRegister(REG_RF_CH, &verifiedChannel, 1);
+    isSuccess &= readRegister(REG_SETUP_AW, &verifiedAddressWidth, 1);
+    isSuccess &= (verifiedChannel == 2U);
+    isSuccess &= (verifiedAddressWidth == 0x03U);
     return isSuccess;
 }
 
@@ -342,6 +360,9 @@ void NRF24L01P::isrExtiHandler() {
 }
 
 void NRF24L01P::isrSpiDmaCompleteHandler() {
+    if (spiDmaSemaphore == nullptr) {
+        return;
+    }
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(spiDmaSemaphore, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);

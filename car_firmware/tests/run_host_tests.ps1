@@ -1,39 +1,38 @@
-param([string]$Compiler = 'g++')
+param(
+    [string]$Compiler = 'g++',
+    [string]$NinjaPath = ''
+)
 
 $ErrorActionPreference = 'Stop'
-$startupFirmwareDir = Split-Path -Parent $PSScriptRoot
-Push-Location $startupFirmwareDir
+$testFirmwareDir = Split-Path -Parent $PSScriptRoot
+$testCompiler = (Get-Command $Compiler -ErrorAction Stop).Source
+if ($NinjaPath) {
+    $testGenerator = @('-G', 'Ninja', "-DCMAKE_MAKE_PROGRAM=$((Get-Command $NinjaPath).Source)")
+} elseif (Get-Command ninja -ErrorAction SilentlyContinue) {
+    $testGenerator = @('-G', 'Ninja')
+} else {
+    $testMake = Join-Path (Split-Path -Parent $testCompiler) 'mingw32-make.exe'
+    if (-not (Test-Path -LiteralPath $testMake)) { throw 'Install Ninja or provide -NinjaPath.' }
+    $testGenerator = @('-G', 'MinGW Makefiles', "-DCMAKE_MAKE_PROGRAM=$testMake")
+}
+Push-Location $testFirmwareDir
 try {
-    New-Item -ItemType Directory -Force build/startup-tests | Out-Null
-    foreach ($startupOptimization in @('-Og', '-O3')) {
-        $startupFlags = @('-std=c++23', $startupOptimization, '-fno-fast-math', '-Wall', '-Wextra', '-Werror')
-        & $Compiler @startupFlags -I tests/stubs -I Component/UserApp -I Component/HardWare/Motor tests/control_startup_test.cpp Component/HardWare/Motor/TB6612.cpp -o build/startup-tests/control.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Control test compilation failed' }
-        & ./build/startup-tests/control.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Control startup test failed' }
-
-        & $Compiler @startupFlags -I Component/HardWare/IMU tests/imu_startup_test.cpp Component/HardWare/IMU/vqf.cpp -o build/startup-tests/imu.exe
-        if ($LASTEXITCODE -ne 0) { throw 'IMU test compilation failed' }
-        & ./build/startup-tests/imu.exe
-        if ($LASTEXITCODE -ne 0) { throw 'IMU startup test failed' }
-
-        & $Compiler @startupFlags -I Component/UserApp tests/balance_compensation_test.cpp -o build/startup-tests/balance.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Balance test compilation failed' }
-        & ./build/startup-tests/balance.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Balance calibration test failed' }
-
-        & $Compiler @startupFlags -I Component/UserApp tests/motion_parameters_test.cpp -o build/startup-tests/motion-parameters.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Motion parameter test compilation failed' }
-        & ./build/startup-tests/motion-parameters.exe
-        if ($LASTEXITCODE -ne 0) { throw 'Motion parameter persistence test failed' }
+    foreach ($testConfiguration in @('Debug', 'Release')) {
+        $testBuildDir = "build/host-$testConfiguration"
+        & cmake -S tests -B $testBuildDir @testGenerator "-DCMAKE_CXX_COMPILER=$testCompiler" "-DCMAKE_BUILD_TYPE=$testConfiguration"
+        if ($LASTEXITCODE -ne 0) { throw 'Host test configuration failed' }
+        & cmake --build $testBuildDir --parallel 6
+        if ($LASTEXITCODE -ne 0) { throw 'Host test build failed' }
+        & ctest --test-dir $testBuildDir --output-on-failure
+        if ($LASTEXITCODE -ne 0) { throw 'Host tests failed' }
     }
-
     # This compilation must fail with the intentional VQF diagnostic.
-    & $Compiler -std=c++23 -Ofast -I Component/HardWare/IMU -c Component/HardWare/IMU/vqf.cpp -o build/startup-tests/forbidden-fast-math.o *> build/startup-tests/fast-math-rejection.log
-    if ($LASTEXITCODE -eq 0 -or -not (Select-String -Quiet -SimpleMatch 'VQF requires IEEE NaN semantics' build/startup-tests/fast-math-rejection.log)) {
+    $testGuardLog = 'build/host-Release/fast-math-rejection.log'
+    & $testCompiler -std=c++23 -Ofast -I Component/HardWare/IMU -c Component/HardWare/IMU/vqf.cpp -o build/host-Release/forbidden-fast-math.o *> $testGuardLog
+    if ($LASTEXITCODE -eq 0 -or -not (Select-String -Quiet -SimpleMatch 'VQF requires IEEE NaN semantics' $testGuardLog)) {
         throw 'The build did not reject unsafe VQF fast-math options as expected'
     }
-    Write-Output 'PASS: unsafe VQF compiler options are rejected'
+    Write-Output 'PASS: Debug/Release host tests and unsafe VQF option rejection'
 } finally {
     Pop-Location
 }
