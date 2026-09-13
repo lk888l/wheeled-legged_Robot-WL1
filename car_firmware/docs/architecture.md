@@ -106,13 +106,15 @@ right_pwm = clamp(even_pwm - differ_pwm, -1000, 1000)
 横滚误差绝对值超过 3° 时，会叠加正弦几何补偿。左右腿目标随后被限制到
 `44.5..78.5 mm`。
 
-`Angle_bias_min` 是 `anglebias` 命令设置的最低腿高基准，默认 `12.6°`。
+`Angle_bias_min` 是 `anglebias` 命令设置的最低腿高基准，编译默认 `9.5°`。
 MotionControl 每周期计算 `Angle_bias = Angle_bias_min + f(h) - f(44.5)`，
 其中 `f(h) = 0.01026*h*h - 1.258*h + 48.24`，
-`h = (Left_Legheight + Right_Legheight) / 2`。基准只由命令修改，复位恢复默认；
-实时偏置只由控制任务计算。`Angle_kp = 0.3*h + 56.9` 使用同一个平均高度。
+`h = (Left_Legheight + Right_Legheight) / 2`。基准由命令修改，执行 `save` 后复位恢复保存值；
+实时偏置只由控制任务计算。`Angle_kp = Angle_kp_mid + 0.3*(h - 61.5)` 使用同一个平均高度。
+`anglepid -p` 修改中间高度的基准，默认 `75.35`，等效保留原 `0.3*h + 56.9` 曲线。
 
-左右腿目标初值均为 `44.5 mm`，只由 MotionControl 生成和限幅。
+没有有效保存记录时左右腿目标初值均为 `44.5 mm`；否则初始化为保存的共同腿高。
+启动后的左右目标只由 MotionControl 生成和限幅。
 该高度是舵机控制目标，不是实际腿高反馈。
 
 ### ServoControl
@@ -142,12 +144,12 @@ MotionControl 每周期计算 `Angle_bias = Angle_bias_min + f(h) - f(44.5)`，
 
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
-| Angle `Kp / Ki / Kd` | `70 / 0 / 60` | 姿态环；运行时 `Kp` 会随腿高重算 |
-| Minimum-height angle bias | `12.6°` | `anglebias` 设置的 44.5 mm 基准，运行时保持至下次修改或复位 |
-| Effective angle bias | `12.6°` | 基准叠加当前平均腿高相对 44.5 mm 的补偿，每 10 ms 更新 |
+| Angle `Kp / Ki / Kd` | `75.35 / 0 / 60` | Kp 为 61.5 mm 基准；有效增益按腿高线性补偿 |
+| Minimum-height angle bias | `9.5°` | `anglebias` 设置的 44.5 mm 基准，可保存到 Flash |
+| Effective angle bias | `9.5°` | 基准叠加当前平均腿高相对 44.5 mm 的补偿，每 10 ms 更新 |
 | Velocity `Kp / Ki / Kd` | `0.05 / 0.008 / 0` | 平均轮速到俯仰目标 |
 | Difference `Kp / Ki / Kd` | `2 / 0.001 / 0` | 左右轮速差到差速 PWM |
-| Roll `Kp / Ki` | `0 / -0.4` | 横滚到左右腿高度差 |
+| Roll `Kp / Ki / Kd` | `0 / -0.4 / 0` | 横滚到左右腿高度差 |
 | Velocity target | `0` | RPM 目标 |
 | Difference target | `0` | 左右 RPM 差目标 |
 | Roll target | `0°` | 车体横滚目标 |
@@ -196,6 +198,9 @@ MotionControl 的周期等待和 IMU I2C 读取位于临界区外，保证调度
 | `BalanceCompensation` | 腿高限幅、左右平均高度和最低腿高基准的俯仰补偿 |
 | `BalanceStartupGate` | 上电稳定等待、倾倒/IMU 异常退出和重新使能 |
 | `PID` | 位置式和增量式 PID |
+| `MotionParameters` / `MotionParameterCommands` | 持久化参数模型、基准增益、严格文本参数解析 |
+| `MotionParameterJournal` / `MotionParameterStorage` | 版本化 CRC 日志、回读验证与 STM32 Flash 适配 |
+| `MotionStorageInterlock` | 保存期间禁止使能、保存后重启稳定计时及 `control off/on` |
 | `NRF24L01P` | SPI 寄存器、收发状态机、IRQ 处理 |
 | `LkUart` | Receive-to-idle DMA 和异步格式化发送 |
 | `TaskReactor` | 通知 bit 到回调的分发、命令 token 解析 |
@@ -208,11 +213,31 @@ MotionControl 的周期等待和 IMU I2C 读取位于临界区外，保证调度
 
 以下是阅读代码或调参时必须知道的当前行为：
 
-- `Angle_kp` 每 10 ms 根据左右腿平均高度重算，`anglepid -p` 在线写入只会短暂生效；
+- `Angle_kp` 每 10 ms 根据左右腿平均高度重算；`anglepid -p` 修改的是持久保持的 `Angle_kp_mid`；
 - `anglebias` 修改最低腿高基准，实时 `Angle_bias` 仍会随腿高变化；需保留原补偿曲线的适用条件；
-- `rollpid -p` 和 `rollpid -i` 当前都写入 `Adapt_y_ki`；
+- `rollpid` 与 `legpid` 操作同一组横滚/腿部 P/I/D；`-p`、`-i`、`-d` 分别修改对应系数；
 - `motor` 命令会发送任务通知，但 PID 控制路径没有消费该通知；
 - TB6612 零命令保持 PWM 为 0；50 counts 死区仅应用于非零命令；
 - VQF 依赖 NaN 初始化标记，构建必须保留 IEEE 浮点语义，禁止 fast-math；
 - nRF 遥测命令会临时把车端从 RX 切到 TX，发送完成或失败后才恢复 RX；
-- 控制参数只保存在 RAM 中，复位后恢复编译时默认值。
+- 参数修改先在 RAM 生效；`save` 仅在控制未使能且 PWM 为零时持久化，详情见[命令参考](commands.md#保存和查看参数)。
+
+
+## 参数持久化与并发
+
+`Motion_parameters` 是可保存参数的唯一运行时来源，原参数名称作为字段引用保留，
+便于 GDB 观察。姿态有效增益/偏置、实时轮速目标和 PID 历史独立于配置结构。
+命令任务用短临界区发布完整参数集；控制任务在原有临界区读取。
+`CPP_Main()` 在创建任何应用任务前加载有效记录，再初始化左右腿目标与有效补偿。
+
+`save` 在同一临界区检查 `Control_armed` 和左右 PWM，并设置保存互锁后取得配置快照。
+Flash HAL 操作位于临界区外，保持中断和 HAL 超时计时可运行；互锁使控制任务保持零 PWM、
+清空 PID 和启动门控。即使保存完全发生在两个控制周期之间，下次控制也会重置稳定计数及
+周期唤醒基准，避免使用保存前的 490 ms 累积立即启动或追赶已错过的周期。
+`control off` 可以持续关闭轮子平衡控制，`control on` 恢复原启动条件；该开关不持久化。
+
+程序区限制为 384 KB，最后 128 KB 的扇区 7 不包含镜像段。存储模块使用链接符号
+核对布局后才访问 Flash。每条 84 字节，显式编码 15 个 float、版本/长度/序号/CRC32，
+最后写提交标记并回读；CRC 或格式不匹配时跳过，选择地址最新的完整记录。
+相同配置不写入；普通 `save` 只追加，从不擦除旧记录。1560 条日志写满后需显式
+`save recycle`，维护操作可能在断电时失去全部历史，届时回退编译默认值。

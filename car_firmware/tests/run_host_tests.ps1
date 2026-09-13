@@ -21,6 +21,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Balance test compilation failed' }
         & ./build/startup-tests/balance.exe
         if ($LASTEXITCODE -ne 0) { throw 'Balance calibration test failed' }
+
+        & $Compiler @startupFlags -I Component/UserApp tests/motion_parameters_test.cpp -o build/startup-tests/motion-parameters.exe
+        if ($LASTEXITCODE -ne 0) { throw 'Motion parameter test compilation failed' }
+        & ./build/startup-tests/motion-parameters.exe
+        if ($LASTEXITCODE -ne 0) { throw 'Motion parameter persistence test failed' }
     }
 
     # This compilation must fail with the intentional VQF diagnostic.

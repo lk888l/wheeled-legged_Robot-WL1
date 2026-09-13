@@ -25,7 +25,7 @@ int main()
 {
     require(BC::minimum_leg_height_mm == 44.5F, "minimum height remains 44.5 mm");
     require(BC::maximum_leg_height_mm == 78.5F, "maximum height remains 78.5 mm");
-    require(BC::default_minimum_bias_degrees == 12.6F, "reset calibration is 12.6 degrees");
+    require(BC::default_minimum_bias_degrees == 9.5F, "compiled calibration remains 9.5 degrees");
 
     // Independent reference values from the accepted calibration table.
     struct Reference { float height; float bias_12_6; float bias_13_6; };

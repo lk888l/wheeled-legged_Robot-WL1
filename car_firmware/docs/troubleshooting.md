@@ -68,7 +68,7 @@ X = 2.5, Y = 0.7, Z = 0.9
 ```
 
 更换 MPU6050 或机械安装后应重新标定。`anglebias <degrees>` 设置最低腿高
-`44.5 mm` 的 `Angle_bias_min`，本次上电有效。实时 `Angle_bias` 每 10 ms
+`44.5 mm` 的 `Angle_bias_min`，先在 RAM 生效，执行 `save` 后掉电保留。实时 `Angle_bias` 每 10 ms
 按 `Angle_bias_min + f(平均腿高) - f(44.5)` 计算，在较高位置可能与基准不同。
 遥控器串口需使用 `nrfsend anglebias <degrees>`。基准不会被后续 `R` 帧覆盖。
 
@@ -239,3 +239,21 @@ Vref，不能仅凭“仍能识别芯片”忽略欠压。
 9. I2C1 仍为 PB6/PB7、400 kHz；
 10. CMake 中的应用 include 和 source glob 仍完整；
 11. Debug 和 Release 都能完成编译、链接并生成 ELF/HEX/BIN。
+
+
+## 运动参数保存问题
+
+- `save: busy`：静止平衡仍是使能状态。扶稳车体后发 `control off`，等待 `params`
+  显示 `armed=false` 再保存，完成后发 `control on`。
+- 上电没有恢复：查看小车 USART1 的 `params: loaded from flash` / `compiled defaults`
+  启动日志；确认之前收到了小车的 `save: ok`，遥控器的无线 ACK 不代表 Flash 写入成功。
+- 改变腿高后 Kp 不等于设定值：查看 `params` 的 `p_mid` 与 `p_effective`。
+  `anglepid -p` 是 61.5 mm 的基准，实际增益仍随平均腿高每毫米改变 0.3。
+- `params` 的 `unsaved` 再次变为 true：自动 `R` 帧可能改变了腿高/横滚目标；
+  固定保存姿态前用遥控器 `joystick off` 并发送明确目标。
+- `save: full`：参数日志已满。先记录 `params` 输出，再在稳定供电、轮子未使能时
+  发 `save recycle`；擦除和重新提交之间断电可能丢失历史配置。
+- 更新固件后参数消失：检查下载器是否全片擦除，以及是否仍使用预留扇区 7 的链接布局。
+  重新生成链接脚本时保留 `PARAMS` 区和 `__motion_params_start__/end__` 符号。
+- `save: flash error`：RAM 调参仍保留。检查写保护、供电、实际 MCU 型号及 Flash 布局，
+  不要把重复无线 ACK 当成保存成功。

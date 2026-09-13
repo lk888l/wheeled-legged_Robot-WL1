@@ -73,7 +73,7 @@ public:
      * @return
      */
     float updateIncremental(float target, float measured){
-        if(kp_==0 && ki_==0)    {return 0.0f;}
+        if(kp_==0 && ki_==0 && kd_==0)    {return 0.0f;}
         float error = target - measured;
         // 计算增量 Δu
         float delta_out = kp_ * (error - prev_error_)

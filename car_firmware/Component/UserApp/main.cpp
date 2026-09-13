@@ -38,6 +38,9 @@
 #include "CtrlAlgorithm/LegKinematics.hpp"
 #include "CtrlAlgorithm/BalanceCompensation.hpp"
 #include "CtrlAlgorithm/BalanceStartupGate.hpp"
+#include "MotionParameterCommands.hpp"
+#include "MotionParameterStorage.hpp"
+#include "MotionStorageInterlock.hpp"
 //freeRTOS library include
 #include "FreeRTOS.h"
 #include "task.h"
@@ -50,12 +53,19 @@ volatile bool isShowIMUData;
 volatile bool isShowMotorRAM;
 /// PID
 // angle-pid
-volatile float Angle_kp{70.0f};
-volatile float Angle_ki{};
-volatile float Angle_kd{60.0f};
+// Settings are shared only under taskENTER_CRITICAL; aliases retain debugger names.
+MotionSettings::Parameters Motion_parameters{};
+MotionSettings::Parameters Saved_parameters{};
+bool Have_saved_parameters{};
+MotionStorageInterlock Storage_interlock;
+float& Angle_kp_mid = Motion_parameters.angle.kp;
+volatile float Angle_kp{MotionSettings::effectiveAngleKp(
+    MotionSettings::Parameters{}.angle.kp, BalanceCompensation::minimum_leg_height_mm)};
+float& Angle_ki = Motion_parameters.angle.ki;
+float& Angle_kd = Motion_parameters.angle.kd;
 // anglebias commands calibrate the minimum-height baseline; only MotionControl
 // writes the effective bias used by the pitch PID (向前则减小).
-volatile float Angle_bias_min{BalanceCompensation::default_minimum_bias_degrees};
+float& Angle_bias_min = Motion_parameters.minimum_pitch_bias;
 volatile float Angle_bias{BalanceCompensation::default_minimum_bias_degrees};
 volatile bool Control_armed{};
 volatile bool Control_imu_valid{};
@@ -63,25 +73,26 @@ volatile float Control_pitch_error{};
 volatile int Control_left_pwm{};
 volatile int Control_right_pwm{};
 // velocity-pid
-volatile float Velocity_kp{0.05f};
-volatile float Velocity_ki{0.008f};
-volatile float Velocity_kd{};
+float& Velocity_kp = Motion_parameters.velocity.kp;
+float& Velocity_ki = Motion_parameters.velocity.ki;
+float& Velocity_kd = Motion_parameters.velocity.kd;
 volatile float Velocity_Target{};
 //differ-pid
-volatile float Differ_kp{2.0f};
-volatile float Differ_ki{0.001};
-volatile float Differ_kd{};
+float& Differ_kp = Motion_parameters.difference.kp;
+float& Differ_ki = Motion_parameters.difference.ki;
+float& Differ_kd = Motion_parameters.difference.kd;
 volatile float Differ_Target{};
 //adapt_y pid
-volatile float Adapt_y_kp{};
-volatile float Adapt_y_ki{-0.4};
+float& Adapt_y_kp = Motion_parameters.roll.kp;
+float& Adapt_y_ki = Motion_parameters.roll.ki;
+float& Adapt_y_kd = Motion_parameters.roll.kd;
 /// real Angle value
 volatile float EAngle_print[3]{};
 /// Leg height
 volatile float Left_Legheight{BalanceCompensation::minimum_leg_height_mm};
 volatile float Right_Legheight{BalanceCompensation::minimum_leg_height_mm};
-volatile float Target_height{BalanceCompensation::minimum_leg_height_mm};
-volatile float Roll_Target{};
+float& Target_height = Motion_parameters.leg_height;
+float& Roll_Target = Motion_parameters.roll_target;
 volatile float LWheel_x{};
 volatile float RWheel_x{};
 /// telecontrol
@@ -97,6 +108,84 @@ const volatile float* NRF_print[4]{reinterpret_cast<const volatile float *>(&EAn
 TaskHandle_t Handle_LEDBlinkFunc = nullptr;
 TaskHandle_t Handle_ServoControlFunc = nullptr;
 TaskHandle_t Handle_MotionControlFunc = nullptr;
+
+static std::string_view commandText(etl::string_view text)
+{
+    return MotionSettings::trim({text.data(), text.size()});
+}
+
+static bool tuneMotion(std::string_view name, etl::string_view args)
+{
+    taskENTER_CRITICAL();
+    auto parameters = Motion_parameters;
+    taskEXIT_CRITICAL();
+    const bool ok = MotionSettings::applyTuning(parameters, name, commandText(args));
+    if (ok) {
+        taskENTER_CRITICAL();
+        Motion_parameters = parameters;
+        taskEXIT_CRITICAL();
+    }
+    const etl::string_view label(name.data(), name.size());
+    if (ok) Uart1.print("{}: ok (RAM; use save to persist)\n", label);
+    else Uart1.print("{}: invalid arguments\n", label);
+    return ok;
+}
+
+static void saveMotion(etl::string_view args)
+{
+    const auto mode = MotionSettings::parseSaveMode(commandText(args));
+    if (mode == MotionSettings::SaveMode::invalid) {
+        Uart1.print("save: usage: save [all|recycle]\n");
+        return;
+    }
+    taskENTER_CRITICAL();
+    const bool allowed = Storage_interlock.begin(Control_armed, Control_left_pwm, Control_right_pwm);
+    const auto parameters = Motion_parameters;
+    taskEXIT_CRITICAL();
+    if (!allowed) {
+        Uart1.print("save: busy; support robot, use control off, then retry\n");
+        return;
+    }
+
+    // Interrupts/HAL timeouts stay enabled. The control task holds PWM at zero
+    // and resets its 500 ms startup gate throughout this operation.
+    const auto result = MotionSettings::saveToFlash(parameters, mode == MotionSettings::SaveMode::recycle);
+    // Also refresh after errors: an interrupted explicit recycle can erase history.
+    Have_saved_parameters = MotionSettings::loadFromFlash(Saved_parameters);
+    taskENTER_CRITICAL();
+    Storage_interlock.finish();
+    taskEXIT_CRITICAL();
+    switch (result) {
+    case MotionSettings::SaveResult::saved: Uart1.print("save: ok (all motion parameters)\n"); break;
+    case MotionSettings::SaveResult::unchanged: Uart1.print("save: unchanged (no flash write)\n"); break;
+    case MotionSettings::SaveResult::full: Uart1.print("save: full; use save recycle to erase journal and save\n"); break;
+    case MotionSettings::SaveResult::invalid: Uart1.print("save: invalid parameters\n"); break;
+    case MotionSettings::SaveResult::io_error: Uart1.print("save: flash error; RAM settings retained\n"); break;
+    }
+}
+
+static void showMotion(etl::string_view args)
+{
+    if (!commandText(args).empty()) {
+        Uart1.print("params: usage: params\n");
+        return;
+    }
+    taskENTER_CRITICAL();
+    const auto p = Motion_parameters;
+    const float kp = Angle_kp, bias = Angle_bias;
+    const float left = Left_Legheight, right = Right_Legheight;
+    const bool armed = Control_armed;
+    const bool enabled = Storage_interlock.enabled();
+    taskEXIT_CRITICAL();
+    const bool dirty = !Have_saved_parameters || MotionSettings::encode(p) != MotionSettings::encode(Saved_parameters);
+    Uart1.print("params: flash_valid={} unsaved={} armed={} enabled={}\n", Have_saved_parameters, dirty, armed, enabled);
+    Uart1.print("anglebias min={:.4f} effective={:.4f}\n", p.minimum_pitch_bias, bias);
+    Uart1.print("anglepid p_mid={:.4f} i={:.6f} d={:.4f} p_effective={:.4f}\n", p.angle.kp, p.angle.ki, p.angle.kd, kp);
+    Uart1.print("velocitypid p={:.6f} i={:.6f} d={:.6f}\n", p.velocity.kp, p.velocity.ki, p.velocity.kd);
+    Uart1.print("differpid p={:.6f} i={:.6f} d={:.6f}\n", p.difference.kp, p.difference.ki, p.difference.kd);
+    Uart1.print("rollpid/legpid p={:.6f} i={:.6f} d={:.6f}\n", p.roll.kp, p.roll.ki, p.roll.kd);
+    Uart1.print("legheight={:.4f} target_roll={:.4f} left={:.4f} right={:.4f}\n", p.leg_height, p.roll_target, left, right);
+}
 
 
 /*---------------------  define task function begin  ---------------------*/
@@ -142,92 +231,24 @@ TaskFunction_t LEDBlinkFunc(){
                     else if(args[1] == 'n'){isShowMotorRAM = false;}
                 }
             }},
-            {"anglepid",[](etl::string_view args){
-                if(args.size() >= 2 && args[0] == '-'){
-                    float value{};
-                    if(args[1] == 'p'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Angle_kp = value;
-                        }
-                    }
-                    else if(args[1] == 'i'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Angle_ki = value;
-                        }
-                    }
-                    else if(args[1] == 'd'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Angle_kd = value;
-                        }
-                    }
+            {"anglepid",[](etl::string_view args){ tuneMotion("anglepid", args); }},
+            {"velocitypid",[](etl::string_view args){ tuneMotion("velocitypid", args); }},
+            {"differpid",[](etl::string_view args){ tuneMotion("differpid", args); }},
+            {"rollpid",[](etl::string_view args){ tuneMotion("rollpid", args); }},
+            {"legpid",[](etl::string_view args){ tuneMotion("legpid", args); }},
+            {"save",[](etl::string_view args){ saveMotion(args); }},
+            {"params",[](etl::string_view args){ showMotion(args); }},
+            {"control",[](etl::string_view args){
+                const auto mode = commandText(args);
+                if (mode != "off" && mode != "on") {
+                    Uart1.print("control: usage: control off|on\n");
+                    return;
                 }
-            }},
-            {"velocitypid",[](etl::string_view args){
-                if(args.size() >= 2 && args[0] == '-'){
-                    float value{};
-                    if(args[1] == 'p'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Velocity_kp = value;
-                        }
-                    }
-                    else if(args[1] == 'i'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Velocity_ki = value;
-                        }
-                    }
-                    else if(args[1] == 'd'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Velocity_kd = value;
-                        }
-                    }
-                }
-
-            }},
-            {"differpid",[](etl::string_view args){
-                if(args.size() >= 2 && args[0] == '-'){
-                    float value{};
-                    if(args[1] == 'p'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Differ_kp = value;
-                        }
-                    }
-                    else if(args[1] == 'i'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Differ_ki = value;
-                        }
-                    }
-                    else if(args[1] == 'd'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Differ_kd = value;
-                        }
-                    }
-                }
-            }},
-            {"rollpid",[](etl::string_view args){
-                if(args.size() >= 2 && args[0] == '-'){
-                    float value{};
-                    if(args[1] == 'p'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Adapt_y_ki = value;
-                        }
-                    }
-                    else if(args[1] == 'i'){
-                        args.remove_prefix(3);
-                        if(TaskReactor::parseStrArg(args,value)){
-                            Adapt_y_ki = value;
-                        }
-                    }
-                }
+                taskENTER_CRITICAL();
+                Storage_interlock.setEnabled(mode == "on");
+                taskEXIT_CRITICAL();
+                if (mode == "off") Uart1.print("control: off requested; wait for params armed=false before save\n");
+                else Uart1.print("control: on; waiting for normal startup conditions\n");
             }},
             {"nrfsend",[&NRF_Tx_Num](etl::string_view args){
                 NRF24L01P::str_touint8(args, NRF_Tx_Num);
@@ -266,49 +287,39 @@ TaskFunction_t LEDBlinkFunc(){
                 }
             }},
             {"legheight",[](etl::string_view args){
-                float height{}, result_x{}, result_deg{};
-                if(TaskReactor::parseStrArg(args,height)){
-                    result_deg = LegKinematics::getMotorAngleForHeight(height,&result_x);
-                    float bais_p = ((-0.000155f * height + 0.03882f) * height + -3.001f) * height + 83.25f;
-                    Uart1.print("Servo angel: {:07.3f} {:07.3f} {:07.3f}\n",result_deg,result_x,bais_p);
-                    Target_height = height;
+                if (tuneMotion("legheight", args)) {
+                    float result_x{};
+                    const float height = Target_height;
+                    const float result_deg = LegKinematics::getMotorAngleForHeight(height, &result_x);
+                    const float bias_p = ((-0.000155f * height + 0.03882f) * height - 3.001f) * height + 83.25f;
+                    Uart1.print("Servo angel: {:07.3f} {:07.3f} {:07.3f}\n", result_deg, result_x, bias_p);
                 }
             }},
-            {"target_roll",[](etl::string_view args){
-                float tar_roll{};
-                if(TaskReactor::parseStrArg(args,tar_roll)){
-                    Roll_Target = tar_roll;
-                }
-            }},
-            {"target_roll",[](etl::string_view args){
-                float tar_roll{};
-                if(TaskReactor::parseStrArg(args,tar_roll)){
-                    Roll_Target = tar_roll;
-                }
-            }},
+            {"target_roll",[](etl::string_view args){ tuneMotion("target_roll", args); }},
             {"VandD",[](etl::string_view args){
-                float target_v{},target_d{};
-                if(TaskReactor::parseStrArg(args,target_d) && TaskReactor::parseStrArg(args,target_v)){
-                    Differ_Target = target_d;
-                    Velocity_Target = target_v;
-                }
+                auto text = commandText(args);
+                float velocity{}, difference{};
+                if (MotionSettings::parseFloat(text, difference) && MotionSettings::parseFloat(text, velocity) && text.empty()) {
+                    taskENTER_CRITICAL();
+                    Differ_Target = difference;
+                    Velocity_Target = velocity;
+                    taskEXIT_CRITICAL();
+                } else Uart1.print("VandD: invalid arguments\n");
             }},
             {"R",[](etl::string_view args){
-                float target_v{},target_d{},target_h{},target_r{};
-                if(TaskReactor::parseStrArg(args,target_d) && TaskReactor::parseStrArg(args,target_v) &&
-                    TaskReactor::parseStrArg(args,target_r) && TaskReactor::parseStrArg(args,target_h)){
-                    Differ_Target = target_d;
-                    Velocity_Target = target_v;
-                    Roll_Target = target_r;
-                    Target_height = target_h;
-                }
+                auto text = commandText(args);
+                float velocity{}, difference{}, height{}, roll{};
+                if (MotionSettings::parseFloat(text, difference) && MotionSettings::parseFloat(text, velocity) &&
+                    MotionSettings::parseFloat(text, roll) && MotionSettings::parseFloat(text, height) && text.empty()) {
+                    taskENTER_CRITICAL();
+                    Differ_Target = difference;
+                    Velocity_Target = velocity;
+                    Roll_Target = roll;
+                    Target_height = BalanceCompensation::clampLegHeight(height);
+                    taskEXIT_CRITICAL();
+                } else Uart1.print("R: invalid arguments\n");
             }},
-            {"anglebias",[](etl::string_view args){
-                float bias{};
-                if(TaskReactor::parseStrArg(args,bias) && BalanceCompensation::isFiniteBias(bias)){
-                    Angle_bias_min = bias;
-                }
-            }},
+            {"anglebias",[](etl::string_view args){ tuneMotion("anglebias", args); }},
     };
     etl::queue<etl::string<32>,4> CMD_que;
     /// Init NRF
@@ -326,6 +337,7 @@ TaskFunction_t LEDBlinkFunc(){
 //                Uart1.print("Unknown command!\n");
 //            }
 //        }
+        if(CMD_que.full()) return;
         if(rxmes.size()>32) {CMD_que.push(rxmes.substr(0, 32));}
         else    {CMD_que.push(rxmes);}
 //        rxmes.insert(0, "Roger：");
@@ -350,7 +362,11 @@ TaskFunction_t LEDBlinkFunc(){
         while(!CMD_que.empty()){
             auto cmd = CMD_que.front();
             CMD_que.pop();
-            if(TaskReactor::parseStrCMD(cmd,Uart_CMD)){
+            auto text = commandText(cmd);
+            const auto name = MotionSettings::takeToken(text);
+            Uart_CMD.command = etl::string_view(name.data(), name.size());
+            Uart_CMD.args = etl::string_view(text.data(), text.size());
+            if(!name.empty()){
                 auto it = cmdMap.find(Uart_CMD.command);
                 if (it != cmdMap.end()) {
                     it->second(Uart_CMD.args); // 执行对应的 Lambda 或函数
@@ -523,7 +539,11 @@ TaskFunction_t MotionControlFunc_PID(){
             BalanceCompensation::pitchBias(Angle_bias_min, gate_height);
         const float gyro_rate = static_cast<float>(std::sqrt(
             IMU_Gyro[0]*IMU_Gyro[0] + IMU_Gyro[1]*IMU_Gyro[1] + IMU_Gyro[2]*IMU_Gyro[2]) * 57.295779513);
-        Control_armed = startup_gate.update(imu_valid, corrected_pitch, static_cast<float>(MAngle.Roll),
+        if (Storage_interlock.consumeReset()) {
+            startup_gate.reset();
+            xLastWakeTime = xTaskGetTickCount();
+        }
+        Control_armed = Storage_interlock.canRun() && startup_gate.update(imu_valid, corrected_pitch, static_cast<float>(MAngle.Roll),
                                            gyro_rate, Velocity_Target, Differ_Target);
         if (!Control_armed) {
             Angle_PID.reset();
@@ -535,7 +555,7 @@ TaskFunction_t MotionControlFunc_PID(){
             Left_Legheight = common_height;
             Right_Legheight = common_height;
             Angle_bias = BalanceCompensation::pitchBias(Angle_bias_min, common_height);
-            Angle_kp = 0.3f * common_height + 56.9f;
+            Angle_kp = MotionSettings::effectiveAngleKp(Angle_kp_mid, common_height);
             Control_pitch_error = static_cast<float>(MAngle.Pitch) + Angle_bias;
             Control_left_pwm = 0;
             Control_right_pwm = 0;
@@ -567,7 +587,7 @@ TaskFunction_t MotionControlFunc_PID(){
                 Uart1.print("A: {:07.3f}\tB: {:07.3f}\n",Left_RPM,Right_RPM);
             }
             //roll pid
-            AdaptY_PID.setTunings(Adapt_y_kp,Adapt_y_ki,0);
+            AdaptY_PID.setTunings(Adapt_y_kp,Adapt_y_ki,Adapt_y_kd);
             float roll_error = Roll_Target - MAngle.Roll;
             // 检测目标角度是否跨越零点（正负号改变）
             if ((last_target_roll > 0 && Roll_Target < 0) || (last_target_roll < 0 && Roll_Target > 0)) {
@@ -595,7 +615,7 @@ TaskFunction_t MotionControlFunc_PID(){
         }
         const float Y_avg = BalanceCompensation::averageLegHeight(Left_Legheight, Right_Legheight);
         Angle_bias = BalanceCompensation::pitchBias(Angle_bias_min, Y_avg);
-        Angle_kp = (0.3f * Y_avg) + 56.9f;
+        Angle_kp = MotionSettings::effectiveAngleKp(Angle_kp_mid, Y_avg);
         Angle_PID.setTunings(Angle_kp,Angle_ki,Angle_kd);
         float EvenPWM = Angle_PID.update(Angle_target,MAngle.Pitch + Angle_bias);
         Control_pitch_error = static_cast<float>(MAngle.Pitch) + Angle_bias;
@@ -666,6 +686,15 @@ TaskFunction_t ServoControlFunc(){
 
 void CPP_Main()
 {
+    // Load before creating any task: no controller can see a partially restored set.
+    Have_saved_parameters = MotionSettings::loadFromFlash(Motion_parameters);
+    Saved_parameters = Motion_parameters;
+    Left_Legheight = Target_height;
+    Right_Legheight = Target_height;
+    Angle_bias = BalanceCompensation::pitchBias(Angle_bias_min, Target_height);
+    Angle_kp = MotionSettings::effectiveAngleKp(Angle_kp_mid, Target_height);
+    if (Have_saved_parameters) Uart1.print("params: loaded from flash\n");
+    else Uart1.print("params: compiled defaults (no valid flash record)\n");
 
     BaseType_t xReturn = pdPASS;
     xReturn = xTaskCreate((TaskFunction_t)LEDBlinkFunc,

@@ -238,6 +238,33 @@ The RF parameters and `R` command format must be changed in sync with
 `tele_firmware`. For all available commands and their limits, see the
 [command reference](docs/commands.md).
 
+## Runtime Tuning and Persistence
+
+Motion tunings can now be persisted with `save` (`save all` is equivalent).
+This stores the minimum-height pitch bias, all four sets of P/I/D gains, and the
+current bounded leg-height and roll targets. Speed, steering, motor output,
+controller history, and the control enable switch are not persisted.
+
+`anglepid -p` adjusts Kp at the 61.5 mm reference height (default 75.35). The
+effective gain is `reference + 0.3 * (average leg height - 61.5)`, preserving the
+original default curve while keeping runtime edits across height changes.
+`rollpid -p` now changes P correctly; `legpid` aliases the same roll/leg controller,
+and all four controllers accept `-p`, `-i`, and `-d`. The compiled pitch bias remains 9.5 degrees.
+
+After tuning, support the robot, send `control off`, wait for `params` to show
+`armed=false`, then send `save`. Use `control on` to resume the normal 500 ms
+startup gate. Tunings remain adjustable while balancing, but Flash writes require
+disarmed control and zero wheel PWM. Prefix car commands with `nrfsend` when using
+the remote's UART; command results are printed on the car's USART1.
+
+The application uses the first 384 KB of Flash; sector 7 is a 128 KB append-only
+parameter journal with versioning, CRC32, verification, and a final commit marker.
+Unchanged saves do not write Flash. After 1560 records, `save` reports `full`;
+explicit `save recycle` reclaims the sector. Power loss during recycling can lose
+all saved settings, in which case boot uses compiled defaults. Avoid mass erase
+when updating firmware, and preserve both linker scripts' parameter reservation.
+See the [command reference](docs/commands.md#保存和查看参数) for the full workflow.
+
 ## Software Structure
 
 ```text
