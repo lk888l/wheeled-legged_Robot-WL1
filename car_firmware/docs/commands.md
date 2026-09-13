@@ -15,7 +15,7 @@ Inf、溢出和数字后的杂字符；多字段命令全部解析成功后才�
 | 项目 | 设置 |
 | --- | --- |
 | TX / RX | PA15 / PA10 |
-| 格式 | 默认 115200, 8-N-1；CMake `WL1_COMMAND_UART_BAUD` 可配置 |
+| 格式 | 默认 9600, 8-N-1（ZX-D30）；CMake `WL1_COMMAND_UART_BAUD` 可配置 |
 | 流控 | 无 |
 | 接收 | DMA receive-to-idle |
 | 单次缓冲 | 128 字节 |

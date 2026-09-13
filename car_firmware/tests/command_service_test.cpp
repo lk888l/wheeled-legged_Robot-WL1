@@ -102,6 +102,15 @@ int main()
     dispatch("ping");
     CHECK(board.command_uart().logs.back().find("pong") != std::string::npos);
 
+    const auto log_count = board.command_uart().logs.size();
+    const auto motion_tick = control.parameters().motion_command_tick;
+    for (const char* reply : {"OK\r\n", "ERROR\r\n", "FAIL\r\n",
+             "OK+G_VERS=V1.7.9\r\n", "OK+G_BAUD=3\r\n", "+OK\r\n", "+ER\r\n"}) {
+        dispatch(reply);
+        CHECK(board.command_uart().logs.size() == log_count);
+        CHECK(control.parameters().motion_command_tick == motion_tick);
+    }
+
     dispatch("R 5 6 7 55", true);
     CHECK(control.parameters().velocity_target == 6.0F && control.parameters().leg_height == 55.0F);
     board.radio().receive_ok = false;

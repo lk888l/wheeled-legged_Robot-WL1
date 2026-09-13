@@ -10,7 +10,7 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 
 - 10 ms 姿态环，计算左右轮 PWM；
 - 50 ms 速度、转向和横滚/腿高控制；
-- 默认使用 115200 波特率的 HC-05/JDY-31 或 BLE 串口透传；nRF24L01+ 默认关闭；
+- 默认使用 ZX-D30 BLE 串口透传，9600 8N1；nRF24L01+ 默认关闭；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
 - `anglebias` 可经车端串口或遥控器串口桥接运行时调整最低腿高的重心基准，
   并按限幅后双腿平均目标高度补偿，见 [命令参考](docs/commands.md#控制命令)；
@@ -197,8 +197,8 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 
 | 功能 | MCU 引脚 | 参数 |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200（可配置）, 8-N-1，DMA2 Stream 7 |
-| USART1 RX | PA10 | 115200（可配置）, 8-N-1，DMA2 Stream 5，Receive-to-idle |
+| USART1 TX | PA15 | 9600（可配置）, 8-N-1，DMA2 Stream 7 |
+| USART1 RX | PA10 | 9600（可配置）, 8-N-1，DMA2 Stream 5，Receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
 | Status LED | PC13 | 低有效；模式见“启动、安全门控与 LED 心跳” |

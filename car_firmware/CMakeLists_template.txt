@@ -17,7 +17,7 @@ project(${projectName} C CXX ASM)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 11)
 
-set(WL1_COMMAND_UART_BAUD "115200" CACHE STRING "Bluetooth/command UART baud rate")
+set(WL1_COMMAND_UART_BAUD "9600" CACHE STRING "Bluetooth/command UART baud rate")
 if(NOT WL1_COMMAND_UART_BAUD MATCHES "^(9600|19200|38400|57600|115200|128000)$")
     message(FATAL_ERROR "Unsupported WL1_COMMAND_UART_BAUD")
 endif()

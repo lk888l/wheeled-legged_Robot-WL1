@@ -107,6 +107,11 @@ int main(void)
 #endif
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  /* ZX-D30 needs 300 ms after power-on before any UART data. Outputs are
+     still inactive here; no AT handshake or BLE connection is required. */
+  if (HAL_GetTick() < 300U) {
+    HAL_Delay(300U - HAL_GetTick());
+  }
 
   /* USER CODE END 2 */
 

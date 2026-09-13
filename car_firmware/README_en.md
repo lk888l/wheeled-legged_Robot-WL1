@@ -11,7 +11,7 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
-- Bluetooth UART at 115200 8N1 by default; optional 32-byte nRF24L01+ commands;
+- ZX-D30 BLE UART at 9600 8N1 by default; optional 32-byte nRF24L01+ commands;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
 - Runtime center-of-gravity pitch baseline tuning with `anglebias` over the car UART or
   the remote's serial bridge, with compensation based on the mean of both clamped leg targets
@@ -44,7 +44,7 @@ Use the `button` command to inspect counts, dropped events, and the maximum samp
 See [button integration](docs/button-a0.md) and the [engineering review](docs/engineering-review-2026-09-05.md)
 for timing semantics, validation, and outstanding runtime risks (Chinese).
 
-The Bluetooth build defaults to USART1 at 115200 8N1 and disables nRF initialization.
+The Bluetooth build defaults to ZX-D30 on USART1 at 9600 8N1 and disables nRF initialization.
 UART/radio availability and command-task creation do not gate balancing. Motion commands
 expire after 500 ms: speed, turn and roll return to zero while balancing and leg-height
 control continue. WeChat requires a BLE UART module; classic HC-05/JDY-31 SPP cannot
@@ -190,8 +190,8 @@ For detailed checks, see [Debugging and troubleshooting](docs/troubleshooting.md
 
 | Function | MCU pin | Parameters |
 | --- | --- | --- |
-| USART1 TX | PA15 | 115200 (configurable), 8-N-1, DMA2 Stream 7 |
-| USART1 RX | PA10 | 115200 (configurable), 8-N-1, DMA2 Stream 5, receive-to-idle |
+| USART1 TX | PA15 | 9600 (configurable), 8-N-1, DMA2 Stream 7 |
+| USART1 RX | PA10 | 9600 (configurable), 8-N-1, DMA2 Stream 5, receive-to-idle |
 | SWDIO | PA13 | ST-Link |
 | SWCLK | PA14 | ST-Link |
 | Status LED | PC13 | Active-low; state-dependent heartbeat above |

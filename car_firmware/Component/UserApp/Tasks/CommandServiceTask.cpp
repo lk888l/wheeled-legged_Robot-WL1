@@ -98,6 +98,15 @@ void CommandServiceTask::process_command(etl::string_view frame)
     const auto name = parsed.command;
     auto args = parsed.args;
 
+    // An unconnected ZX-D30 is in AT mode. Do not echo its replies back into
+    // that parser (ERROR -> unknown-command echo -> ERROR can loop forever).
+    // Module replies must not refresh the motion-command watchdog either.
+    if (name == "OK" || name == "ERROR" || name == "FAIL" ||
+        name.substr(0U, 3U) == "OK+" || name.substr(0U, 3U) == "+OK" ||
+        name.substr(0U, 3U) == "+ER") {
+        return;
+    }
+
     if (name == "ping") {
         uart.print("pong state={} control={}\n", system_state_name(status_.state()),
                    status_.control_enabled() ? "on" : "off");
