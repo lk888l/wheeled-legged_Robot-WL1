@@ -294,8 +294,9 @@ PA0 必须保留 `KEY_A0` 上拉输入及低有效配置，不开启 EXTI；PC13
 
 ## 保存失败或重启参数不符
 
-先发 `params` 查看 `flash_valid/unsaved/armed/enabled`。`save: busy` 不会延迟补写，
-需 `control off` 并等待 armed=false 后重试；初始化或 IMU 故障不能用 control on 绕过。
+先发 `params` 查看 `flash_valid/unsaved/armed/enabled`。普通 save 可以在平衡运行中
+执行，无需 control off；busy 表示启动中或存储已被占用，或正在运行时请求了 recycle。
+只有回收维护需要 control off 并等待 armed=false；初始化或 IMU 故障不能用 control on 绕过。
 `save: unchanged` 代表当前设置已经持久化。`full` 需显式 `save recycle`，擦除期间
 断电可能丢失历史记录。烧录前确认没有整片擦除，链接脚本和 CubeMX 模板均保留
 0x08060000 起的 128 KiB 参数区。

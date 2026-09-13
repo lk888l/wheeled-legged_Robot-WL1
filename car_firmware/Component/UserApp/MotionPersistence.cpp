@@ -34,7 +34,7 @@ bool MotionPersistence::load()
 
 MotionSettings::SaveResult MotionPersistence::save(bool recycle)
 {
-    if (!control_.begin_storage()) return MotionSettings::SaveResult::busy;
+    if (!control_.begin_storage(recycle)) return MotionSettings::SaveResult::busy;
     const auto result = MotionSettings::saveToFlash(snapshot(control_.parameters()), recycle);
     has_saved_ = MotionSettings::loadFromFlash(saved_);
     control_.end_storage();

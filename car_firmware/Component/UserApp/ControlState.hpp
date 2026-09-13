@@ -62,9 +62,10 @@ public:
     void publish_feedback(const ControlFeedback& feedback);
     [[nodiscard]] LegTargets leg_targets() const;
     void publish_leg_targets(LegTargets targets);
-    [[nodiscard]] bool begin_storage();
+    [[nodiscard]] bool begin_storage(bool exclusive);
     void end_storage();
     [[nodiscard]] bool storage_busy() const;
+    [[nodiscard]] bool storage_blocks_control() const;
     [[nodiscard]] bool consume_storage_reset();
     void request_control_reset();
 

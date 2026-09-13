@@ -1,5 +1,9 @@
 # Flash 保存与模块化固件的合并兼容说明
 
+> 本文记录合并时的行为。后续普通 save 已改为保持平衡运行，只有 recycle 仍要求停机；
+> 当前实现见 [运行时 Flash 保存](runtime-flash-save.md) 和 [命令参考](commands.md)。
+
+
 本次合并连接本地 `bd0955b`（Flash 保存）与远端 `ed66a59`（模块化运行控制）。
 两者都基于 `9b58e9e`，一边仍修改旧 main.cpp，一边已把业务迁移到独立任务，
 因此不能整文件选择 ours 或 theirs。

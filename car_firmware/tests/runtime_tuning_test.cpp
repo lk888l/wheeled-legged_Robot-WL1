@@ -229,7 +229,7 @@ void test_remote_timeout()
     f.run();
 }
 
-void test_save_at_arming_boundary()
+void test_recycle_at_arming_boundary()
 {
     fake_flash::reset();
     Fixture f;
@@ -239,7 +239,7 @@ void test_save_at_arming_boundary()
     f.board.left_encoder().on_read = [&] {
         if (fake_rtos::now == 500U && !saved) {
             CHECK(!f.control.feedback().armed);
-            f.send("save", false);
+            f.send("save recycle", false);
             CHECK(fake_flash::device.writes == 21U);
             saved = true;
         }
@@ -284,6 +284,47 @@ void test_save_at_arming_boundary()
     };
     f.run();
 }
+
+void test_append_keeps_balancing()
+{
+    fake_flash::reset();
+    Fixture f;
+    f.send("anglepid -d 0");
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick == 510U) {
+            CHECK(f.control.feedback().armed);
+            f.board.imu().reading.Pitch -= 1.0;
+            // The storage owner remains busy while the real motion task runs.
+            CHECK(f.control.begin_storage(false));
+        }
+        if (tick >= 520U && tick <= 570U) {
+            CHECK(f.control.storage_busy() && !f.control.storage_blocks_control());
+            CHECK(f.control.feedback().armed && f.status.control_enabled());
+            CHECK(f.board.wheel_motor().left != 0 && f.board.wheel_motor().right != 0);
+        }
+        if (tick == 570U) {
+            f.control.end_storage();
+            const auto before = f.control.feedback();
+            fake_flash::device.on_yield = [&] {
+                CHECK(f.control.storage_busy() && !f.control.storage_blocks_control());
+                CHECK(f.control.feedback().armed && !f.control.consume_storage_reset());
+            };
+            f.send("save", false);
+            CHECK(fake_flash::device.writes == 21U && fake_flash::device.yields == 21U);
+            CHECK(f.control.feedback().left_pwm == before.left_pwm);
+            CHECK(!f.control.consume_storage_reset());
+        }
+        if (tick == 580U) {
+            CHECK(f.control.feedback().armed && f.board.wheel_motor().left != 0);
+            CHECK(f.control.feedback().deadline_misses == 0U);
+            f.send("save recycle", false);
+            CHECK(fake_flash::device.erases == 0U && f.control.feedback().armed);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -291,5 +332,6 @@ int main()
     test_each_gain();
     test_calibration_and_recovery();
     test_remote_timeout();
-    test_save_at_arming_boundary();
+    test_recycle_at_arming_boundary();
+    test_append_keeps_balancing();
 }

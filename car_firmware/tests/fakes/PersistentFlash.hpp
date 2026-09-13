@@ -12,17 +12,29 @@ struct Flash {
     unsigned writes{}, erases{};
     bool fail_write{};
     std::function<void()> on_write;
+    std::function<void()> on_yield;
+    unsigned yields{};
+    bool awaiting_yield{};
     Flash() { words.fill(0xFFFFFFFFU); }
     std::uint32_t readWord(std::size_t offset) { return words.at(offset / 4); }
     bool programWord(std::size_t offset, std::uint32_t value)
     {
         CHECK(fake_rtos::critical_depth == 0);
+        CHECK(!awaiting_yield);
         if (on_write) on_write();
         if (fail_write) return false;
         CHECK(offset % 4 == 0 && words.at(offset / 4) == 0xFFFFFFFFU);
         words[offset / 4] = value;
         ++writes;
+        awaiting_yield = true;
         return true;
+    }
+    void yieldAfterProgram()
+    {
+        CHECK(fake_rtos::critical_depth == 0 && awaiting_yield);
+        awaiting_yield = false;
+        ++yields;
+        if (on_yield) on_yield();
     }
     bool erase()
     {

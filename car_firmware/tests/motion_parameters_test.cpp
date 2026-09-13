@@ -31,6 +31,7 @@ struct FakeFlash {
     std::array<std::uint32_t, capacity_bytes / 4> words;
     int writes = 0, erases = 0, fail_after = -1;
     bool fail_erase = false, corrupt_write = false;
+    bool awaiting_yield = false;
 
     FakeFlash() { words.fill(0xFFFFFFFFU); }
     std::uint32_t readWord(std::size_t offset)
@@ -40,6 +41,7 @@ struct FakeFlash {
     }
     bool programWord(std::size_t offset, std::uint32_t value)
     {
+        require(!awaiting_yield, "every programmed word yields before another write");
         require(offset % 4 == 0 && offset < capacity_bytes, "write stays within aligned journal words");
         auto& word = words[offset / 4];
         require(word == 0xFFFFFFFFU, "never overwrite an occupied or torn word");
@@ -47,8 +49,10 @@ struct FakeFlash {
         if (fail_after > 0) --fail_after;
         ++writes;
         word &= corrupt_write ? value ^ 1U : value;
+        awaiting_yield = true;
         return true;
     }
+    void yieldAfterProgram() { awaiting_yield = false; }
     bool erase()
     {
         ++erases;
@@ -236,6 +240,11 @@ static void testStorageInterlock()
 {
     MotionStorageInterlock interlock;
     require(interlock.canRun(), "normal automatic startup is unchanged");
+    require(interlock.begin(true, 250, -120, false), "append allowed with active control and nonzero PWM");
+    require(interlock.busy() && interlock.canRun() && !interlock.consumeReset(), "append never disarms or resets PID");
+    require(!interlock.begin(false, 0, 0, false), "append still excludes overlapping writers");
+    interlock.finish();
+    require(interlock.canRun() && !interlock.consumeReset(), "append completion does not restart the gate");
     require(!interlock.begin(true, 0, 0) && !interlock.begin(false, 1, 0) && !interlock.begin(false, 0, -1),
             "armed control or nonzero PWM blocks flash writes");
     require(!interlock.busy() && !interlock.consumeReset(), "rejected save does not disturb running control");

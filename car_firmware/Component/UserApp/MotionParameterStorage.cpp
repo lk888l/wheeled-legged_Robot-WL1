@@ -1,5 +1,7 @@
 #include "MotionParameterStorage.hpp"
 #include "main.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 // These symbols are required in both linker scripts, keeping code and data apart.
 extern "C" {
@@ -42,6 +44,15 @@ struct InternalFlash {
         operation.VoltageRange = FLASH_VOLTAGE_RANGE_3; // Board VDD = 3.3 V.
         std::uint32_t error{};
         return HAL_FLASHEx_Erase(&operation, &error) == HAL_OK;
+    }
+
+    void yieldAfterProgram()
+    {
+        // STM32F411 DS10314 table 45: one x32 word takes 16 us typical,
+        // 100 us characterized maximum. Never program the entire record in
+        // one burst: block for a tick so higher-priority motion runs between
+        // words. Erase (up to seconds) remains an exclusive stopped operation.
+        vTaskDelay(1U);
     }
 };
 } // namespace

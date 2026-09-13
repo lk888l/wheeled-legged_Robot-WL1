@@ -54,7 +54,7 @@ void MotionControlTask::run()
         feedback.sample_tick = sample_tick;
         feedback.max_sample_gap_ticks = std::max(feedback.max_sample_gap_ticks, sample_gap);
         if (sample_gap > period) { ++feedback.deadline_misses; }
-        if (!status_.control_enabled() || control_.storage_busy()) {
+        if (!status_.control_enabled() || control_.storage_blocks_control()) {
             (void)control_.consume_storage_reset();
             startup_gate.reset();
             reset_controllers();
@@ -200,7 +200,7 @@ void MotionControlTask::run()
         // atomic with begin_storage/control off; sensor I/O and PID math stay outside.
         taskENTER_CRITICAL();
         const bool storage_reset = control_.consume_storage_reset();
-        if (!status_.control_enabled() || control_.storage_busy() || storage_reset) {
+        if (!status_.control_enabled() || control_.storage_blocks_control() || storage_reset) {
             startup_gate.reset();
             reset_controllers();
             wheel_motor.forceStop();

@@ -60,12 +60,14 @@ public:
         const auto offset = slot * record_bytes;
         for (std::size_t i = 0; i < commit_index; ++i) {
             if (!flash_.programWord(offset + i * 4, record[i])) return SaveResult::io_error;
+            flash_.yieldAfterProgram();
         }
         // Verify all data before publishing the commit marker.
         auto readback = read(slot);
         if (!std::equal(record.begin(), record.begin() + commit_index, readback.begin()))
             return SaveResult::io_error;
         if (!flash_.programWord(offset + commit_index * 4, committed)) return SaveResult::io_error;
+        flash_.yieldAfterProgram();
         readback = read(slot);
         return readback == record && validRecord(readback) ? SaveResult::saved : SaveResult::io_error;
     }

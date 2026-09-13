@@ -49,16 +49,23 @@ int main()
     moving.armed = true;
     moving.left_pwm = 20;
     control.publish_feedback(moving);
+    status.enable_control(true);
     send("@save\n");
+    last_contains("save: ok");
+    CHECK(fake_flash::device.writes == 21 && fake_flash::device.yields == 21);
+    CHECK(control.feedback().armed && control.feedback().left_pwm == 20);
+    CHECK(status.control_enabled() && !control.consume_storage_reset());
+    send("@save recycle\n");
     last_contains("save: busy");
-    CHECK(fake_flash::device.writes == 0 && !control.storage_busy());
+    CHECK(fake_flash::device.writes == 21 && !control.storage_busy());
     control.publish_feedback({});
     status.enable_control(true);
     send("@control off\n");
     CHECK(!status.control_enabled());
-    fake_flash::device.on_write = [&] { CHECK(control.storage_busy()); };
+    send("@velocitypid -p 0.06\n");
+    fake_flash::device.on_write = [&] { CHECK(control.storage_busy() && !control.storage_blocks_control()); };
     send("@sa");
-    CHECK(fake_flash::device.writes == 0); // Split BLE packet cannot trigger early save.
+    CHECK(fake_flash::device.writes == 21); // Split BLE packet cannot trigger early save.
     send("ve\n");
     last_contains("save: ok");
     CHECK(!control.storage_busy() && control.consume_storage_reset());
@@ -101,4 +108,18 @@ int main()
     send("@control on\n");
     CHECK(!status.control_enabled());
     last_contains("rejected");
+    fake_flash::device.fail_write = false;
+    fake_flash::device.on_write = {};
+    // Fill the remaining slots, then request a normal save with active PWM.
+    control.publish_feedback(moving);
+    for (unsigned i = 0; i < 8; ++i) {
+        const auto before_tuning = fake_flash::device.words;
+        send((std::string("@anglebias ") + std::to_string(11 + i) + "\n").c_str());
+        CHECK(fake_flash::device.words == before_tuning); // Tuning changes RAM only.
+        send("@save\n");
+    }
+    last_contains("save: full");
+    CHECK(fake_flash::device.erases == 0U && control.feedback().armed);
+    CHECK(!control.storage_busy() && !control.storage_blocks_control());
+    CHECK(!control.consume_storage_reset());
 }

@@ -125,7 +125,7 @@ void CommandServiceTask::process_command(etl::string_view frame)
             control_.request_control_reset();
             uart.print("control: off requested; wait for params armed=false before save\n");
         } else if (args == "on") {
-            if (status_.state() != SystemState::ready || control_.storage_busy()) {
+            if (status_.state() != SystemState::ready || control_.storage_blocks_control()) {
                 uart.print("control: on rejected; system not ready\n");
             } else {
                 status_.enable_control(true);
@@ -314,7 +314,7 @@ void CommandServiceTask::save_parameters(etl::string_view args)
     case MotionSettings::SaveResult::full: uart.print("save: full; use save recycle to erase journal and save\n"); break;
     case MotionSettings::SaveResult::invalid: uart.print("save: invalid parameters\n"); break;
     case MotionSettings::SaveResult::io_error: uart.print("save: flash error; RAM settings retained\n"); break;
-    case MotionSettings::SaveResult::busy: uart.print("save: busy; support robot, use control off, then retry\n"); break;
+    case MotionSettings::SaveResult::busy: uart.print("save: busy; recycle requires stopped control, or another save is active\n"); break;
     }
 }
 

@@ -39,10 +39,10 @@ void ControlState::publish_leg_targets(LegTargets targets)
     leg_targets_ = targets;
 }
 
-bool ControlState::begin_storage()
+bool ControlState::begin_storage(bool exclusive)
 {
     const CriticalSection lock;
-    return storage_interlock_.begin(feedback_.armed, feedback_.left_pwm, feedback_.right_pwm);
+    return storage_interlock_.begin(feedback_.armed, feedback_.left_pwm, feedback_.right_pwm, exclusive);
 }
 
 void ControlState::end_storage()
@@ -61,6 +61,12 @@ bool ControlState::consume_storage_reset()
 {
     const CriticalSection lock;
     return storage_interlock_.consumeReset();
+}
+
+bool ControlState::storage_blocks_control() const
+{
+    const CriticalSection lock;
+    return storage_interlock_.blocksControl();
 }
 
 void ControlState::request_control_reset()
