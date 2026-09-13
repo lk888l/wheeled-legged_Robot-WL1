@@ -38,6 +38,7 @@ private:
 public:
     ///
     HallEncoder(TIM_HandleTypeDef* _htim, InitConfig_t _cfg);
+    bool Init();
     ///
     int32_t getCounter();
     double getRPM();

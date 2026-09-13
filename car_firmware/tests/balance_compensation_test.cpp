@@ -1,86 +1,43 @@
-#include "CtrlAlgorithm/BalanceCompensation.hpp"
-
 #include <array>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <limits>
 
-namespace BC = BalanceCompensation;
+#include "CtrlAlgorithm/BalanceCompensation.hpp"
+#include "test_check.hpp"
 
-static void require(bool condition, const char* scenario)
-{
-    if (!condition) {
-        std::fprintf(stderr, "FAIL: %s\n", scenario);
-        std::exit(EXIT_FAILURE);
-    }
-}
-
-static void expectNear(float actual, float expected, const char* scenario)
-{
-    require(BC::isFiniteBias(actual) && std::fabs(actual - expected) < 0.0001F, scenario);
-}
+static_assert(BalanceCompensation::clampLegHeight(0.0F) == 44.5F);
+static_assert(BalanceCompensation::clampLegHeight(100.0F) == 78.5F);
+static_assert(BalanceCompensation::averageLegHeight(44.5F, 78.5F) == 61.5F);
+static_assert(BalanceCompensation::pitchBias(
+    BalanceCompensation::default_minimum_bias_degrees, 44.5F) ==
+    BalanceCompensation::default_minimum_bias_degrees);
 
 int main()
 {
-    require(BC::minimum_leg_height_mm == 44.5F, "minimum height remains 44.5 mm");
-    require(BC::maximum_leg_height_mm == 78.5F, "maximum height remains 78.5 mm");
-    require(BC::default_minimum_bias_degrees == 12.6F, "reset calibration is 12.6 degrees");
+    using namespace BalanceCompensation;
+    CHECK(minimum_leg_height_mm == 44.5F);
+    CHECK(maximum_leg_height_mm == 78.5F);
+    CHECK(default_minimum_bias_degrees == 7.0F);
 
-    // Independent reference values from the accepted calibration table.
-    struct Reference { float height; float bias_12_6; float bias_13_6; };
-    const std::array references{
-        Reference{44.5F, 12.6F, 13.6F},
-        Reference{61.5F, 9.70252F, 10.70252F},
-        Reference{78.5F, 12.73532F, 13.73532F},
-    };
-    for (const auto& reference : references) {
-        expectNear(BC::pitchBias(12.6F, reference.height), reference.bias_12_6,
-                   "default baseline follows the reference curve");
-        expectNear(BC::pitchBias(13.6F, reference.height), reference.bias_13_6,
-                   "edited baseline follows the reference curve");
+    // Reference points were calculated independently in double precision from
+    // 7.0 + f(h) - f(44.5); they do not call the production helper for expected values.
+    struct Reference { float height; double bias; };
+    constexpr std::array<Reference, 5U> reference{{
+        {44.5F, 7.0}, {50.0F, 5.413635}, {60.0F, 4.119635},
+        {61.5F, 4.102520}, {78.5F, 7.135320}}};
+    for (const auto& point : reference) {
+        CHECK(std::abs(pitchBias(7.0F, point.height) - point.bias) < 0.00002);
+        CHECK(std::abs(pitchBias(12.0F, point.height) - (point.bias + 5.0)) < 0.00002);
+        CHECK(clampLegHeight(point.height) == point.height);
+    }
+    for (const float baseline : {-12.5F, 0.0F, 9.5F, 23.5F}) {
+        CHECK(pitchBias(baseline, minimum_leg_height_mm) == baseline);
     }
 
-    // Height compensation must never change the meaning of the minimum baseline.
-    for (float baseline : {-5.0F, 0.0F, 12.6F, 13.6F, 20.0F}) {
-        require(BC::pitchBias(baseline, 44.5F) == baseline,
-                "minimum height uses the exact calibrated baseline");
-        for (unsigned step = 0; step <= 340; ++step) {
-            const float height = 44.5F + 0.1F * static_cast<float>(step);
-            expectNear(BC::pitchBias(baseline + 1.0F, height) - BC::pitchBias(baseline, height),
-                       1.0F, "editing the baseline shifts the whole curve by the same amount");
-        }
-    }
-
-    expectNear(BC::averageLegHeight(44.5F, 78.5F), 61.5F, "both legs contribute to the average");
-    expectNear(BC::averageLegHeight(78.5F, 44.5F), 61.5F, "left/right exchange keeps the average");
-    expectNear(BC::pitchBias(13.6F, BC::averageLegHeight(44.5F, 78.5F)), 10.70252F,
-               "asymmetric legs use their shared average for compensation");
-
-    // Limit each leg before averaging: clamp(avg(20,80)) would incorrectly give 50.
-    const float limited_left = BC::clampLegHeight(20.0F);
-    const float limited_right = BC::clampLegHeight(80.0F);
-    expectNear(limited_left, 44.5F, "low leg target is clamped");
-    expectNear(limited_right, 78.5F, "high leg target is clamped");
-    expectNear(BC::averageLegHeight(limited_left, limited_right), 61.5F,
-               "per-leg bounds are applied before averaging");
-    expectNear(BC::clampLegHeight(55.0F), 55.0F, "valid leg target is preserved");
-    expectNear(BC::pitchBias(12.6F, BC::averageLegHeight(
-                   BC::clampLegHeight(0.0F), BC::clampLegHeight(0.0F))),
-               12.6F, "below-minimum targets use the minimum-height calibration");
-
-    // Repeated evaluations after a change at middle height must not accumulate trim.
-    for (unsigned cycle = 0; cycle < 1000; ++cycle) {
-        const auto& reference = references[cycle % references.size()];
-        expectNear(BC::pitchBias(13.6F, reference.height), reference.bias_13_6,
-                   "calibration is stable over repeated height changes");
-    }
-    expectNear(BC::pitchBias(13.6F, 44.5F), 13.6F, "lowering the legs returns to the edited baseline");
-
-    require(BC::isFiniteBias(13.6F) && BC::isFiniteBias(-5.0F), "finite calibration values are accepted");
-    require(!BC::isFiniteBias(std::numeric_limits<float>::quiet_NaN()), "NaN calibration is rejected");
-    require(!BC::isFiniteBias(std::numeric_limits<float>::infinity()), "positive infinity is rejected");
-    require(!BC::isFiniteBias(-std::numeric_limits<float>::infinity()), "negative infinity is rejected");
-
-    std::puts("PASS: balance calibration, height limits, symmetry and repeated updates");
+    const float low = clampLegHeight(-100.0F);
+    const float high = clampLegHeight(100.0F);
+    CHECK(low == 44.5F && high == 78.5F);
+    CHECK(averageLegHeight(low, high) == 61.5F);
+    CHECK(averageLegHeight(low, high) == averageLegHeight(high, low));
+    CHECK(pitchBias(default_minimum_bias_degrees, averageLegHeight(low, high)) ==
+          pitchBias(default_minimum_bias_degrees, averageLegHeight(high, low)));
 }

@@ -222,17 +222,7 @@ bool NRF24L01P::receive(std::uint8_t* data, std::uint8_t length)
     const bool success =
         spiSend(&command_value, 1U) && spiReceive(data, length);
     setChipSelect(false);
-    return success && clearStatus(0x40U);
-}
-
-bool NRF24L01P::hasReceivedPayload(bool& available)
-{
-    std::uint8_t fifo_status = 0U;
-    if (!readRegister(register_fifo_status, &fifo_status, 1U)) {
-        return false;
-    }
-    available = (fifo_status & 0x01U) == 0U;
-    return true;
+    return success;
 }
 
 bool NRF24L01P::readStatus(Status& status)
@@ -261,10 +251,16 @@ bool NRF24L01P::handleIrq(Status& status)
         return false;
     }
 
-    // Leave RX data and RX_DR for receive(); never discard a car's reply here.
-    const std::uint8_t flags = (status.tx_sent ? 0x20U : 0U) |
-                               (status.max_retries ? 0x10U : 0U);
-    bool success = clearStatus(flags);
+    // STATUS is write-one-to-clear. A TX completion can arrive between the
+    // read above and this write: clear only flags that this call observed.
+    const auto observed = static_cast<std::uint8_t>(
+        (status.rx_ready ? 0x40U : 0U) |
+        (status.tx_sent ? 0x20U : 0U) |
+        (status.max_retries ? 0x10U : 0U));
+    bool success = clearStatus(observed);
+    if (status.rx_ready) {
+        success = flushRx() && success;
+    }
     if (status.max_retries) {
         success = flushTx() && success;
     }

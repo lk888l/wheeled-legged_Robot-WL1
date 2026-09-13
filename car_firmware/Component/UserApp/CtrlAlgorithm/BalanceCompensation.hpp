@@ -7,7 +7,7 @@ namespace BalanceCompensation {
 
 inline constexpr float minimum_leg_height_mm = 44.5F;
 inline constexpr float maximum_leg_height_mm = 78.5F;
-inline constexpr float default_minimum_bias_degrees = 9.5F;
+inline constexpr float default_minimum_bias_degrees = 7.0F;
 
 constexpr float clampLegHeight(float height_mm) noexcept
 {
