@@ -224,6 +224,10 @@ void CommandServiceTask::process_command(etl::string_view frame)
                        parameters.angle_bias, control_.feedback().angle_bias);
             return;
         }
+        if (name == "deadzone") {
+            uart.print("deadzone={} (left/right PWM counts)\n", parameters.motor_deadzone);
+            return;
+        }
     }
     bool accepted = false;
     if (name == "showimu" || name == "showrpm") {
@@ -253,6 +257,11 @@ void CommandServiceTask::process_command(etl::string_view frame)
     } else if (name == "anglebias") {
         // This is the minimum-height baseline; MotionControl adds height compensation.
         accepted = parse_value(args, parameters.angle_bias);
+    } else if (name == "deadzone") {
+        std::uint16_t value{};
+        accepted = text_command::parse_argument(args, value) && args.empty() &&
+            value <= MotionSettings::maximum_motor_deadzone;
+        if (accepted) parameters.motor_deadzone = value;
     } else if (name == "legheight") {
         accepted = parse_value(args, parameters.leg_height);
         if (accepted) {
@@ -327,6 +336,7 @@ void CommandServiceTask::show_parameters()
     uart.print("params: flash_valid={} unsaved={} armed={} enabled={}\n",
         persistence_.has_saved_parameters(), persistence_.unsaved(), f.armed, status_.control_enabled());
     uart.print("anglebias min={:.4f} effective={:.4f}\n", p.angle_bias, f.angle_bias);
+    uart.print("deadzone={} (left/right PWM counts)\n", p.motor_deadzone);
     uart.print("anglepid p_mid={:.4f} i={:.6f} d={:.4f} p_effective={:.4f} mode={}\n",
         p.angle.kp, p.angle.ki, p.angle.kd, f.angle_kp, p.angle_kp_auto ? "auto" : "manual");
     uart.print("velocitypid p={:.6f} i={:.6f} d={:.6f}\n", p.velocity.kp, p.velocity.ki, p.velocity.kd);

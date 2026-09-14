@@ -87,8 +87,11 @@ public:
 class TB6612 {
 public:
     int left{}, right{};
+    uint16_t a_deadzone{}, b_deadzone{};
     unsigned writes{};
     void forceStop() { left = right = 0; }
+    void setA_DeadZone(uint16_t value) { assert(fake_rtos::critical_depth > 0); a_deadzone = value; }
+    void setB_DeadZone(uint16_t value) { assert(fake_rtos::critical_depth > 0); b_deadzone = value; }
     // Real PWM/GPIO writes are bounded register operations. They are atomic
     // with the storage interlock; blocking IMU I/O must still stay outside.
     void setAVel_raw(int value) { assert(fake_rtos::critical_depth > 0); left = value; ++writes; }

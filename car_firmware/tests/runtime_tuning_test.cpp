@@ -129,11 +129,16 @@ void test_calibration_and_recovery()
         const auto tick = fake_rtos::now;
         if (tick == 510U) {
             CHECK(f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().a_deadzone == MotionSettings::default_motor_deadzone);
+            CHECK(f.board.wheel_motor().b_deadzone == MotionSettings::default_motor_deadzone);
+            f.send("deadzone 75", false);
             CHECK(std::fabs(f.control.feedback().angle_kp - 70.25F) < 0.0001F);
             f.send("anglepid -p 80");
             f.send("R 0 0 0 61.5");
         }
         if (tick == 560U) {
+            CHECK(f.board.wheel_motor().a_deadzone == 75U);
+            CHECK(f.board.wheel_motor().b_deadzone == 75U);
             CHECK(f.control.feedback().angle_kp == 80);
             CHECK(std::fabs(f.control.feedback().angle_bias -
                 BalanceCompensation::pitchBias(

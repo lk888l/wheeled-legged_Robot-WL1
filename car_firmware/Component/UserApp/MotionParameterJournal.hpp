@@ -15,7 +15,11 @@ public:
     static constexpr std::uint32_t magic = 0x574C3150U; // WL1P
     // Keep the 84-byte stride so existing version-1 records remain readable.
     // Version 2 uses bit 16 of the field-count word for fixed/manual angle Kp.
-    static constexpr std::uint32_t version = 2;
+    // Version 3 stores the shared motor dead zone in the high half of the
+    // version word, preserving both the 15-float payload and physical stride.
+    static constexpr std::uint32_t version = 3;
+    static constexpr std::uint32_t version_mask = 0xFFFFU;
+    static constexpr unsigned deadzone_shift = 16U;
     static constexpr std::uint32_t manual_kp_flag = 1U << 16;
     static constexpr std::uint32_t committed = 0x434F4D54U;
     static constexpr std::size_t header_words = 4;
@@ -50,7 +54,7 @@ public:
         }
         Record record{};
         record[0] = magic;
-        record[1] = version;
+        record[1] = version | (std::uint32_t{parameters.motor_deadzone} << deadzone_shift);
         record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag);
         record[3] = state.latest == no_slot ? 1U : state.record[3] + 1U;
         const auto words = encode(parameters);
@@ -110,14 +114,20 @@ private:
         ParameterWords words{};
         std::copy_n(record.begin() + header_words, parameter_count, words.begin());
         auto parameters = decode(words);
-        parameters.angle_kp_auto = record[1] == 1U || (record[2] & manual_kp_flag) == 0U;
+        const auto schema = record[1] & version_mask;
+        parameters.angle_kp_auto = schema == 1U || (record[2] & manual_kp_flag) == 0U;
+        if (schema == version) {
+            parameters.motor_deadzone = static_cast<std::uint16_t>(record[1] >> deadzone_shift);
+        }
         return parameters;
     }
 
     static bool validRecord(const Record& record)
     {
+        const auto schema = record[1] & version_mask;
         const bool supported = (record[1] == 1U && record[2] == parameter_count) ||
-            (record[1] == version && (record[2] & ~manual_kp_flag) == parameter_count);
+            (record[1] == 2U && (record[2] & ~manual_kp_flag) == parameter_count) ||
+            (schema == version && (record[2] & ~manual_kp_flag) == parameter_count);
         return record[0] == magic && supported &&
             record[commit_index] == committed && record[crc_index] == crc(record) &&
             valid(parametersFrom(record));

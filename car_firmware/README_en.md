@@ -9,7 +9,7 @@ and two leg servos, and receives remote commands over a Bluetooth UART, with opt
 
 The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
-- `save` persists all motion tunings and the angle Kp mode to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
+- `save` persists all motion tunings, the shared wheel-PWM dead zone, and the angle Kp mode to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
 - ZX-D30 BLE UART at 9600 8N1 by default; optional 32-byte nRF24L01+ commands;
@@ -224,10 +224,11 @@ range, and VQF for attitude fusion.
 | Left encoder A / B | PA5 / PA1 | TIM2_CH1 / CH2 |
 | Right encoder A / B | PB4 / PB5 | TIM3_CH1 / CH2 |
 
-The current PID path inverts the TB6612 B-channel direction and configures a
-minimum compare value of 50 counts for both PWM channels. The final PWM command
-is limited to `-1000..1000`. A zero command uses a dedicated safe branch, so the
-dead zone is not reapplied and the compare value remains zero.
+The current PID path inverts the TB6612 B-channel direction. Both PWM channels
+share a runtime-adjustable minimum nonzero compare value. It defaults to zero, so
+compensation is disabled until set with `deadzone <0..1000>` and persisted with `save`.
+The final PWM command is limited to `-1000..1000`. A zero command uses a dedicated
+safe branch, so the dead zone is not reapplied and the compare value remains zero.
 
 ### Leg Servos
 

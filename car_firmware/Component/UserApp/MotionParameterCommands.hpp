@@ -31,9 +31,24 @@ inline bool parseFloat(std::string_view& args, float& value) noexcept
         BalanceCompensation::isFiniteBias(value);
 }
 
+inline bool parseDeadzone(std::string_view& args, std::uint16_t& value) noexcept
+{
+    const auto token = takeToken(args);
+    if (token.empty()) return false;
+    const auto result = std::from_chars(token.data(), token.data() + token.size(), value);
+    return result.ec == std::errc{} && result.ptr == token.data() + token.size() &&
+        value <= maximum_motor_deadzone;
+}
+
 // Apply to a copy so malformed/truncated packets never partially update a command.
 inline bool applyTuning(Parameters& p, std::string_view name, std::string_view args) noexcept
 {
+    if (name == "deadzone") {
+        std::uint16_t value{};
+        if (!parseDeadzone(args, value) || !args.empty()) return false;
+        p.motor_deadzone = value;
+        return true;
+    }
     PidGains* pid = name == "anglepid" ? &p.angle : name == "velocitypid" ? &p.velocity :
         name == "differpid" ? &p.difference :
         (name == "rollpid" || name == "legpid") ? &p.roll : nullptr;

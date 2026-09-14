@@ -67,7 +67,8 @@ static_assert(Journal::record_bytes == 84);
 static void testCommandsAndCompensation()
 {
     MS::Parameters p;
-    require(p.minimum_pitch_bias == 9.5F && p.angle.kp == 75.35F, "preserve compiled calibration and effective gains");
+    require(p.minimum_pitch_bias == 9.5F && p.angle.kp == 75.35F &&
+            p.motor_deadzone == 0U, "preserve compiled calibration, gains and motor dead zone");
     for (const auto name : {"anglepid", "velocitypid", "differpid", "rollpid", "legpid"}) {
         auto edited = p;
         require(MS::applyTuning(edited, name, "  -p   1.25\r\n"), "P accepts whitespace and CRLF");
@@ -90,6 +91,13 @@ static void testCommandsAndCompensation()
     require(MS::applyTuning(p, "legheight", "99") && p.leg_height == 78.5F, "save bounded leg height");
     require(MS::applyTuning(p, "legheight", "0") && p.leg_height == 44.5F, "bound low leg height");
     require(MS::applyTuning(p, "target_roll", "-2") && p.roll_target == -2, "roll posture is tunable");
+    require(MS::applyTuning(p, "deadzone", "75") && p.motor_deadzone == 75U,
+            "shared motor dead zone is tunable");
+    for (const auto bad : {"-1", "1001", "1.5", "50junk", "50 60"}) {
+        const auto before_deadzone = p;
+        require(!MS::applyTuning(p, "deadzone", bad), "reject invalid motor dead zone");
+        require(same(before_deadzone, p), "invalid dead zone has no side effects");
+    }
     require(!MS::applyTuning(p, "R", "0 0 0 61.5"), "motion frames use their separate transient path");
     require(MS::parseSaveMode("") == MS::SaveMode::append &&
             MS::parseSaveMode(" all\r\n") == MS::SaveMode::append &&
@@ -132,6 +140,7 @@ static void testJournal()
 
     MS::Parameters second{10.5F, {80, 0.2F, 55}, {0.04F, 0.007F, 0.001F},
         {1.5F, 0.0008F, 0.3F}, {0.2F, -0.3F, 0.01F}, 61.5F, -1.5F};
+    second.motor_deadzone = 72U;
     require(journal.save(second) == MS::SaveResult::saved, "save all command-tunable fields together");
     require(Journal(flash).load(restored) && same(second, restored), "new boot restores every saved field exactly");
     // Flip each header/payload/CRC/commit word and fall back to the prior record.
@@ -173,6 +182,9 @@ static void testJournal()
     invalid = second;
     invalid.leg_height = 100;
     require(journal.save(invalid) == MS::SaveResult::invalid, "out-of-bounds stored posture is rejected");
+    invalid = second;
+    invalid.motor_deadzone = MS::maximum_motor_deadzone + 1U;
+    require(journal.save(invalid) == MS::SaveResult::invalid, "out-of-bounds motor dead zone is rejected");
 
     auto third = second;
     third.angle.kp = 81;
@@ -213,25 +225,44 @@ static void testLegacyJournal()
     legacy[20] = 0x434F4D54U;
     std::copy(legacy.begin(), legacy.end(), flash.words.begin());
     MS::Parameters restored;
-    require(Journal(flash).load(restored) && same(original, restored), "v1 restores midpoint mode and all gains");
+    require(Journal(flash).load(restored) && same(original, restored) &&
+            restored.motor_deadzone == MS::default_motor_deadzone,
+            "v1 restores midpoint mode, gains and the compiled dead-zone default");
     require(Journal(flash).save(original) == MS::SaveResult::unchanged && flash.writes == 0,
             "reading legacy settings does not force a migration write");
+
+    FakeFlash v2_flash;
+    auto v2 = legacy;
+    v2[1] = 2U;
+    v2[2] = MS::parameter_count | Journal::manual_kp_flag;
+    v2[Journal::crc_index] = Journal::crc(v2);
+    std::copy(v2.begin(), v2.end(), v2_flash.words.begin());
+    auto expected_v2 = original;
+    expected_v2.angle_kp_auto = false;
+    require(Journal(v2_flash).load(restored) && same(expected_v2, restored) &&
+            restored.motor_deadzone == MS::default_motor_deadzone,
+            "v2 restores its Kp mode and the compiled dead-zone default");
+
     auto manual = original;
     manual.angle_kp_auto = false;
+    manual.motor_deadzone = 72U;
     require(Journal(flash).save(manual) == MS::SaveResult::saved && flash.erases == 0,
-            "mode-only change appends v2 without erasing legacy record");
-    require(flash.words[21] == 0x574C3150U && flash.words[22] == 2U,
-            "v2 keeps v1 physical record stride");
-    require(Journal(flash).load(restored) && same(manual, restored), "manual mode survives new boot");
+            "mode and dead-zone changes append v3 without erasing legacy record");
+    require(flash.words[21] == Journal::magic &&
+            (flash.words[22] & Journal::version_mask) == Journal::version &&
+            (flash.words[22] >> Journal::deadzone_shift) == 72U,
+            "v3 keeps the v1 physical record stride and packs the motor dead zone");
+    require(Journal(flash).load(restored) && same(manual, restored),
+            "manual mode and motor dead zone survive a new boot");
     auto damaged = flash;
     damaged.words[41] = 0xFFFFFFFFU;
-    require(Journal(damaged).load(restored) && same(original, restored), "torn v2 falls back to v1");
+    require(Journal(damaged).load(restored) && same(original, restored), "torn v3 falls back to v1");
     Journal::Record invalid{};
     std::copy_n(flash.words.begin() + 21, invalid.size(), invalid.begin());
     invalid[2] |= 1U << 17;
     invalid[19] = Journal::crc(invalid);
     std::copy(invalid.begin(), invalid.end(), damaged.words.begin() + 21);
-    require(Journal(damaged).load(restored) && same(original, restored), "unknown v2 flags rejected despite valid CRC");
+    require(Journal(damaged).load(restored) && same(original, restored), "unknown v3 flags rejected despite valid CRC");
     require(Journal(flash).save(original) == MS::SaveResult::saved &&
             Journal(flash).load(restored) && restored.angle_kp_auto, "returning to auto also persists");
 }

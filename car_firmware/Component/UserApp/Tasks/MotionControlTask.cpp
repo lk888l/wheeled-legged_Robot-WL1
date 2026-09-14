@@ -206,6 +206,8 @@ void MotionControlTask::run()
             wheel_motor.forceStop();
             last_wake = xTaskGetTickCount();
         } else {
+            wheel_motor.setA_DeadZone(parameters.motor_deadzone);
+            wheel_motor.setB_DeadZone(parameters.motor_deadzone);
             wheel_motor.setAVel_raw(left_pwm);
             wheel_motor.setBVel_raw(right_pwm);
         }

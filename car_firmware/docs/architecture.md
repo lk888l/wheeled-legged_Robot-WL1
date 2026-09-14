@@ -251,7 +251,7 @@ Release/RelWithDebInfo 使用 `-O3 -fno-fast-math`，VQF 编译保护会拒绝 f
 | Difference target | `0` | 左右 RPM 差目标 |
 | Roll target | `0°` | 车体横滚目标 |
 | Leg height | `44.5 mm` | 共同腿高目标 |
-| Motor dead zone | `50 / 50` | TB6612 A/B PWM counts |
+| Motor dead zone | `0` shared default | TB6612 A/B minimum nonzero PWM counts; runtime `deadzone` tuning |
 
 在线修改方式见 [命令参考](commands.md)。
 
@@ -353,7 +353,8 @@ MotionControl 的休眠、I2C、VQF、PID 和日志均不在临界区内。临�
 ## 运动参数持久化
 
 `ControlState` 是运行参数和反馈的所有者；`MotionPersistence` 从其快照中按白名单
-提取 15 个浮点参数和 Kp 模式，交给 `MotionParameterJournal` 和 HAL 存储适配层。
+提取 15 个浮点参数、Kp 模式和双轮共用电机死区，交给 `MotionParameterJournal` 和
+HAL 存储适配层。
 `CPP_Main` 在启动控制任务前加载参数，命令任务独占后续保存及已保存快照。
 互锁区分写入占用和控制阻断：普通追加保存只防止并发写入，不阻断控制，不重置 PID
 或启动门控。每写一个 32 位字后，命令任务 vTaskDelay(1) 让出一个 tick，运动任务
@@ -361,10 +362,12 @@ MotionControl 的休眠、I2C、VQF、PID 和日志均不在临界区内。临�
 最终电机输出与反馈发布原子检查维护互锁，防止擦除与解锁交错。
 `control off` 也留下重置请求，连续 off/on 不能跳过稳定窗口。
 
-Flash 扇区 7 独立预留 128 KiB，程序链接区为 384 KiB。日志 v2 仍为 84 字节：
-头部第 2 个索引字低位为 15，bit16 表示固定 Kp，其余新增位拒绝；CRC 覆盖模式。
-v1 记录按自动基准模式读取，无需启动时重写；v1/v2 可追加共存。普通保存只写空槽，
-日志满时返回 full，显式 recycle 才擦除。详细行为见 [保存命令](commands.md#flash-参数保存)。
+Flash 扇区 7 独立预留 128 KiB，程序链接区为 384 KiB。日志 v3 仍为 84 字节：
+版本字低 16 位为 schema、高 16 位保存 0..1000 的死区；字段计数字低位为 15，
+bit16 表示固定 Kp，其余新增位拒绝；CRC 覆盖两项元数据。v1 记录按自动基准模式
+读取，v1/v2 的死区采用编译默认值 0，无需启动时重写；v1/v2/v3 可追加共存。
+普通保存只写空槽，日志满时返回 full，显式 recycle 才擦除。详细行为见
+[保存命令](commands.md#flash-参数保存)。
 
 运行中保存的时序边界见 [运行时 Flash 保存](runtime-flash-save.md)。开机恢复是只读操作，
 普通遥控调参不触发 Flash 写入；save 处理时先复制整组 RAM 参数，再写日志。

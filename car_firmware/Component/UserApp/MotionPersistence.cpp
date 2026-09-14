@@ -5,7 +5,8 @@ namespace app {
 MotionSettings::Parameters MotionPersistence::snapshot(const ControlParameters& p)
 {
     return {p.angle_bias, p.angle, p.velocity, p.difference, p.roll,
-        BalanceCompensation::clampLegHeight(p.leg_height), p.roll_target, p.angle_kp_auto};
+        BalanceCompensation::clampLegHeight(p.leg_height), p.roll_target, p.angle_kp_auto,
+        p.motor_deadzone};
 }
 
 bool MotionPersistence::load()
@@ -22,6 +23,7 @@ bool MotionPersistence::load()
     p.leg_height = saved_.leg_height;
     p.roll_target = saved_.roll_target;
     p.angle_kp_auto = saved_.angle_kp_auto;
+    p.motor_deadzone = saved_.motor_deadzone;
     control_.set_parameters(p);
     control_.publish_leg_targets({p.leg_height, p.leg_height});
     ControlFeedback feedback;

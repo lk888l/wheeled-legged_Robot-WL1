@@ -57,8 +57,6 @@ BoardHardware::BoardHardware()
     imu_.setGyroOffset(2.5, 0.7, 0.9);
     wheel_motor_.setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::B),
                                   TB6612::Direction::Negative);
-    wheel_motor_.setA_DeadZone(50);
-    wheel_motor_.setB_DeadZone(50);
     left_servo_.setLimit(0.0F, 50.0F);
     right_servo_.setLimit(0.0F, 50.0F);
 #if WL1_ENABLE_NRF24

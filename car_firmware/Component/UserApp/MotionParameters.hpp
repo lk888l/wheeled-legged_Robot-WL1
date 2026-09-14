@@ -13,6 +13,8 @@ struct PidGains {
 
 inline constexpr float reference_height_mm = 61.5F;
 inline constexpr float angle_kp_height_slope = 0.3F;
+inline constexpr std::uint16_t default_motor_deadzone = 0U;
+inline constexpr std::uint16_t maximum_motor_deadzone = 1000U;
 
 // Only tunings and posture targets belong here. Speed, turn and motor commands
 // deliberately start at zero after every boot.
@@ -25,6 +27,7 @@ struct Parameters {
     float leg_height = BalanceCompensation::minimum_leg_height_mm;
     float roll_target = 0.0F;
     bool angle_kp_auto = true;
+    std::uint16_t motor_deadzone = default_motor_deadzone;
 };
 
 constexpr float effectiveAngleKp(float reference_kp, float average_height) noexcept
@@ -47,7 +50,8 @@ constexpr ParameterWords encode(const Parameters& p) noexcept
 
 constexpr bool sameParameters(const Parameters& a, const Parameters& b) noexcept
 {
-    return encode(a) == encode(b) && a.angle_kp_auto == b.angle_kp_auto;
+    return encode(a) == encode(b) && a.angle_kp_auto == b.angle_kp_auto &&
+        a.motor_deadzone == b.motor_deadzone;
 }
 
 constexpr Parameters decode(const ParameterWords& words) noexcept
@@ -63,7 +67,8 @@ constexpr bool valid(const Parameters& p) noexcept
         if ((word & 0x7F800000U) == 0x7F800000U) return false;
     }
     return p.leg_height >= BalanceCompensation::minimum_leg_height_mm &&
-        p.leg_height <= BalanceCompensation::maximum_leg_height_mm;
+        p.leg_height <= BalanceCompensation::maximum_leg_height_mm &&
+        p.motor_deadzone <= maximum_motor_deadzone;
 }
 
 } // namespace MotionSettings

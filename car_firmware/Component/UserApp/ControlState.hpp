@@ -25,6 +25,8 @@ struct ControlParameters {
     bool show_rpm{false};
     // -p tunes the 61.5 mm reference gain; -manual explicitly selects fixed Kp.
     bool angle_kp_auto{true};
+    // Minimum nonzero compare value, shared by the left/A and right/B wheel outputs.
+    std::uint16_t motor_deadzone{MotionSettings::default_motor_deadzone};
     // Only accepted movement commands renew this deadline; PID tuning does not.
     uint32_t motion_command_tick{};
     bool motion_command_received{};

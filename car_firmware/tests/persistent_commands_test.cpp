@@ -41,9 +41,11 @@ int main()
     send("velocitypid -i 0.007", true);
     send("differpid -d 0.02", true);
     send("@legpid -d 0.03\n");
+    send("@deadzone 72\n");
     send("@R 5 6 2 61.5\n");
     CHECK(control.parameters().angle.kp == 80 && control.parameters().angle_kp_auto);
     CHECK(control.parameters().roll.kd == 0.03F);
+    CHECK(control.parameters().motor_deadzone == 72U);
 
     app::ControlFeedback moving;
     moving.armed = true;
@@ -86,6 +88,7 @@ int main()
     CHECK(restored.parameters().velocity_target == 0 && restored.parameters().difference_target == 0);
     CHECK(!restored.parameters().motion_command_received && restored.parameters().motion_command_tick == 0);
     CHECK(!restored.parameters().show_imu && !restored.parameters().show_rpm);
+    CHECK(restored.parameters().motor_deadzone == 72U);
     CHECK(restored.leg_targets().left == 61.5F && restored.leg_targets().right == 61.5F);
     CHECK(!restore.unsaved());
 

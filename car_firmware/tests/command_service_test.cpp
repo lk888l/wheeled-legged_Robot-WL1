@@ -45,6 +45,7 @@ int main()
     };
 
     CHECK(control.parameters().angle_bias == BalanceCompensation::default_minimum_bias_degrees);
+    CHECK(control.parameters().motor_deadzone == MotionSettings::default_motor_deadzone);
     // Both command transports must preserve the last valid baseline on every
     // rejected number, including numeric overflow and extra arguments.
     for (const bool radio : {false, true}) {
@@ -97,6 +98,17 @@ int main()
     CHECK(control.parameters().leg_height == 50.0F);
     dispatch("legheight 60                     extra");
     CHECK(control.parameters().leg_height == 50.0F);
+    dispatch("deadzone 75");
+    CHECK(control.parameters().motor_deadzone == 75U);
+    for (const char* invalid : {"deadzone -1", "deadzone 1001", "deadzone 1.5",
+                                "deadzone 50junk", "deadzone 50 60"}) {
+        dispatch(invalid);
+        CHECK(control.parameters().motor_deadzone == 75U);
+    }
+    dispatch("deadzone", true);
+    CHECK(board.command_uart().logs.back().find("deadzone=75") != std::string::npos);
+    dispatch("deadzone 0", true);
+    CHECK(control.parameters().motor_deadzone == 0U);
     dispatch("motor 100 100");
     CHECK(board.command_uart().logs.back().find("raw PWM is unavailable") != std::string::npos);
     dispatch("ping");
