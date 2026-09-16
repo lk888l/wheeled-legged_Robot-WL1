@@ -114,6 +114,34 @@ void CommandServiceTask::process_command(etl::string_view frame)
         return;
     }
     if (name == "save") { save_parameters(args); return; }
+    if (name == "install") {
+        if (args == "on") {
+            if (status_.state() != SystemState::ready || control_.storage_busy()) {
+                uart.print("install: rejected; system not ready or storage busy\n");
+                return;
+            }
+            taskENTER_CRITICAL();
+            status_.enable_control(false);
+            control_.set_installation_mode(true);
+            board_.wheel_motor().forceStop();
+            taskEXIT_CRITICAL();
+        } else if (args == "off") {
+            // Idempotent exit never enables balancing or revives a remote target.
+            taskENTER_CRITICAL();
+            status_.enable_control(false);
+            control_.set_installation_mode(false);
+            control_.request_control_reset();
+            board_.force_safe_outputs();
+            taskEXIT_CRITICAL();
+        } else if (!args.empty() && args != "status") {
+            uart.print("install: usage: install on|off|status\n");
+            return;
+        }
+        uart.print("install: active={} ready={} height=44.5 control={}\n",
+            control_.installation_mode() ? 1 : 0, control_.installation_ready() ? 1 : 0,
+            status_.control_enabled() ? "on" : "off");
+        return;
+    }
     if (name == "params") {
         if (args.empty()) show_parameters();
         else uart.print("params: usage: params\n");
@@ -121,11 +149,18 @@ void CommandServiceTask::process_command(etl::string_view frame)
     }
     if (name == "control") {
         if (args == "off") {
+            taskENTER_CRITICAL();
             status_.enable_control(false);
             control_.request_control_reset();
+            // Installation continues to hold its position until install off.
+            if (control_.installation_mode()) board_.wheel_motor().forceStop();
+            else board_.force_safe_outputs();
+            taskEXIT_CRITICAL();
             uart.print("control: off requested; wait for params armed=false before save\n");
         } else if (args == "on") {
-            if (status_.state() != SystemState::ready || control_.storage_blocks_control()) {
+            if (control_.installation_mode()) {
+                uart.print("control: on rejected; installation active; use install off first\n");
+            } else if (status_.state() != SystemState::ready || control_.storage_blocks_control()) {
                 uart.print("control: on rejected; system not ready\n");
             } else {
                 status_.enable_control(true);
@@ -136,11 +171,12 @@ void CommandServiceTask::process_command(etl::string_view frame)
     }
     if (name == "status") {
         const auto feedback = control_.feedback();
-        uart.print("status={} control={} hw_fail={} task_fail={} armed={} imu={}\n",
+        uart.print("status={} control={} hw_fail={} task_fail={} armed={} imu={} install={}\n",
                    system_state_name(status_.state()),
                    status_.control_enabled() ? "on" : "off",
                    status_.hardware_failed_mask(), status_.task_failed_mask(),
-                   feedback.armed ? 1 : 0, feedback.imu_valid ? 1 : 0);
+                   feedback.armed ? 1 : 0, feedback.imu_valid ? 1 : 0,
+                   control_.installation_mode() ? 1 : 0);
         return;
     }
     if (name == "controlstate") {
@@ -199,6 +235,11 @@ void CommandServiceTask::process_command(etl::string_view frame)
     }
 
     auto parameters = control_.parameters();
+    if (control_.installation_mode() &&
+        (name == "R" || name == "VandD" || name == "target_roll" || name == "legheight")) {
+        uart.print("{} rejected: installation active\n", name);
+        return;
+    }
     if ((name == "R" || name == "VandD" || name == "target_roll") &&
         parameters.motion_command_received &&
         static_cast<TickType_t>(xTaskGetTickCount() - parameters.motion_command_tick) >=

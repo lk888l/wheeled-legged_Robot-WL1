@@ -8,12 +8,26 @@
 
 
 #include <utility>
+#include <algorithm>
 #include <cmath>
 #include "MPU6050.h"
 
+namespace {
+VQFParams fusionParameters()
+{
+    VQFParams params;
+    // This MPU6050 has ~3.4 deg/s Z bias at rest. VQF's default 2 deg/s
+    // absolute bias limit prevents rest detection, so it cannot calibrate it.
+    // Keep the normal rest variance/time tests; allow a bounded 5 deg/s bias.
+    params.biasClip = 5.0;
+    params.biasSigmaInit = 2.0;
+    return params;
+}
+}
+
 MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
     : Hi2c(_hi2c)
-    ,vqf((1.0/M650_cfg.SampleRate))
+    ,vqf(fusionParameters(), samplePeriod(M650_cfg.SampleRate))
 {
 
 }
@@ -21,129 +35,79 @@ MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c)
 MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c, MPU6050::InitConfig_t _cfg)
     : Hi2c(_hi2c)
     , M650_cfg(_cfg)
-    ,vqf((1.0/M650_cfg.SampleRate))
+    ,vqf(fusionParameters(), samplePeriod(M650_cfg.SampleRate))
 {
 
 }
 
-bool MPU6050::Init() {
-    uint8_t check{};
-    uint8_t Data{};
+// DLPF enabled: 1 kHz internal rate, divided by SMPLRT_DIV + 1.
+// Normalize before constructing VQF, including invalid/zero requested rates.
+double MPU6050::samplePeriod(uint16_t requested)
+{
+    const auto rate = std::clamp<uint16_t>(requested, 4U, 1000U);
+    return static_cast<double>(1000U / rate) / 1000.0;
+}
 
-    if (HAL_I2C_Mem_Read(Hi2c, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1,
-                        MPU6050_TIME_OUT) != HAL_OK) {
-        return false;
+bool MPU6050::Init()
+{
+    if (Hi2c == nullptr || static_cast<uint8_t>(M650_cfg.AccRange) > 3U ||
+        static_cast<uint8_t>(M650_cfg.GyroRange) > 3U) { return false; }
+    const auto read = [&](uint8_t reg, uint8_t& value) {
+        return HAL_I2C_Mem_Read(Hi2c, MPU6050_ADDR, reg, 1, &value, 1,
+                               MPU6050_TIME_OUT) == HAL_OK;
+    };
+    const auto write = [&](uint8_t reg, uint8_t value) {
+        return HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, reg, 1, &value, 1,
+                                MPU6050_TIME_OUT) == HAL_OK;
+    };
+    uint8_t identity{};
+    if (!read(WHO_AM_I_REG, identity) || identity != 0x68) { return false; }
+    // Reset stale state after MCU-only resets, then retain the gyro X PLL clock.
+    if (!write(PWR_MGMT_1_REG, 0x80)) { return false; }
+    HAL_Delay(100U);
+    if (!write(PWR_MGMT_1_REG, 0x01) || !write(PWR_MGMT_2_REG, 0x00)) { return false; }
+    HAL_Delay(30U);
+    const uint16_t divider = 1000U / std::clamp<uint16_t>(M650_cfg.SampleRate, 4U, 1000U);
+    const uint16_t rate = 1000U / divider;
+    const uint8_t dlpf = rate >= 500U ? 1U : rate >= 200U ? 2U : rate >= 100U ? 3U :
+                         rate >= 50U ? 4U : rate >= 25U ? 5U : 6U;
+    const uint8_t registers[] = {MPU_CFG_REG, SMPLRT_DIV_REG, GYRO_CONFIG_REG,
+                                 ACCEL_CONFIG_REG, MPU_INTBP_CFG_REG};
+    const uint8_t values[] = {dlpf, static_cast<uint8_t>(divider - 1U),
+        static_cast<uint8_t>(static_cast<uint8_t>(M650_cfg.GyroRange) << 3U),
+        static_cast<uint8_t>(static_cast<uint8_t>(M650_cfg.AccRange) << 3U), 0x80};
+    for (unsigned i = 0U; i < sizeof(registers); ++i) {
+        uint8_t actual{};
+        if (!write(registers[i], values[i]) || !read(registers[i], actual) || actual != values[i]) {
+            return false;
+        }
     }
-    if(check == 0x68)
-    {
+    uint8_t power{};
+    if (!read(PWR_MGMT_1_REG, power) || power != 0x01 ||
+        !read(PWR_MGMT_2_REG, power) || power != 0x00) { return false; }
+    // Datasheet sensitivity in LSB/(degree/s) and LSB/g.
+    constexpr double gyro_scales[] = {131.0, 65.5, 32.8, 16.4};
+    constexpr double acc_scales[] = {16384.0, 8192.0, 4096.0, 2048.0};
+    GyroCoefficient = gyro_scales[static_cast<uint8_t>(M650_cfg.GyroRange)];
+    AccCoefficient = acc_scales[static_cast<uint8_t>(M650_cfg.AccRange)];
+    vqf.resetState();
+    return true;
+}
 
-        // power management register 0X6B we should write all 0's to wake the sensor up
-        Data = 0x01;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-        Data = 0x00;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-
-        // Set DATA RATE of 4 - 1000Hz by writing SMPLRT_DIV register
-        if(M650_cfg.SampleRate>1000)
-        {M650_cfg.SampleRate=1000;}
-        else if(M650_cfg.SampleRate<4)
-        {M650_cfg.SampleRate=4;}
-        Data = 1000/M650_cfg.SampleRate - 1;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-
-        //  MPU_CFG_REG
-        /*
-        * <pre>
-        *          |   ACCELEROMETER    |           GYROSCOPE
-        * DLPF_CFG | Bandwidth | Delay  | Bandwidth | Delay  | Sample Rate
-        * ---------+-----------+--------+-----------+--------+-------------
-        * 0        | 260Hz     | 0ms    | 256Hz     | 0.98ms | 8kHz
-        * 1        | 184Hz     | 2.0ms  | 188Hz     | 1.9ms  | 1kHz
-        * 2        | 94Hz      | 3.0ms  | 98Hz      | 2.8ms  | 1kHz
-        * 3        | 44Hz      | 4.9ms  | 42Hz      | 4.8ms  | 1kHz
-        * 4        | 21Hz      | 8.5ms  | 20Hz      | 8.3ms  | 1kHz
-        * 5        | 10Hz      | 13.8ms | 10Hz      | 13.4ms | 1kHz
-        * 6        | 5Hz       | 19.0ms | 5Hz       | 18.6ms | 1kHz
-        * 7        |   -- Reserved --   |   -- Reserved --   | Reserved
-        * </pre>
-        */
-//        if (M650_cfg.SampleRate >= 500) {
-//            Data = 0x01; // 184Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 200) {
-//            Data = 0x02; // 94Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 100) {
-//            Data = 0x03; // 44Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 50) {
-//            Data = 0x04; // 21Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 25) {
-//            Data = 0x05; // 10Hz Bandwidth
-//        } else {
-//            Data = 0x06; // 5Hz Bandwidth
-//        }
-        Data = 0x00;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-
-        // Set accelerometer configuration in ACCEL_CONFIG Register
-        /**
-         * +------------------------+--------------------------+
-         * | AFS_SEL       | Full Version |
-         * |               |              |
-         * +===============+==============+
-         * |      0        |      2g      |
-         * |      1        |      4g      |
-         * |      2        |      8g      |
-         * |      3        |      16g     |
-         * +------------------------+--------------------------+
-         */
-        Data = (static_cast<uint8_t>(M650_cfg.AccRange))<<3;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-        if(M650_cfg.AccRange == AccRange_t::A2)
-        {AccCoefficient = 32768 / 2.0;}
-        else if(M650_cfg.AccRange == AccRange_t::A4)
-        {AccCoefficient = 32768 / 4.0;}
-        else if(M650_cfg.AccRange == AccRange_t::A8)
-        {AccCoefficient = 32768 / 8.0;}
-        else if(M650_cfg.AccRange == AccRange_t::A16)
-        {AccCoefficient = 32768 / 16.0;}
-        // Set Gyroscopic configuration in GYRO_CONFIG Register
-        // XG_ST=0,YG_ST=0,ZG_ST=0, FS_SEL=0 ->  250 /s
-        /**
-         * +------------------------+--------------------------+
-         * | AFS_SEL       | Full Version |
-         * |               |              |
-         * +===============+==============+
-         * |      0        |  ± 250 °/s   |
-         * |      1        |  ± 500 °/s   |
-         * |      2        |  ± 1000 °/s  |
-         * |      3        |  ± 2000 °/s  |
-         * +------------------------+--------------------------+
-         */
-        Data = (static_cast<uint8_t>(M650_cfg.GyroRange))<<3;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-        if(M650_cfg.GyroRange == GyroRange_t::G250)
-        {GyroCoefficient = 32768 / 250.0;}
-        else if(M650_cfg.GyroRange == GyroRange_t::G500)
-        { GyroCoefficient = 32768 / 500.0;}
-        else if(M650_cfg.GyroRange == GyroRange_t::G1000)
-        { GyroCoefficient = 30768 / 1000.0;}
-        else if(M650_cfg.GyroRange == GyroRange_t::G2000)
-        { GyroCoefficient = 32768 / 2000.0;}
-        //set MPU INT PIN Config
-        Data = 0x80;
-        if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_INTBP_CFG_REG, 1, &Data, 1,
-                              MPU6050_TIME_OUT) != HAL_OK) return false;
-
-        // Init VQF ---- Attitude calculation algorithm
-//        vqf = VQF((1.0/M650_cfg.SampleRate));
-        return true;
+bool MPU6050::getMotion(double gyro[3], double acc[3])
+{
+    // One coherent burst: accel, temperature (skipped), gyro from the same sample.
+    uint8_t bytes[14]{};
+    if (HAL_I2C_Mem_Read(Hi2c, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, bytes, sizeof(bytes),
+                         MPU6050_TIME_OUT) != HAL_OK) { return false; }
+    for (unsigned axis = 0U; axis < 3U; ++axis) {
+        const unsigned a = axis * 2U;
+        const unsigned g = a + 8U;
+        acc[axis] = static_cast<int16_t>((bytes[a] << 8U) | bytes[a + 1U]) / AccCoefficient;
+        gyro[axis] = static_cast<int16_t>((bytes[g] << 8U) | bytes[g + 1U]) / GyroCoefficient +
+                     M650_cfg.GyroOffset[axis];
     }
-    return false;
+    return true;
 }
 
 bool MPU6050::getGyro(double _gyro[3])
@@ -183,9 +147,9 @@ bool MPU6050::getAccel(double _acc[3])
     int16_t Accel_Z_RAW = (int16_t)(Rec_Data[4] << 8 | Rec_Data[5]);
 
     //32768 / (2.0)
-    _acc[0] = Accel_X_RAW / 8192.0;
-    _acc[1] = Accel_Y_RAW / 8192.0;
-    _acc[2] = Accel_Z_RAW / 8192.0;
+    _acc[0] = Accel_X_RAW / AccCoefficient;
+    _acc[1] = Accel_Y_RAW / AccCoefficient;
+    _acc[2] = Accel_Z_RAW / AccCoefficient;
     return true;
 }
 
@@ -223,7 +187,7 @@ void MPU6050::setGyroOffset(double _offnum[3]) {
 bool MPU6050::getEulerAngle(MPU6050::EulerAngle &_angle) {
     double acc[3],gyro[3];
     vqf_real_t quat[4]{}; // output array for quaternion
-    if((getGyro(gyro) && getAccel(acc)))
+    if(getMotion(gyro, acc))
     {
         MPU6050::DegTorad(gyro);
         MPU6050::GToMS2(acc);
@@ -238,7 +202,7 @@ bool MPU6050::getEulerAngle(MPU6050::EulerAngle &_angle) {
 bool MPU6050::getEulerAngleGyro(MPU6050::EulerAngle &_angle, double *_gyro) {
     double acc[3],gyro[3];
     vqf_real_t quat[4]{}; // output array for quaternion
-    if((getGyro(gyro) && getAccel(acc)))
+    if(getMotion(gyro, acc))
     {
         MPU6050::DegTorad(gyro);
         MPU6050::GToMS2(acc);
@@ -256,7 +220,7 @@ bool MPU6050::getEulerAngleGyro(MPU6050::EulerAngle &_angle, double *_gyro) {
 bool MPU6050::getEulerAngleACC(MPU6050::EulerAngle &_angle, double *_acc) {
     double acc[3],gyro[3];
     vqf_real_t quat[4]{}; // output array for quaternion
-    if((getGyro(gyro) && getAccel(acc)))
+    if(getMotion(gyro, acc))
     {
         MPU6050::DegTorad(gyro);
         MPU6050::GToMS2(acc);

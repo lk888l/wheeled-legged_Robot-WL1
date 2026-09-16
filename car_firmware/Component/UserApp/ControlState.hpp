@@ -70,12 +70,18 @@ public:
     [[nodiscard]] bool storage_blocks_control() const;
     [[nodiscard]] bool consume_storage_reset();
     void request_control_reset();
+    void set_installation_mode(bool enabled);
+    [[nodiscard]] bool installation_mode() const;
+    void set_installation_ready(bool ready);
+    [[nodiscard]] bool installation_ready() const;
 
 private:
     ControlParameters parameters_{};
     ControlFeedback feedback_{};
     LegTargets leg_targets_{};
     MotionStorageInterlock storage_interlock_{};
+    bool installation_mode_{};
+    bool installation_ready_{};
 };
 
 } // namespace app

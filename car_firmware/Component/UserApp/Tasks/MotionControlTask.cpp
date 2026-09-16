@@ -19,6 +19,7 @@ void MotionControlTask::run()
     BalanceStartupGate startup_gate;
     uint8_t velocity_loop_count = 0;
     uint8_t imu_read_failures = 0U;
+    bool reset_imu_fusion = false;
     //  PID
     PID angle_pid(70.0f,0,51.0f,-1000,1000,-100,100);
     PID velocity_pid(0.04,0.006,0,-10,10,-100,100);
@@ -54,7 +55,29 @@ void MotionControlTask::run()
         feedback.sample_tick = sample_tick;
         feedback.max_sample_gap_ticks = std::max(feedback.max_sample_gap_ticks, sample_gap);
         if (sample_gap > period) { ++feedback.deadline_misses; }
+        if (control_.installation_mode()) {
+            reset_imu_fusion = true;
+            (void)control_.consume_storage_reset();
+            startup_gate.reset();
+            reset_controllers();
+            wheel_motor.forceStop();
+            feedback.velocity_target = feedback.difference_target = feedback.roll_target = 0.0F;
+            feedback.remote_timed_out = false;
+            // No IMU dependency or roll/height adaptation while fitting the horns.
+            feedback.imu_valid = false;
+            legs = {};
+            control_.publish_leg_targets(legs);
+            if (++velocity_loop_count >= 5U) {
+                velocity_loop_count = 0U;
+                (void)left_encoder.getRPM();
+                (void)right_encoder.getRPM();
+                (void)servo_.notify_give();
+            }
+            control_.publish_feedback(feedback);
+            continue;
+        }
         if (!status_.control_enabled() || control_.storage_blocks_control()) {
+            reset_imu_fusion = true;
             (void)control_.consume_storage_reset();
             startup_gate.reset();
             reset_controllers();
@@ -82,6 +105,8 @@ void MotionControlTask::run()
         feedback.roll_target = parameters.roll_target;
         const float common_height = BalanceCompensation::clampLegHeight(parameters.leg_height);
         // get IMU euler angle
+        // The body may have moved while sampling was paused for installation/off.
+        if (reset_imu_fusion) { imu.resetFusion(); reset_imu_fusion = false; }
         feedback.imu_valid = imu.getEulerAngleGyro(angle, gyro) &&
             std::isfinite(angle.Roll) && std::isfinite(angle.Pitch) && std::isfinite(angle.Yaw) &&
             std::isfinite(gyro[0]) && std::isfinite(gyro[1]) && std::isfinite(gyro[2]);
@@ -200,7 +225,8 @@ void MotionControlTask::run()
         // atomic with begin_storage/control off; sensor I/O and PID math stay outside.
         taskENTER_CRITICAL();
         const bool storage_reset = control_.consume_storage_reset();
-        if (!status_.control_enabled() || control_.storage_blocks_control() || storage_reset) {
+        if (!status_.control_enabled() || control_.installation_mode() ||
+            control_.storage_blocks_control() || storage_reset) {
             startup_gate.reset();
             reset_controllers();
             wheel_motor.forceStop();

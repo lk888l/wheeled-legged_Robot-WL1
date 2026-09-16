@@ -73,6 +73,7 @@ public:
     EulerAngle reading{0.0, -9.5, 0.0};
     std::array<double, 3U> gyro_reading{};
     std::vector<TickType_t> samples;
+    void resetFusion() {}
     bool getEulerAngleGyro(EulerAngle& angle, double* gyro)
     {
         assert(fake_rtos::critical_depth == 0); // HAL must run outside critical sections.
@@ -113,6 +114,7 @@ public:
     float angle{};
     void stop() { ++stops; }
     void setAngle_Smooth(float target, float) { angle = target; }
+    float getCurrentAngle() const { return angle; }
 };
 
 namespace bsp { class BoardHardware; }

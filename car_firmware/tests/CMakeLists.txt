@@ -60,6 +60,17 @@ add_wl1_test(uart_dma_test)
 target_include_directories(uart_dma_test BEFORE PRIVATE uart_fakes fakes)
 add_wl1_test(imu_startup_test ../Component/HardWare/IMU/vqf.cpp)
 target_include_directories(imu_startup_test PRIVATE ../Component/HardWare/IMU)
+add_wl1_test(mpu6050_driver_test ../Component/HardWare/IMU/MPU6050.cpp ../Component/HardWare/IMU/vqf.cpp)
+target_include_directories(mpu6050_driver_test BEFORE PRIVATE imu_fakes ../Component/HardWare/IMU)
+add_wl1_test(servo_output_test ../Component/HardWare/Motor/Servo.cpp)
+target_include_directories(servo_output_test BEFORE PRIVATE servo_fakes fakes ../Component/HardWare/Motor)
+add_wl1_test(installation_mode_test
+    ../Component/Application/AppTask.cpp ../Component/Application/Button.cpp
+    ../Component/Application/RuntimeStatus.cpp ../Component/UserApp/ControlState.cpp
+    ../Component/UserApp/Tasks/ButtonTask.cpp ../Component/UserApp/Tasks/CommandServiceTask.cpp
+    ../Component/UserApp/Tasks/MotionControlTask.cpp ../Component/UserApp/Tasks/ServoControlTask.cpp
+    ../Component/UserApp/MotionPersistence.cpp fakes/MotionParameterStorage.cpp)
+target_include_directories(installation_mode_test BEFORE PRIVATE fakes)
 add_wl1_test(app_task_test ../Component/Application/AppTask.cpp)
 add_wl1_test(task_reactor_test)
 add_wl1_test(runtime_state_test

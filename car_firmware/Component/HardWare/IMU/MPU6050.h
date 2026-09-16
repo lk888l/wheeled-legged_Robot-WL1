@@ -14,6 +14,8 @@
 #include "main.h"
 #include "vqf.hpp"
 #include <memory>
+#include <algorithm>
+#include <cmath>
 
 
 class MPU6050 {
@@ -29,7 +31,8 @@ class MPU6050 {
     static constexpr uint8_t GYRO_CONFIG_REG = 0x1B;
     static constexpr uint8_t GYRO_XOUT_H_REG = 0x43;
     static constexpr uint8_t MPU6050_ADDR = 0xD0;
-    static constexpr uint32_t MPU6050_TIME_OUT = 500;
+    // A failed read must not block the 10 ms control loop for half a second.
+    static constexpr uint32_t MPU6050_TIME_OUT = 5;
     static constexpr double PI = 3.14159265358979323846;
     static constexpr double DEG_TO_RAD_COE = (PI / 180.0f);
     static constexpr double EULERANGLE_COE = 57.295779513082320876798154814105;
@@ -66,11 +69,14 @@ private:
     VQF vqf;
     double GyroCoefficient{};
     double AccCoefficient{};
+    static double samplePeriod(uint16_t requested);
+    bool getMotion(double gyro[3], double acc[3]);
 
 public:
     MPU6050(I2C_HandleTypeDef* _hi2c);
     MPU6050(I2C_HandleTypeDef* _hi2c,InitConfig_t _cfg);
     bool Init();
+    void resetFusion() { vqf.resetState(); }
     bool getGyro(double _gyro[3]);
     bool getAccel(double _acc[3]);
     bool getTemperature(float& _temp);
@@ -126,7 +132,7 @@ public:
     static inline void QuatToEuler(const double _q[4], EulerAngle& _angle)
     {
         _angle.Roll = atan2(2 * (_q[0] * _q[1] + _q[2] * _q[3]), _q[0]*_q[0] - _q[1]*_q[1] - _q[2]*_q[2] + _q[3]*_q[3])* EULERANGLE_COE;
-        _angle.Pitch = -asin(2 * (_q[1] * _q[3] - _q[0] * _q[2]))*EULERANGLE_COE;
+        _angle.Pitch = -asin(std::clamp(2 * (_q[1] * _q[3] - _q[0] * _q[2]), -1.0, 1.0))*EULERANGLE_COE;
         _angle.Yaw = atan2(2 * (_q[0] * _q[3] + _q[1] * _q[2]), _q[0]*_q[0] + _q[1]*_q[1] - _q[2]*_q[2] - _q[3]*_q[3])*EULERANGLE_COE;
     }
 };

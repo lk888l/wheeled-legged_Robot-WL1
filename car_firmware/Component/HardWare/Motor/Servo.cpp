@@ -44,10 +44,15 @@ bool Servo::Init() {
     if (HTim == nullptr || xTimer == nullptr) {
         return false;
     }
-    return HAL_TIM_PWM_Start(HTim, TimChannel) == HAL_OK;
+    taskENTER_CRITICAL();
+    OutputEnabled = HAL_TIM_PWM_Start(HTim, TimChannel) == HAL_OK;
+    taskEXIT_CRITICAL();
+    return OutputEnabled;
 }
 
 void Servo::stop() {
+    taskENTER_CRITICAL();
+    OutputEnabled = false;
     if (xTimer != nullptr) {
         xTimerStop(xTimer, 0);
     }
@@ -55,9 +60,11 @@ void Servo::stop() {
         __HAL_TIM_SET_COMPARE(HTim, TimChannel, 0);
         HAL_TIM_PWM_Stop(HTim, TimChannel);
     }
+    taskEXIT_CRITICAL();
 }
 
 bool Servo::setAngle_Immediate(float angle) {
+    taskENTER_CRITICAL();
     if(Limit_Max_Angle!=0 && angle>Limit_Max_Angle)   angle = Limit_Max_Angle;
     else if(angle<Limit_Min_Angle)  angle = Limit_Min_Angle;
     if (xTimer != nullptr) {
@@ -65,22 +72,33 @@ bool Servo::setAngle_Immediate(float angle) {
     }
     setPWM_FromAngle(angle);
     CurrentAngle = TargetAngle = angle;
-    return true;
+    OutputEnabled = HAL_TIM_PWM_Start(HTim, TimChannel) == HAL_OK;
+    taskEXIT_CRITICAL();
+    return OutputEnabled;
 }
 
 void Servo::setAngle_Smooth(float targetAngle, float speed) {
+    taskENTER_CRITICAL();
     if(Limit_Max_Angle!=0 && targetAngle>Limit_Max_Angle)   targetAngle = Limit_Max_Angle;
     else if(targetAngle<Limit_Min_Angle)  targetAngle = Limit_Min_Angle;
     if(speed == 0){
         setAngle_Immediate(targetAngle);
+        taskEXIT_CRITICAL();
+        return;
     }
     TargetAngle = targetAngle;
     StepSize = speed * (UPDATE_PERIOD_MS / 1000.0f);
+    // stop() disables CCxE. Restart it when explicitly commanded again.
+    if (!OutputEnabled) {
+        setPWM_FromAngle(CurrentAngle);
+        OutputEnabled = HAL_TIM_PWM_Start(HTim, TimChannel) == HAL_OK;
+    }
     if (xTimer != nullptr) {
         xTimerStart(xTimer, 0); // start soft timer
     } else {
         setAngle_Immediate(targetAngle);
     }
+    taskEXIT_CRITICAL();
 }
 
 float Servo::getCurrentAngle() const {
@@ -88,6 +106,9 @@ float Servo::getCurrentAngle() const {
 }
 
 void Servo::updateSmoothing() {
+    taskENTER_CRITICAL();
+    // A queued timer callback must not restore compare after a safety stop.
+    if (!OutputEnabled) { taskEXIT_CRITICAL(); return; }
     float diff = TargetAngle - CurrentAngle;
     if (this->abs(diff) <= StepSize) {
         CurrentAngle = TargetAngle;
@@ -99,6 +120,7 @@ void Servo::updateSmoothing() {
         else CurrentAngle -= StepSize;
     }
     setPWM_FromAngle(CurrentAngle);
+    taskEXIT_CRITICAL();
 }
 
 int32_t Servo::PhysicalToPulse(float physicalAngle, float baseMinPulse, float baseMaxPulse, float baseMaxAngle) {

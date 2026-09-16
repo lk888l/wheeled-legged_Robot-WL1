@@ -54,7 +54,7 @@ BoardHardware::BoardHardware()
              GPIOA,
              GPIO_PIN_12)
 {
-    imu_.setGyroOffset(2.5, 0.7, 0.9);
+    // VQF estimates bias from this sensor; do not inject another board's offsets.
     wheel_motor_.setDirection_Cfg(static_cast<uint8_t>(TB6612::OutPort::B),
                                   TB6612::Direction::Negative);
     left_servo_.setLimit(0.0F, 50.0F);
