@@ -90,6 +90,8 @@ void test_each_gain()
                     if (loop == "anglepid") {
                         f.send("anglepid -p 0");
                         f.board.imu().reading.Pitch -= 1.0;
+                        // D now consumes physical gyro rate, in rad/s.
+                        f.board.imu().gyro_reading[1] = -100.0 * 0.017453292519943295;
                     } else if (loop == "velocitypid") {
                         f.board.left_encoder().rpm = f.board.right_encoder().rpm = 1;
                     } else if (loop == "differpid") {
@@ -105,9 +107,10 @@ void test_each_gain()
                     if (loop == "anglepid") {
                         CHECK(f.board.wheel_motor().left == 1 && f.board.wheel_motor().right == 1);
                     } else if (loop == "velocitypid") {
-                        CHECK(f.board.wheel_motor().left == -10 && f.board.wheel_motor().right == -10);
+                        // 50 ms wheel filter: first step is 2/3 of 1 RPM.
+                        CHECK(f.board.wheel_motor().left == -7 && f.board.wheel_motor().right == -7);
                     } else if (loop == "differpid") {
-                        CHECK(f.board.wheel_motor().left == -2 && f.board.wheel_motor().right == 2);
+                        CHECK(f.board.wheel_motor().left == -1 && f.board.wheel_motor().right == 1);
                     } else {
                         const auto legs = f.control.leg_targets();
                         CHECK(std::fabs(legs.left - 62.5F) < 0.0001F);
@@ -330,6 +333,81 @@ void test_append_keeps_balancing()
     };
     f.run();
 }
+
+void test_gyro_damping_and_soft_drive()
+{
+    Fixture f;
+    auto p = f.control.parameters();
+    p.angle = {0, 0, 60};
+    p.angle_kp_auto = false;
+    p.velocity = p.difference = p.roll = {0, 0, 0};
+    f.control.set_parameters(p);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick == 510U) {
+            CHECK(f.control.feedback().armed);
+            f.send("anglebias 11.5", false);
+            f.send("legheight 61.5", false);
+        }
+        if (tick >= 520U && tick <= 560U) {
+            CHECK(f.control.feedback().armed);
+            // Both calibration and height changed while the physical gyro is at rest.
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+        }
+        if (tick == 560U) f.board.imu().gyro_reading[1] = 50 * 0.017453292519943295;
+        if (tick == 570U) {
+            CHECK(f.board.wheel_motor().left == -30 && f.board.wheel_motor().right == -30);
+            f.board.imu().gyro_reading[1] *= -1;
+        }
+        if (tick == 580U) {
+            CHECK(f.board.wheel_motor().left == 30 && f.board.wheel_motor().right == 30);
+            f.board.imu().gyro_reading[1] = 0;
+            f.send("anglepid -manual 10", false);
+            f.send("anglepid -d 0", false);
+            f.send("deadzone 75", false);
+            f.board.imu().reading.Pitch = -f.control.feedback().angle_bias - 0.1;
+        }
+        if (tick == 590U) {
+            const auto feedback = f.control.feedback();
+            CHECK(feedback.left_pwm_request == 1 && feedback.right_pwm_request == 1);
+            CHECK(feedback.left_pwm == 2 && feedback.right_pwm == 2);
+            CHECK(f.board.wheel_motor().left == 2 && f.board.wheel_motor().right == 2);
+            f.send("@balancediag\n", false);
+            CHECK(f.board.command_uart().logs.back().find("request=1,1 pwm=2,2") != std::string::npos);
+            f.send("control off", false);
+            f.send("control on", false);
+        }
+        if (tick == 600U) {
+            CHECK(!f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+            CHECK(f.control.feedback().angle_target == 0);
+            CHECK(f.control.feedback().filtered_rpm == 0);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
+
+void test_delayed_encoder_sample()
+{
+    Fixture f;
+    bool delayed = false;
+    step = [&] {
+        if (fake_rtos::now == 550U && !delayed) {
+            fake_rtos::now += 50U; // Actual encoder interval is now 100 ms.
+            delayed = true;
+        } else if (delayed) {
+            CHECK(fake_rtos::now == 610U); // Scheduler rebases instead of catching up.
+            CHECK(f.control.feedback().armed);
+            CHECK(f.board.left_encoder().last_elapsed_ms == 100);
+            CHECK(f.board.right_encoder().last_elapsed_ms == 100);
+            CHECK(f.control.feedback().deadline_misses == 1);
+            CHECK(f.control.feedback().max_sample_gap_ticks == 60);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -339,4 +417,6 @@ int main()
     test_remote_timeout();
     test_recycle_at_arming_boundary();
     test_append_keeps_balancing();
+    test_gyro_damping_and_soft_drive();
+    test_delayed_encoder_sample();
 }

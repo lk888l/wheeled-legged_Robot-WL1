@@ -153,6 +153,14 @@ void CommandServiceTask::process_command(etl::string_view frame)
                    f.remote_timed_out ? 1 : 0, f.velocity_target, f.difference_target, f.roll_target);
         return;
     }
+    if (name == "balancediag") {
+        const auto f = control_.feedback();
+        uart.print("rate={:.2f} rpm={:.2f},{:.2f} filtered={:.2f},{:.2f}\n",
+                   f.pitch_rate, f.left_rpm, f.right_rpm, f.filtered_rpm, f.filtered_difference_rpm);
+        uart.print("tilt={:.3f} request={},{} pwm={},{}\n", f.angle_target,
+                   f.left_pwm_request, f.right_pwm_request, f.left_pwm, f.right_pwm);
+        return;
+    }
     if (name == "button") {
         drain_button_events();
         uart.print("button A0={} click={} double={} long={} drop={} gap={} tick\n",

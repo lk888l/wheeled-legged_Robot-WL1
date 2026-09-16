@@ -40,6 +40,7 @@ function(add_wl1_test name)
     add_executable(${name} ${name}.cpp ${ARGN})
     target_include_directories(${name} PRIVATE
         ../Core/Inc ../Component/Application ../Component/Bsp ../Component/UserApp
+        ../Component/HardWare/Motor
         ../Component/Module/Basic ../Component/Module/include)
     target_compile_features(${name} PRIVATE cxx_std_23)
     add_test(NAME ${name} COMMAND ${name})
@@ -52,6 +53,10 @@ find_package(Threads REQUIRED)
 target_link_libraries(button_event_queue_test PRIVATE Threads::Threads)
 add_wl1_test(telemetry_frame_test)
 add_wl1_test(pid_test)
+add_wl1_test(balance_signal_test)
+add_wl1_test(motor_feedback_test ../Component/HardWare/Motor/TB6612.cpp
+    ../Component/HardWare/Motor/HallEncoder.cpp)
+target_include_directories(motor_feedback_test BEFORE PRIVATE motor_fakes)
 add_wl1_test(motion_parameters_test)
 add_wl1_test(balance_compensation_test)
 add_wl1_test(balance_startup_test)
@@ -60,6 +65,9 @@ add_wl1_test(uart_dma_test)
 target_include_directories(uart_dma_test BEFORE PRIVATE uart_fakes fakes)
 add_wl1_test(imu_startup_test ../Component/HardWare/IMU/vqf.cpp)
 target_include_directories(imu_startup_test PRIVATE ../Component/HardWare/IMU)
+add_wl1_test(imu_driver_test ../Component/HardWare/IMU/MPU6050.cpp
+    ../Component/HardWare/IMU/vqf.cpp)
+target_include_directories(imu_driver_test BEFORE PRIVATE imu_fakes ../Component/HardWare/IMU)
 add_wl1_test(app_task_test ../Component/Application/AppTask.cpp)
 add_wl1_test(task_reactor_test)
 add_wl1_test(runtime_state_test

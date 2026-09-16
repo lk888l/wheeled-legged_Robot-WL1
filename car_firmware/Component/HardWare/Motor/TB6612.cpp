@@ -11,6 +11,7 @@
 #include <cstdlib>
 /// user library include
 #include "TB6612.h"
+#include "WheelPwm.hpp"
 
 
 TB6612::TB6612(InitConfig_t _tbconfig)
@@ -128,6 +129,7 @@ void TB6612::setBPWM(uint16_t _value) {
 }
 
 void TB6612::setAVel_raw(int16_t _value) {
+    _value = WheelPwm::compensate(_value, ADeadZone);
     if(_value>0) {
 //        _value += ADeadZone;
         setADirection(1);
@@ -142,12 +144,11 @@ void TB6612::setAVel_raw(int16_t _value) {
         return;
     }
     _value = std::abs(_value);
-    if(_value < ADeadZone)
-    {_value = ADeadZone;}
     setAPWM(_value);
 }
 
 void TB6612::setBVel_raw(int16_t _value) {
+    _value = WheelPwm::compensate(_value, BDeadZone);
     if(_value>0) {
 //        _value += BDeadZone;
         setBDirection(1);
@@ -162,8 +163,6 @@ void TB6612::setBVel_raw(int16_t _value) {
         return;
     }
     _value = std::abs(_value);
-    if(_value < BDeadZone)
-    {_value = BDeadZone;}
     setBPWM(_value);
 }
 
@@ -172,7 +171,6 @@ TB6612::~TB6612()
     HAL_TIM_PWM_Stop(TB6_Cfg.Htim,TB6_Cfg.AChannel);
     HAL_TIM_PWM_Stop(TB6_Cfg.Htim,TB6_Cfg.BChannel);
 }
-
 
 
 

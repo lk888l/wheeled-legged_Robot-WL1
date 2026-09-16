@@ -76,6 +76,7 @@ public:
     bool getTemperature(float& _temp);
     bool getEulerAngle(EulerAngle& _angle);
     bool getEulerAngleACC(EulerAngle& _angle, double _acc[3]);
+    // Gyro output is body rad/s after configured offsets and VQF bias correction.
     bool getEulerAngleGyro(EulerAngle& _angle, double _gyro[3]);
     void setGyroOffset(double&& _xg, double&& _yg, double&& _zg);
     void setGyroOffset(double _offnum[3]);

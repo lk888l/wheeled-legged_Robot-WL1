@@ -42,6 +42,7 @@ public:
     ///
     int32_t getCounter();
     double getRPM();
+    double getRPM(float elapsed_ms);
     void clearCounter();
     int64_t getAccumCnt();
     static int32_t TurnNum_toCnt(const HallEncoder& thisEncoder, float _num);

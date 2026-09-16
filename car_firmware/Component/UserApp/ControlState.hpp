@@ -25,7 +25,7 @@ struct ControlParameters {
     bool show_rpm{false};
     // -p tunes the 61.5 mm reference gain; -manual explicitly selects fixed Kp.
     bool angle_kp_auto{true};
-    // Minimum nonzero compare value, shared by the left/A and right/B wheel outputs.
+    // Minimum-drive compensation, tapered around zero for both wheels.
     std::uint16_t motor_deadzone{MotionSettings::default_motor_deadzone};
     // Only accepted movement commands renew this deadline; PID tuning does not.
     uint32_t motion_command_tick{};
@@ -39,6 +39,11 @@ struct ControlFeedback {
     float angle_kp{70.0F};
     float angle_bias{BalanceCompensation::default_minimum_bias_degrees};
     float pitch_error{};
+    float pitch_rate{}; // deg/s, gyro projected into the Euler pitch axis
+    float left_rpm{}, right_rpm{}; // measured over the actual encoder interval
+    float filtered_rpm{}, filtered_difference_rpm{};
+    float angle_target{};
+    int left_pwm_request{}, right_pwm_request{}; // before friction compensation
     int left_pwm{};
     int right_pwm{};
     bool armed{};

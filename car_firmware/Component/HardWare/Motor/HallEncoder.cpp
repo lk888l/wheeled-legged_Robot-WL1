@@ -8,6 +8,7 @@
 
 
 #include "HallEncoder.h"
+#include <cmath>
 
 
 
@@ -55,12 +56,16 @@ int32_t HallEncoder::getCounter() {
  * @return
  */
 double HallEncoder::getRPM() {
+    return getRPM(Hall_Cfg.Samplerate);
+}
+
+double HallEncoder::getRPM(float elapsed_ms) {
     int32_t delta = getCounter();
     // 增加分母检查，防止除零
     double perTurnCnt = static_cast<double>(Hall_Cfg.EdgeCnt) * Hall_Cfg.EncoderLine * Hall_Cfg.ReductionRatio;
-//    if (perTurnCnt == 0) return 0;
+    if (perTurnCnt <= 0 || !std::isfinite(elapsed_ms) || elapsed_ms <= 0) return 0;
     // 计算公式：(增量 / 每圈脉冲数) * (60s / 采样周期s)
-    return (delta / perTurnCnt) * (60000.0 / Hall_Cfg.Samplerate);
+    return (delta / perTurnCnt) * (60000.0 / elapsed_ms);
 }
 
 void HallEncoder::clearCounter() {
@@ -84,7 +89,6 @@ int32_t HallEncoder::Rpm_toCnt(const HallEncoder &thisEncoder, float _rpm) {
 float HallEncoder::Cnt_toTurnNum(const HallEncoder &thisEncoder, int32_t _num) {
     return (static_cast<float>(_num) / thisEncoder.Hall_Cfg.EdgeCnt / thisEncoder.Hall_Cfg.EncoderLine / thisEncoder.Hall_Cfg.ReductionRatio);
 }
-
 
 
 

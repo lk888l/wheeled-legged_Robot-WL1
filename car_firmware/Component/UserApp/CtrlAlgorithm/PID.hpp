@@ -12,6 +12,8 @@
 #ifndef __F411CEU6_PID_HPP
 #define __F411CEU6_PID_HPP
 
+#include <algorithm>
+#include <cmath>
 
 class PID {
 public:
@@ -31,38 +33,47 @@ public:
     * @brief 计算 PID 输出
     * @param target
     * @param measured
-    * @param dt 采样周期 (ms)
+    * @param sample_ratio actual / nominal period; existing gains are per sample
     * @return
     */
-    float update(float target, float measured) {
-        // 1. 计算误差
-        float error = target - measured;
+    float update(float target, float measured, float sample_ratio = 1.0F,
+                 bool integrate = true) {
+        if (!std::isfinite(sample_ratio) || sample_ratio <= 0.0F) return 0.0F;
+        const float delta = has_previous_measurement_
+            ? (measured - prev_actual) / sample_ratio : 0.0F;
+        return updateWithMeasurementRate(target, measured, delta, sample_ratio, integrate);
+    }
 
-        // 2. 积分项 (包含积分限幅防止饱和)
-        if(ki_!=0){
-            integral_ += error;
-            // 积分抗饱和 (Simple Clamping)
-            if (integral_ > max_int_) { integral_ = max_int_; }
-            else if (integral_ < min_int_) { integral_ = min_int_; }
+    // measured_rate is change per NOMINAL sample, not degrees/second.
+    // It may come from a gyro, independent of target/balance-bias changes.
+    float updateWithMeasurementRate(float target, float measured, float measured_rate,
+                                    float sample_ratio = 1.0F, bool integrate = true) {
+        if (!std::isfinite(sample_ratio) || sample_ratio <= 0.0F) return 0.0F;
+        const float error = target - measured;
+        const float pd = kp_ * error - kd_ * measured_rate;
+        if (ki_ == 0.0F) {
+            integral_ = 0.0F;
+        } else if (integrate) {
+            float candidate = std::clamp(integral_ + error * sample_ratio,
+                                          min_int_, max_int_);
+            const float candidate_output = pd + ki_ * candidate;
+            const float integral_push = ki_ * (candidate - integral_);
+            // Permit unwinding, including negative Ki; reject accumulation
+            // beyond saturation. Keep the partial step up to the limit so a
+            // pure I controller can still reach it with a large error sample.
+            if (candidate_output > max_out_ && integral_push > 0.0F) {
+                candidate = pd + ki_ * integral_ >= max_out_
+                    ? integral_ : (max_out_ - pd) / ki_;
+            } else if (candidate_output < min_out_ && integral_push < 0.0F) {
+                candidate = pd + ki_ * integral_ <= min_out_
+                    ? integral_ : (min_out_ - pd) / ki_;
+            }
+            integral_ = std::clamp(candidate, min_int_, max_int_);
         }
-        else{
-            integral_ = 0;
-        }
-
-        // 3. 总输出并再次限幅
-        float total_out = kp_ * error
-                        + integral_ * ki_
-//                        + kd_ * (error - prev_error_);
-                        - (has_previous_measurement_ ? kd_ * (measured - prev_actual) : 0.0f);
-
-        if (total_out > max_out_) total_out = max_out_;
-        else if (total_out < min_out_) total_out = min_out_;
-
-        // 保存状态
         prev_error_ = error;
         prev_actual = measured;
         has_previous_measurement_ = true;
-        return total_out;
+        return std::clamp(pd + ki_ * integral_, min_out_, max_out_);
     }
 
     /**

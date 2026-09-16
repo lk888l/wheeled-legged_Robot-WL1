@@ -6,7 +6,9 @@
 #include "ControlState.hpp"
 #include "RuntimeStatus.hpp"
 #include "CtrlAlgorithm/BalanceStartupGate.hpp"
+#include "CtrlAlgorithm/BalanceSignal.hpp"
 #include "CtrlAlgorithm/PID.hpp"
+#include "WheelPwm.hpp"
 
 namespace app {
 
@@ -19,6 +21,7 @@ void MotionControlTask::run()
     BalanceStartupGate startup_gate;
     uint8_t velocity_loop_count = 0;
     uint8_t imu_read_failures = 0U;
+    BalanceSignal::WheelFilter average_filter, difference_filter;
     //  PID
     PID angle_pid(70.0f,0,51.0f,-1000,1000,-100,100);
     PID velocity_pid(0.04,0.006,0,-10,10,-100,100);
@@ -36,14 +39,22 @@ void MotionControlTask::run()
     auto& wheel_motor = board_.wheel_motor();
     last_wake = xTaskGetTickCount();        //get now system tick to delay a period
     TickType_t previous_sample = last_wake;
+    TickType_t previous_encoder_sample = last_wake;
+    bool wheel_saturated = false;
     const auto reset_controllers = [&] {
         angle_pid.reset();
         velocity_pid.reset();
         difference_pid.reset();
         roll_pid.reset();
+        average_filter.reset();
+        difference_filter.reset();
+        wheel_saturated = false;
         angle_target = difference_pwm = 0.0F;
+        feedback.angle_target = 0.0F;
+        feedback.filtered_rpm = feedback.filtered_difference_rpm = 0.0F;
         feedback.armed = false;
         feedback.left_pwm = feedback.right_pwm = 0;
+        feedback.left_pwm_request = feedback.right_pwm_request = 0;
     };
     for (;;) {
         vTaskDelayUntil(&last_wake, period);
@@ -53,11 +64,19 @@ void MotionControlTask::run()
         ++feedback.loop_count;
         feedback.sample_tick = sample_tick;
         feedback.max_sample_gap_ticks = std::max(feedback.max_sample_gap_ticks, sample_gap);
-        if (sample_gap > period) { ++feedback.deadline_misses; }
+        if (sample_gap > period) {
+            ++feedback.deadline_misses;
+            // Do not catch up with back-to-back PID updates on one IMU sample.
+            last_wake = sample_tick;
+        }
         if (!status_.control_enabled() || control_.storage_blocks_control()) {
             (void)control_.consume_storage_reset();
             startup_gate.reset();
             reset_controllers();
+            // Discard counts collected while stopped; never replay them on re-arm.
+            (void)left_encoder.getRPM();
+            (void)right_encoder.getRPM();
+            previous_encoder_sample = sample_tick;
             wheel_motor.forceStop();
             control_.publish_feedback(feedback);
             last_wake = sample_tick;
@@ -101,6 +120,7 @@ void MotionControlTask::run()
         feedback.euler[0] = static_cast<float>(angle.Roll);
         feedback.euler[1] = static_cast<float>(angle.Pitch);
         feedback.euler[2] = static_cast<float>(angle.Yaw);
+        feedback.pitch_rate = BalanceSignal::pitchRate(static_cast<float>(angle.Roll), gyro);
         if(parameters.show_imu) {
             board_.command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", angle.Roll, angle.Pitch, angle.Yaw);
         }
@@ -133,6 +153,7 @@ void MotionControlTask::run()
                 velocity_loop_count = 0U;
                 (void)left_encoder.getRPM();
                 (void)right_encoder.getRPM();
+                previous_encoder_sample = sample_tick;
                 control_.publish_leg_targets(legs);
                 (void)servo_.notify_give();
             }
@@ -142,14 +163,24 @@ void MotionControlTask::run()
         velocity_loop_count++;
         if(velocity_loop_count >= 5){
             velocity_loop_count = 0;
-            double left_rpm = left_encoder.getRPM();
-            double right_rpm = right_encoder.getRPM();
-            double average_rpm = (left_rpm+right_rpm)/2;
-            difference_rpm = left_rpm - right_rpm;
+            const float elapsed_ms = static_cast<float>(sample_tick - previous_encoder_sample) *
+                (10.0F / static_cast<float>(period));
+            previous_encoder_sample = sample_tick;
+            const float left_rpm = static_cast<float>(left_encoder.getRPM(elapsed_ms));
+            const float right_rpm = static_cast<float>(right_encoder.getRPM(elapsed_ms));
+            const float average_rpm = average_filter.update((left_rpm + right_rpm) / 2.0F, elapsed_ms);
+            difference_rpm = difference_filter.update(left_rpm - right_rpm, elapsed_ms);
+            feedback.left_rpm = left_rpm;
+            feedback.right_rpm = right_rpm;
+            feedback.filtered_rpm = average_rpm;
+            feedback.filtered_difference_rpm = difference_rpm;
             velocity_pid.setTunings(parameters.velocity.kp,parameters.velocity.ki,parameters.velocity.kd);
             difference_pid.setTunings(parameters.difference.kp,parameters.difference.ki,parameters.difference.kd);
-            angle_target = velocity_pid.update(parameters.velocity_target,average_rpm);
-            difference_pwm = difference_pid.update(parameters.difference_target,difference_rpm);
+            const float velocity_ratio = elapsed_ms / BalanceSignal::nominal_velocity_period_ms;
+            angle_target = velocity_pid.update(parameters.velocity_target, average_rpm,
+                                               velocity_ratio, !wheel_saturated);
+            difference_pwm = difference_pid.update(parameters.difference_target, difference_rpm,
+                                                   velocity_ratio, !wheel_saturated);
             if(parameters.show_rpm){
                 board_.command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",left_rpm,right_rpm);
             }
@@ -189,13 +220,22 @@ void MotionControlTask::run()
             ? MotionSettings::effectiveAngleKp(parameters.angle.kp, average_height) : parameters.angle.kp;
         angle_pid.setTunings(feedback.angle_kp,parameters.angle.ki,parameters.angle.kd);
         feedback.pitch_error = static_cast<float>(angle.Pitch) + feedback.angle_bias;
-        float even_pwm = angle_pid.update(angle_target,angle.Pitch + feedback.angle_bias);
+        feedback.angle_target = angle_target;
+        // Keep legacy Kd units: 60 * (deg/sample) == 0.6 * (deg/s) at 10 ms.
+        // Only physical angular velocity contributes to D, never leg-height/bias steps.
+        float even_pwm = angle_pid.updateWithMeasurementRate(angle_target,
+            feedback.pitch_error, feedback.pitch_rate * BalanceSignal::nominal_angle_period_s,
+            static_cast<float>(sample_gap) / static_cast<float>(period));
         int left_pwm = static_cast<int>(std::round((even_pwm + difference_pwm)));
         int right_pwm = static_cast<int>(std::round((even_pwm - difference_pwm)));
         left_pwm = TB6612::clamp(left_pwm,1000,-1000);
         right_pwm = TB6612::clamp(right_pwm,1000,-1000);
-        feedback.left_pwm = left_pwm;
-        feedback.right_pwm = right_pwm;
+        feedback.left_pwm_request = left_pwm;
+        feedback.right_pwm_request = right_pwm;
+        feedback.left_pwm = WheelPwm::compensate(left_pwm, parameters.motor_deadzone);
+        feedback.right_pwm = WheelPwm::compensate(right_pwm, parameters.motor_deadzone);
+        wheel_saturated = std::abs(feedback.left_pwm) >= WheelPwm::maximum ||
+                          std::abs(feedback.right_pwm) >= WheelPwm::maximum;
         // Only the bounded PWM register writes and feedback publication are
         // atomic with begin_storage/control off; sensor I/O and PID math stay outside.
         taskENTER_CRITICAL();

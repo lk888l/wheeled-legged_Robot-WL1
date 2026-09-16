@@ -25,6 +25,12 @@
 必须在临界区外，最终 PWM 寄存器写入与保存互锁原子提交。主机测试不验证真实 BLE
 传输、STM32 Flash 时序或闭环负载。
 
+中点震荡回归另包含 `imu_driver_test`（实际驱动 + VQF）、`motor_feedback_test`
+（实际 TB6612/编码器驱动）和 `balance_signal_test`。其 HAL 替身在
+`imu_fakes` / `motor_fakes`；`runtime_tuning_test` 验证陀螺阻尼、腿高/标定无 D 冲击、
+补偿前后 PWM 诊断、停机复位和延迟采样。实车步骤见
+[中点震荡调试](../docs/balance-oscillation.md)。
+
 ## 合并后板上复验步骤
 
 1. 按项目 README 准备设备，烧录时保留扇区 7；用 USART1/BLE 发送 `@params\n`。

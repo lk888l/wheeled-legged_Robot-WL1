@@ -6,6 +6,7 @@
 #include <vector>
 #include "task.h"
 #include "HardwareModule.hpp"
+#include "WheelPwm.hpp"
 #include "etl/format.h"
 #include "etl/string.h"
 #include "etl/string_view.h"
@@ -94,8 +95,8 @@ public:
     void setB_DeadZone(uint16_t value) { assert(fake_rtos::critical_depth > 0); b_deadzone = value; }
     // Real PWM/GPIO writes are bounded register operations. They are atomic
     // with the storage interlock; blocking IMU I/O must still stay outside.
-    void setAVel_raw(int value) { assert(fake_rtos::critical_depth > 0); left = value; ++writes; }
-    void setBVel_raw(int value) { assert(fake_rtos::critical_depth > 0); right = value; ++writes; }
+    void setAVel_raw(int value) { assert(fake_rtos::critical_depth > 0); left = WheelPwm::compensate(value, a_deadzone); ++writes; }
+    void setBVel_raw(int value) { assert(fake_rtos::critical_depth > 0); right = WheelPwm::compensate(value, b_deadzone); ++writes; }
     template<typename T>
     static T clamp(T value, T high, T low) { return std::clamp(value, low, high); }
 };
@@ -105,6 +106,8 @@ public:
     double rpm{};
     std::function<void()> on_read;
     double getRPM() { if (on_read) on_read(); return rpm; }
+    float last_elapsed_ms{};
+    double getRPM(float elapsed_ms) { last_elapsed_ms = elapsed_ms; return getRPM(); }
 };
 
 class Servo {

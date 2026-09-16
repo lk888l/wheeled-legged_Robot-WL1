@@ -70,20 +70,10 @@ bool MPU6050::Init() {
         * 7        |   -- Reserved --   |   -- Reserved --   | Reserved
         * </pre>
         */
-//        if (M650_cfg.SampleRate >= 500) {
-//            Data = 0x01; // 184Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 200) {
-//            Data = 0x02; // 94Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 100) {
-//            Data = 0x03; // 44Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 50) {
-//            Data = 0x04; // 21Hz Bandwidth
-//        } else if (M650_cfg.SampleRate >= 25) {
-//            Data = 0x05; // 10Hz Bandwidth
-//        } else {
-//            Data = 0x06; // 5Hz Bandwidth
-//        }
-        Data = 0x00;
+        // 100 Hz control: attenuate motor vibration before sampling (gyro 42 Hz,
+        // accel 44 Hz, ~4.8 ms delay). DLPF=0 also changes the divider base to
+        // 8 kHz, inconsistent with the 1 kHz SMPLRT_DIV calculation above.
+        Data = 0x03;
         if (HAL_I2C_Mem_Write(Hi2c, MPU6050_ADDR, MPU_CFG_REG, 1, &Data, 1,
                               MPU6050_TIME_OUT) != HAL_OK) return false;
 
@@ -131,7 +121,7 @@ bool MPU6050::Init() {
         else if(M650_cfg.GyroRange == GyroRange_t::G500)
         { GyroCoefficient = 32768 / 500.0;}
         else if(M650_cfg.GyroRange == GyroRange_t::G1000)
-        { GyroCoefficient = 30768 / 1000.0;}
+        { GyroCoefficient = 32768 / 1000.0;}
         else if(M650_cfg.GyroRange == GyroRange_t::G2000)
         { GyroCoefficient = 32768 / 2000.0;}
         //set MPU INT PIN Config
@@ -245,9 +235,11 @@ bool MPU6050::getEulerAngleGyro(MPU6050::EulerAngle &_angle, double *_gyro) {
         vqf.update(gyro,acc);
         vqf.getQuat6D(quat);
         QuatToEuler(quat,_angle);
-        _gyro[0] = gyro[0];
-        _gyro[1] = gyro[1];
-        _gyro[2] = gyro[2];
+        vqf_real_t bias[3]{};
+        vqf.getBiasEstimate(bias);
+        _gyro[0] = gyro[0] - bias[0];
+        _gyro[1] = gyro[1] - bias[1];
+        _gyro[2] = gyro[2] - bias[2];
         return true;
     }
     return false;
@@ -270,4 +262,3 @@ bool MPU6050::getEulerAngleACC(MPU6050::EulerAngle &_angle, double *_acc) {
     }
     return false;
 }
-
