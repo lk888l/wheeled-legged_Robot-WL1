@@ -1,0 +1,12 @@
+# Generated for @image_mode@. Keep this script beside its matching HEX image.
+set wl1_image [file join [file dirname [info script]] @PROJECT_NAME@_@image_mode@.hex]
+if {![file isfile $wl1_image]} { error "Missing image: $wl1_image" }
+init
+reset halt
+adapter speed 1800
+# update: 0..6 only; factory: 0..7 including every old parameter record.
+flash erase_sector 0 0 @image_last_sector@
+flash write_image $wl1_image 0 ihex
+verify_image $wl1_image 0 ihex
+reset run
+shutdown

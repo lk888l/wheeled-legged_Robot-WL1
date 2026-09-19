@@ -52,15 +52,7 @@ public:
             if (!flash_.erase()) return SaveResult::io_error;
             slot = 0;
         }
-        Record record{};
-        record[0] = magic;
-        record[1] = version | (std::uint32_t{parameters.motor_deadzone} << deadzone_shift);
-        record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag);
-        record[3] = state.latest == no_slot ? 1U : state.record[3] + 1U;
-        const auto words = encode(parameters);
-        std::copy(words.begin(), words.end(), record.begin() + header_words);
-        record[crc_index] = crc(record);
-        record[commit_index] = committed;
+        const auto record = makeRecord(parameters, state.latest == no_slot ? 1U : state.record[3] + 1U);
         const auto offset = slot * record_bytes;
         for (std::size_t i = 0; i < commit_index; ++i) {
             if (!flash_.programWord(offset + i * 4, record[i])) return SaveResult::io_error;
@@ -74,6 +66,21 @@ public:
         flash_.yieldAfterProgram();
         readback = read(slot);
         return readback == record && validRecord(readback) ? SaveResult::saved : SaveResult::io_error;
+    }
+
+    // Shared by runtime saves and the factory image's compile-time default record.
+    static constexpr Record makeRecord(const Parameters& parameters, std::uint32_t sequence = 1U) noexcept
+    {
+        Record record{};
+        record[0] = magic;
+        record[1] = version | (std::uint32_t{parameters.motor_deadzone} << deadzone_shift);
+        record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag);
+        record[3] = sequence;
+        const auto words = encode(parameters);
+        std::copy(words.begin(), words.end(), record.begin() + header_words);
+        record[crc_index] = crc(record);
+        record[commit_index] = committed;
+        return record;
     }
 
     static constexpr std::uint32_t crc(const Record& record) noexcept

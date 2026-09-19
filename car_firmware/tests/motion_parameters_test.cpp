@@ -267,6 +267,53 @@ static void testLegacyJournal()
             Journal(flash).load(restored) && restored.angle_kp_auto, "returning to auto also persists");
 }
 
+static void testFactoryAndForeignFlash()
+{
+    constexpr auto seed = Journal::makeRecord(MS::Parameters{});
+    static_assert(seed[0] == Journal::magic && seed[3] == 1U);
+    static_assert(seed[Journal::crc_index] == Journal::crc(seed));
+    FakeFlash factory;
+    std::copy(seed.begin(), seed.end(), factory.words.begin());
+    MS::Parameters loaded;
+    loaded.minimum_pitch_bias = -123;
+    require(Journal(factory).load(loaded) && same(loaded, MS::Parameters{}),
+            "factory record loads the compiled defaults without a runtime write");
+    require(Journal(factory).save(loaded) == MS::SaveResult::unchanged && factory.writes == 0,
+            "first unchanged factory save consumes no slot");
+    loaded.minimum_pitch_bias = 10.75F;
+    require(Journal(factory).save(loaded) == MS::SaveResult::saved && factory.erases == 0,
+            "first factory tuning appends without erasing");
+    MS::Parameters rebooted;
+    require(Journal(factory).load(rebooted) && same(rebooted, loaded),
+            "factory tuning survives a new journal instance");
+
+    // Foreign firmware may occupy every slot; boot still falls back, but normal
+    // save deliberately cannot perform a seconds-long automatic sector erase.
+    FakeFlash foreign;
+    foreign.words.fill(0xA5A5A5A5U);
+    const auto dirty = foreign.words;
+    MS::Parameters defaults;
+    require(!Journal(foreign).load(defaults) && same(defaults, MS::Parameters{}),
+            "foreign firmware data leaves compiled defaults intact");
+    require(Journal(foreign).save(defaults) == MS::SaveResult::full && foreign.words == dirty,
+            "update alone cannot reclaim a foreign full journal");
+    require(Journal(foreign).save(defaults, true) == MS::SaveResult::saved && foreign.erases == 1,
+            "explicit stopped maintenance can recover a foreign journal");
+
+    // A factory programmer must erase the entire sector, even when slot zero
+    // is blank. Otherwise the last valid old slot overrides the default seed.
+    FakeFlash stale;
+    const auto old = Journal::makeRecord(loaded, 99);
+    std::copy(old.begin(), old.end(), stale.words.end() - old.size());
+    std::copy(seed.begin(), seed.end(), stale.words.begin());
+    require(Journal(stale).load(rebooted) && same(rebooted, loaded),
+            "writing only a seed would leave later old settings authoritative");
+    stale.erase();
+    std::copy(seed.begin(), seed.end(), stale.words.begin());
+    require(Journal(stale).load(rebooted) && same(rebooted, MS::Parameters{}),
+            "whole-sector factory erase removes all stale records");
+}
+
 static void testStorageInterlock()
 {
     MotionStorageInterlock interlock;
@@ -302,6 +349,7 @@ int main()
     testCommandsAndCompensation();
     testJournal();
     testLegacyJournal();
+    testFactoryAndForeignFlash();
     testStorageInterlock();
     std::puts("PASS: motion commands, height gains, flash recovery/readback/recycling and storage interlock");
 }

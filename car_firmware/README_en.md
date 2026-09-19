@@ -99,9 +99,10 @@ generators.
 
 Build outputs are placed in the selected build directory:
 
-- `WL1_F411CEU6.elf`: debugging and flashing;
-- `WL1_F411CEU6.hex`: Intel HEX image;
-- `WL1_F411CEU6.bin`: raw binary image;
+- `WL1_F411CEU6_update.hex/.bin`: application update, preserving saved parameters;
+- `WL1_F411CEU6_factory.hex/.bin`: first installation or factory reset, including a default parameter record;
+- `WL1_F411CEU6.elf`: application debugging/flashing, without parameter records;
+- `WL1_F411CEU6.hex/.bin`: compatibility names with the same contents as update;
 - `WL1_F411CEU6.map`: linker map and memory analysis.
 
 Build configurations:
@@ -118,20 +119,34 @@ C++23.
 
 ### 3. Flash with ST-Link
 
-Connect SWDIO, SWCLK, GND, and the target-board reference voltage, then run:
+Connect SWDIO, SWCLK, GND, and the target-board reference voltage. For blank chips,
+chips previously running other firmware, or a deliberate factory reset, run:
 
 ```sh
-openocd -f STlink.cfg \
-  -c "program build/Release/WL1_F411CEU6.elf verify reset exit"
+cmake --build build/Release --target flash_factory
+# Later updates that retain saved tuning:
+cmake --build build/Release --target flash_update
 ```
+
+Factory erases sectors 0–7 and writes compiled defaults. Update erases only
+sectors 0–6 and preserves the entire parameter sector 7. Both targets verify
+the image and reset the device into normal operation.
 
 If the controller supply has been independently verified while a particular
 probe still reports a false low Vref, use the tested 100 kHz compatibility path:
 
 ```sh
 openocd -f STlink_hla.cfg \
-  -c "init; reset halt; adapter speed 1800; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+  -f build/Release/flash_factory.cfg
+# For later updates use build/Release/flash_update.cfg.
 ```
+
+Alternatively configure `WL1_OPENOCD_CONFIG` with the absolute path to
+`STlink_hla.cfg` so the CMake flash targets use that probe backend.
+Keep each generated flash script beside its matching HEX image.
+An image does not encode erase policy: factory programming must erase all of
+sector 7, including old records after the default record. See
+[installation and parameter retention](docs/flash-images.md).
 
 Full-image write and verification were tested at 1800 kHz; reset returns to the
 100 kHz debugging speed. The deprecated HLA backend is only a compatibility
@@ -211,7 +226,12 @@ follow this table and `Core/Src/usart.c`.
 | Address | — | 7-bit `0x68` (the driver uses the left-shifted value `0xD0`) |
 
 The current configuration uses a ±1000 °/s gyroscope range, a ±4 g accelerometer
-range, and VQF for attitude fusion.
+range, and VQF for attitude fusion. DLPF=0 and SMPLRT_DIV=9 retain 800 Hz sensor
+register updates; the host reads and advances VQF at 100 Hz (10 ms).
+Ordinary `control off` keeps the estimator running with actuators disabled.
+`control on` retains the learned bias and still requires the 500 ms startup gate.
+Installation and exclusive maintenance can still pause sampling. See the
+[balance regression investigation](docs/balance-regression-2026-09-19.md).
 
 ### Motors and Encoders
 

@@ -330,6 +330,43 @@ void test_append_keeps_balancing()
     };
     f.run();
 }
+
+void test_control_off_keeps_attitude_tracking()
+{
+    Fixture f;
+    f.send("control off", false);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick > 10U) {
+            // Every completed iteration must have consumed a fresh IMU sample,
+            // including the two seconds when outputs are explicitly disabled.
+            CHECK(f.board.imu().samples.size() == tick / 10U - 1U);
+            CHECK(f.board.imu().fusion_resets == 0U);
+        }
+        if (tick <= 2010U) {
+            CHECK(!f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+        }
+        if (tick == 1000U) f.board.imu().reading.Pitch = -8.5;
+        if (tick == 1010U) {
+            CHECK(f.control.feedback().imu_valid);
+            CHECK(f.control.feedback().euler[1] == -8.5F);
+        }
+        if (tick == 2010U) f.send("control on", false);
+        if (tick > 2010U && tick < 2510U) CHECK(!f.control.feedback().armed);
+        if (tick == 2510U) {
+            CHECK(f.control.feedback().armed);
+            CHECK(f.board.imu().fusion_resets == 0U);
+            f.send("control off", false);
+        }
+        if (tick == 2520U) {
+            CHECK(!f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -339,4 +376,5 @@ int main()
     test_remote_timeout();
     test_recycle_at_arming_boundary();
     test_append_keeps_balancing();
+    test_control_off_keeps_attitude_tracking();
 }

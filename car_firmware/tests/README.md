@@ -27,7 +27,7 @@
 
 ## 合并后板上复验步骤
 
-1. 按项目 README 准备设备，烧录时保留扇区 7；用 USART1/BLE 发送 `@params\n`。
+1. 按项目 README 准备设备：日常更新选 update 保留扇区 7，空片/其他固件首次安装选 factory；用 USART1/BLE 发送 `@params\n`。
 2. 平衡运行时调节 15 项参数与角度模式，发 `@save\n`，核对 armed 持续为真、控制周期继续。
 3. 再发 save 确认 unchanged；改 RAM 参数但不保存，完整断电后确认恢复已保存值。
 4. 分别用 -p 80 和 -manual 80，在 44.5/61.5/78.5 mm 核对自动值 74.9/80/85.1
@@ -36,7 +36,9 @@
 
 遥控器串口桥接沿用远端白名单，只支持有限调参，不转发 save 或任意 R 帧；以上复验
 直接连接小车命令 UART/BLE。协议及回包见 [命令参考](../docs/commands.md)。
-下面的实板记录属于合并前镜像，保留作为 v1 数据来源；合并后版本另行复验。
+双镜像可用 `python tests/check_firmware_images.py build/Release` 独立验证地址、CRC
+和擦除策略；最新实板复验见 [2026-09-19 报告](../docs/flash-images-validation-2026-09-19.md)。
+下面的实板记录属于合并前镜像，保留作为 v1 数据来源；当前版本复验见上述新报告。
 
 ## 2026-09-13 合并前实板 Flash 验证记录
 

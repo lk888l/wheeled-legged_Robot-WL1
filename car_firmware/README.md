@@ -85,9 +85,10 @@ ctest --test-dir build/host-tests --output-on-failure
 
 构建输出位于所选构建目录：
 
-- `WL1_F411CEU6.elf`：调试和烧录；
-- `WL1_F411CEU6.hex`：Intel HEX；
-- `WL1_F411CEU6.bin`：裸二进制镜像；
+- `WL1_F411CEU6_update.hex/.bin`：日常更新，保留已保存参数；
+- `WL1_F411CEU6_factory.hex/.bin`：空片、其他固件转入或恢复出厂，包含默认参数记录；
+- `WL1_F411CEU6.elf`：调试和程序区烧录，不包含参数记录；
+- `WL1_F411CEU6.hex/.bin`：兼容旧文件名，内容与 update 一致；
 - `WL1_F411CEU6.map`：链接映射和内存分析。
 
 构建配置说明：
@@ -103,25 +104,36 @@ ctest --test-dir build/host-tests --output-on-failure
 
 ### 3. 使用 ST-Link 烧录
 
-连接 SWDIO、SWCLK、GND 和目标板参考电压后执行：
+连接 SWDIO、SWCLK、GND 和目标板参考电压后，按芯片用途选择：
+
+| 场景 | 烧录目标 | 擦除范围 |
+| --- | --- | --- |
+| 空芯片、之前烧录了其他固件、需要恢复出厂参数 | `flash_factory` | 扇区 0–7，原参数全部清除 |
+| 已运行本工程，只更新程序并保留调参 | `flash_update` | 扇区 0–6，保留整个扇区 7 |
 
 ```sh
-openocd -f STlink.cfg \
-  -c "program build/Release/WL1_F411CEU6.elf verify reset exit"
+cmake --build build/Release --target flash_factory
+# 后续保留参数更新：
+cmake --build build/Release --target flash_update
 ```
 
 若已经用万用表确认主控板供电正常，但特定 ST-Link 仍误报低 Vref，可使用仓库内
-经过本板验证的 100 kHz HLA 兼容配置：
+经过本板验证的 HLA 兼容配置执行同一份烧录脚本：
 
 ```sh
 openocd -f STlink_hla.cfg \
-  -c "init; reset halt; adapter speed 1800; flash write_image erase build/Release/WL1_F411CEU6.elf; verify_image build/Release/WL1_F411CEU6.elf; reset run; shutdown"
+  -f build/Release/flash_factory.cfg
+# 后续更新使用 build/Release/flash_update.cfg。
 ```
 
-本次 V2J48M35 探头使用 1800 kHz 完成写入与校验；400 kHz 会映射到 240 kHz，
-可能导致 Flash 算法超时。配置文件在复位时降回 100 kHz，供稳定调试。
+也可配置 `-DWL1_OPENOCD_CONFIG=STlink_hla.cfg` 的绝对路径，让两个 CMake 烧录目标
+使用 HLA。脚本在暂停后使用 1800 kHz 完成写入与校验，复位时降回 100 kHz。
 HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 ST-Link 仍优先使用
 `STlink.cfg` 的标准 SWD 后端。
+
+镜像本身不携带擦除指令。factory 必须配合完整擦除扇区 7，不能只覆盖第一条默认
+记录。上面的脚本已固定擦除范围、校验并复位运行；详见
+[首次烧录、更新与参数保留](docs/flash-images.md)。
 
 烧录后，USART1 会按顺序输出每个初始化步骤，例如：
 
@@ -220,11 +232,15 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 | SDA | PB7 | I2C1，400 kHz |
 | Address | — | 7-bit `0x68`（驱动中使用左移后的 `0xD0`） |
 
-当前配置为陀螺仪 ±1000 °/s、加速度计 ±4 g，X 轴陀螺仪 PLL 时钟，100 Hz 采样，
-DLPF=3（陀螺仪 42 Hz / 加速度计 44 Hz），姿态融合使用 10 ms 周期的 VQF。
+当前配置为陀螺仪 ±1000 °/s、加速度计 ±4 g，X 轴陀螺仪 PLL 时钟。
+为保持原平衡控制的反馈时序，使用 DLPF=0、SMPLRT_DIV=9，传感器寄存器以 800 Hz
+更新；主控每 10 ms 读取一次，VQF 仍按 100 Hz 更新，不按 800 Hz 积分。
 初始化复位传感器并回读配置；每次以 14 字节连续读取同一帧加速度与角速度，
 I²C 超时为 5 ms。移除了固定板级零偏，使用 VQF 自带的零偏估计，
 将估计限幅设为 ±5 °/s 以覆盖本板约 3.4 °/s 的 Z 轴零偏；启动后保持静止让估计收敛。
+普通 `control off` 关闭输出时继续姿态融合，`control on` 保留已估计零偏并重新经过
+500 ms 稳定门控。安装模式及独占维护仍可暂停融合。时序回归分析及无负载复验见
+[2026-09-19 平衡回归记录](docs/balance-regression-2026-09-19.md)。
 
 ### 电机与编码器
 

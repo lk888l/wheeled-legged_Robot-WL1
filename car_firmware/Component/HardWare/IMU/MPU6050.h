@@ -53,7 +53,7 @@ public:
     typedef struct InitConfig_t {
         GyroRange_t GyroRange = GyroRange_t::G1000;
         AccRange_t AccRange = AccRange_t::A4;
-        uint16_t SampleRate = 100;       //(hz)
+        uint16_t SampleRate = 100; // Host fusion cadence (Hz); sensor updates 8x faster.
         double GyroOffset[3]{};
     }InitConfig_t;
 

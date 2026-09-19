@@ -76,7 +76,7 @@ void MotionControlTask::run()
             control_.publish_feedback(feedback);
             continue;
         }
-        if (!status_.control_enabled() || control_.storage_blocks_control()) {
+        if (status_.state() != SystemState::ready || control_.storage_blocks_control()) {
             reset_imu_fusion = true;
             (void)control_.consume_storage_reset();
             startup_gate.reset();
@@ -105,7 +105,8 @@ void MotionControlTask::run()
         feedback.roll_target = parameters.roll_target;
         const float common_height = BalanceCompensation::clampLegHeight(parameters.leg_height);
         // get IMU euler angle
-        // The body may have moved while sampling was paused for installation/off.
+        // Installation/maintenance can pause sampling. Ordinary control off
+        // continues fusion below, retaining attitude and learned gyro bias.
         if (reset_imu_fusion) { imu.resetFusion(); reset_imu_fusion = false; }
         feedback.imu_valid = imu.getEulerAngleGyro(angle, gyro) &&
             std::isfinite(angle.Roll) && std::isfinite(angle.Pitch) && std::isfinite(angle.Yaw) &&
@@ -128,6 +129,22 @@ void MotionControlTask::run()
         feedback.euler[2] = static_cast<float>(angle.Yaw);
         if(parameters.show_imu) {
             board_.command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", angle.Roll, angle.Pitch, angle.Yaw);
+        }
+        if (!status_.control_enabled()) {
+            // Disable actuators, not the estimator. Clearing VQF on control on
+            // discards its bias estimate just before the 500 ms arming window;
+            // the estimator may need longer than that to learn bias again.
+            (void)control_.consume_storage_reset();
+            startup_gate.reset();
+            reset_controllers();
+            wheel_motor.forceStop();
+            feedback.velocity_target = feedback.difference_target = feedback.roll_target = 0.0F;
+            feedback.angle_bias = BalanceCompensation::pitchBias(parameters.angle_bias, common_height);
+            feedback.angle_kp = parameters.angle_kp_auto
+                ? MotionSettings::effectiveAngleKp(parameters.angle.kp, common_height) : parameters.angle.kp;
+            feedback.pitch_error = static_cast<float>(angle.Pitch) + feedback.angle_bias;
+            control_.publish_feedback(feedback);
+            continue;
         }
         const float gate_height = feedback.armed
             ? BalanceCompensation::averageLegHeight(legs.left, legs.right) : common_height;

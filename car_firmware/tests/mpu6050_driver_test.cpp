@@ -42,7 +42,10 @@ int main() {
     MPU6050 imu(&bus);
     CHECK(imu.Init());
     CHECK(regs[0x6B] == 1 && regs[0x6C] == 0 && delays >= 130);
-    CHECK(regs[0x19] == 9 && regs[0x1A] == 3);
+    // Preserve the sensor timing used before ba5b8e7: DLPF=0, 8 kHz / 10
+    // gives 800 Hz register updates while attitude is consumed at 100 Hz.
+    CHECK(regs[0x19] == 9 && regs[0x1A] == 0);
+    CHECK(8000U / (regs[0x19] + 1U) == 800U);
     CHECK(regs[0x1B] == 16 && regs[0x1C] == 8);
     raw(0x43, 3280); raw(0x45, -3280); raw(0x47, 1640);
     double gyro[3], acc[3];
@@ -71,7 +74,7 @@ int main() {
         MPU6050 sensor(&bus, {MPU6050::GyroRange_t::G1000, MPU6050::AccRange_t::A4, rate, {}});
         CHECK(sensor.Init());
         CHECK(regs[0x19] == 1000 / std::clamp<unsigned>(rate, 4, 1000) - 1);
-        CHECK(regs[0x1A] >= 1 && regs[0x1A] <= 6);
+        CHECK(regs[0x1A] == 0);
     }
     reset(); corrupt_config = true; CHECK(!imu.Init());
     reset(); fail_write = true; CHECK(!imu.Init());

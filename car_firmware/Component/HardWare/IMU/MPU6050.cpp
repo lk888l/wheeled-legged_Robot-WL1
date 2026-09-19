@@ -40,8 +40,8 @@ MPU6050::MPU6050(I2C_HandleTypeDef *_hi2c, MPU6050::InitConfig_t _cfg)
 
 }
 
-// DLPF enabled: 1 kHz internal rate, divided by SMPLRT_DIV + 1.
-// Normalize before constructing VQF, including invalid/zero requested rates.
+// Period between host fusion updates, not between the sensor's register updates.
+// Keep the existing integer-millisecond cadence, including invalid/zero rates.
 double MPU6050::samplePeriod(uint16_t requested)
 {
     const auto rate = std::clamp<uint16_t>(requested, 4U, 1000U);
@@ -68,9 +68,12 @@ bool MPU6050::Init()
     if (!write(PWR_MGMT_1_REG, 0x01) || !write(PWR_MGMT_2_REG, 0x00)) { return false; }
     HAL_Delay(30U);
     const uint16_t divider = 1000U / std::clamp<uint16_t>(M650_cfg.SampleRate, 4U, 1000U);
-    const uint16_t rate = 1000U / divider;
-    const uint8_t dlpf = rate >= 500U ? 1U : rate >= 200U ? 2U : rate >= 100U ? 3U :
-                         rate >= 50U ? 4U : rate >= 25U ? 5U : 6U;
+    // Preserve the measurement timing used to tune the balance controller before
+    // ba5b8e7. DLPF=0 uses the 8 kHz gyro base clock: at a 100 Hz host cadence,
+    // divider=10 gives 800 Hz register updates. VQF still advances by 10 ms.
+    // Selecting DLPF=3 from the host rate changed both the filter delay and the
+    // register rate (to 100 Hz), adding feedback lag without retuning the PID.
+    constexpr uint8_t dlpf = 0U;
     const uint8_t registers[] = {MPU_CFG_REG, SMPLRT_DIV_REG, GYRO_CONFIG_REG,
                                  ACCEL_CONFIG_REG, MPU_INTBP_CFG_REG};
     const uint8_t values[] = {dlpf, static_cast<uint8_t>(divider - 1U),

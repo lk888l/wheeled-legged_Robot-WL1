@@ -12,19 +12,19 @@ using PidGains = MotionSettings::PidGains;
 
 struct ControlParameters {
     PidGains angle{MotionSettings::Parameters{}.angle};
-    PidGains velocity{0.05F, 0.008F, 0.0F};
-    PidGains difference{2.0F, 0.001F, 0.0F};
-    PidGains roll{0.0F, -0.4F, 0.0F};
+    PidGains velocity{MotionSettings::Parameters{}.velocity};
+    PidGains difference{MotionSettings::Parameters{}.difference};
+    PidGains roll{MotionSettings::Parameters{}.roll};
     // Runtime calibration at minimum leg height; the height correction is separate.
-    float angle_bias{BalanceCompensation::default_minimum_bias_degrees};
+    float angle_bias{MotionSettings::Parameters{}.minimum_pitch_bias};
     float velocity_target{0.0F};
     float difference_target{0.0F};
-    float leg_height{44.5F};
-    float roll_target{0.0F};
+    float leg_height{MotionSettings::Parameters{}.leg_height};
+    float roll_target{MotionSettings::Parameters{}.roll_target};
     bool show_imu{false};
     bool show_rpm{false};
     // -p tunes the 61.5 mm reference gain; -manual explicitly selects fixed Kp.
-    bool angle_kp_auto{true};
+    bool angle_kp_auto{MotionSettings::Parameters{}.angle_kp_auto};
     // Minimum nonzero compare value, shared by the left/A and right/B wheel outputs.
     std::uint16_t motor_deadzone{MotionSettings::default_motor_deadzone};
     // Only accepted movement commands renew this deadline; PID tuning does not.
