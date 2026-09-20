@@ -34,13 +34,14 @@ public:
     * @param dt 采样周期 (ms)
     * @return
     */
-    float update(float target, float measured) {
+    float update(float target, float measured, float integral_weight = 1.0F) {
         // 1. 计算误差
         float error = target - measured;
 
         // 2. 积分项 (包含积分限幅防止饱和)
         if(ki_!=0){
-            integral_ += error;
+            // Stand launch scales integration with available actuator authority.
+            integral_ += error * integral_weight;
             // 积分抗饱和 (Simple Clamping)
             if (integral_ > max_int_) { integral_ = max_int_; }
             else if (integral_ < min_int_) { integral_ = min_int_; }

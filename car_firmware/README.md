@@ -8,6 +8,8 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 
 当前运行路径使用 STM32 HAL、FreeRTOS 和 C++23：
 
+- 上电默认使用原有普通启动；手动支架冷启动时双腿同步缓升至 69.5 mm，渐增平衡输出并以 30 RPM 前进，编码器累计约 12 cm 后平滑恢复正常控制，见 [冷启动发车](docs/cold-start.md)；
+- 支持 `coldstart start/stop/status` 手动发车与查询，以及 `autoleg on/off/status` 开关自适应腿高；开关默认开启，仅本次上电有效；
 - `save` 一键将全部运动调参、双轮 PWM 死区及 Kp 模式保存到内部 Flash，断电恢复；姿态 P 按 61.5 mm 基准线性补偿腿高，见 [保存命令](docs/commands.md#flash-参数保存)；
 - `install on` 腿部舵机安装模式：屏蔽轮电机与自适应腿高，双腿保持 44.5 mm；`install off` 退出后控制保持关闭；
 - 10 ms 姿态环，计算左右轮 PWM；
@@ -186,8 +188,9 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 `g_app_hardware_failed_mask`、`g_app_task_failed_mask` 和
 `g_app_control_enabled`。位定义与上述初始化顺序一致，从 bit 0 开始。
 
-`control=on` 表示硬件与任务就绪。轮电机还需满足与 `main` 相同的 500 ms 稳定
-姿态门控，`status` / `controlstate` 中的 `armed=1` 才表示平衡解锁。`anglebias`
+`control=on` 表示硬件与任务就绪。上电与普通 `control on` 均使用原有 500 ms
+稳定姿态门控；[支架冷启动](docs/cold-start.md) 需显式 `coldstart start`。`status` / `controlstate` 中的
+`armed=1` 表示平衡已开始，冷启动渐增期间还需结合 `gain` 判断输出比例。`anglebias`
 设置最小腿高重心基准；四组 PID 可用原有 `-p/-i/-d` 命令在线调整。
 `anglepid -p` 调整中间腿高的 Kp 基准，`-manual` 指定固定 Kp，`-auto` 恢复补偿。
 确认参数后用 `save` 保存，断电恢复。详见命令参考。

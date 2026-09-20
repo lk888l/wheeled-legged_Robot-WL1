@@ -36,7 +36,7 @@ public:
     app::ButtonTask button{board, events};
     ServoPeer servo;
     app::CommandServiceTask command{board, status, control, button, events};
-    app::MotionControlTask motion{board, status, control, servo};
+    app::MotionControlTask motion{board, status, control, servo, false};
     TaskFunction_t command_entry{};
     void* command_argument{};
     std::vector<Sample> samples;

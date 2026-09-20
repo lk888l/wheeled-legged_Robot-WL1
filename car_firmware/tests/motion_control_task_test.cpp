@@ -32,7 +32,7 @@ int main()
     status.set_state(app::SystemState::ready);
     ServoPeer servo;
     CHECK(servo.start());
-    app::MotionControlTask motion(board, status, control, servo);
+    app::MotionControlTask motion(board, status, control, servo, false);
     fake_rtos::run_on_resume = true;
     fake_rtos::on_delay = advance;
     try { (void)motion.start(); CHECK(false); }

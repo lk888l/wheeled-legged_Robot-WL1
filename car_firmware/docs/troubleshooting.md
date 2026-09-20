@@ -76,6 +76,9 @@ showimu -n
 更换 MPU6050 或机械安装后应重新检查姿态及平衡基准。`anglebias <值>` 设置最小腿高的持久运行时
 基准，`anglebias` 查询基准和实际补偿值；执行 `save` 后重启恢复已保存基准；无有效记录时使用 9.5° 默认值。
 使用 `controlstate` 区分控制任务已运行和姿态已满足启动门控。
+上电默认使用普通启动；显式 `coldstart start` 的支架发车会报告 `coldstart`、`travel` 和 `gain`。电机或编码器未连接时，
+输出渐增开始 6 秒后出现 `coldstart=aborted abort=4`、控制关闭，是行程超时保护。
+流程与其他原因码见 [冷启动发车](cold-start.md)。
 
 ## 编码器和电机排查
 

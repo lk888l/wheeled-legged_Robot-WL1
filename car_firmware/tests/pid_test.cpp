@@ -24,4 +24,8 @@ int main()
     CHECK(derivative_only.updateIncremental(1, 0) == 0);
     derivative_only.setTunings(1, 0, 0);
     CHECK(derivative_only.updateIncremental(1, 0) == 1);
+    PID soft_start(0, 1, 0, -100, 100, -100, 100);
+    for (unsigned i = 0; i < 100; ++i) { CHECK(soft_start.update(10, 0, 0) == 0); }
+    CHECK(soft_start.update(10, 0, 0.5F) == 5);
+    CHECK(soft_start.update(10, 0) == 15);
 }

@@ -63,6 +63,26 @@ install: active=1 ready=1 height=44.5 control=off
 
 ## 控制命令
 
+上电和复位默认使用原有普通启动，需显式 `coldstart start` 才执行
+[支架冷启动发车](cold-start.md)，双腿发车目标为 69.5 mm。`controlstate` 报告
+`coldstart=<阶段> abort=<原因码> travel=<毫米> gain=<0..1>`，用于查看发车进度。
+`control off`、`install on` 或独占 Flash 维护会取消本次发车；之后 `control on`
+使用普通 500 ms 平衡启动门控，不会自动前进。重新发车仍需显式 `coldstart start`。
+冷启动进行期间，运动目标由发车流程接管，普通遥控目标仍接收并遵循 500 ms 超时；
+约 12 cm 后恢复当时有效的目标。停止发车可用 `coldstart stop` 或 `control off`。
+
+| 命令 | 作用 |
+| --- | --- |
+| `coldstart start` | 开启控制并重新执行完整发车；正在发车时重复请求保持当前进度。正常平衡输出期间须先停控，安装/故障/存储忙时拒绝 |
+| `coldstart stop` | 关闭车端控制、立即停止输出并取消待处理发车请求 |
+| `coldstart status` / `coldstart` | 回执 `coldstart: phase=... active=0/1 abort=0..6 travel=<mm> gain=<0..1> control=on/off` |
+| `autoleg on` / `autoleg off` | 开关横滚自适应腿高；关闭时两腿同高，重开渐进恢复。仅运行时生效，默认开启 |
+| `autoleg status` / `autoleg` | 回执 `autoleg: enabled=0/1 active=0/1`；前者为用户设置，后者为当前是否实际调节 |
+
+这些命令均支持 USART1/BLE 和可选 nRF。小程序使用单包短行 `coldstart start\n`、
+`autoleg off\n` 等，串口分包发送使用 `@` 前缀。冷启动前进目标为 −30 RPM，
+与遥控器/小程序的前进方向一致。详见 [冷启动](cold-start.md#手动发车与自适应腿高)。
+
 | 命令 | 参数 | 作用 |
 | --- | --- | --- |
 | `R` | `<turn> <velocity> <roll> <height>` | 一次更新转向、速度、横滚和腿高目标 |
@@ -289,4 +309,3 @@ receive: <original text>
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
 确认参数后使用 `save` 保存，无需重新构建或烧录。
-

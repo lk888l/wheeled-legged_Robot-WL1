@@ -9,6 +9,8 @@ and two leg servos, and receives remote commands over a Bluetooth UART, with opt
 
 The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
+- Power-on and reset use ordinary arming by default. An explicit stand launch extends both legs together to 69.5 mm, ramps balance output and a 30 RPM forward target, then restores normal control after about 120 mm of encoder travel. See [cold start and validation](docs/cold-start.md); `coldstart start` requests the launch and `control off` cancels it.
+- Use `coldstart start/stop/status` for explicit launch control, and `autoleg on/off/status` for runtime adaptive leg-height control (enabled by default; not stored in Flash). Forward is −30 RPM in the firmware, matching the handset and mini-program.
 - `save` persists all motion tunings, the shared wheel-PWM dead zone, and the angle Kp mode to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;

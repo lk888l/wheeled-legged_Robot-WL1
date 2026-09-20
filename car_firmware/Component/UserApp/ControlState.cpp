@@ -52,7 +52,9 @@ void ControlState::publish_leg_targets(LegTargets targets)
 bool ControlState::begin_storage(bool exclusive)
 {
     const CriticalSection lock;
-    return storage_interlock_.begin(feedback_.armed, feedback_.left_pwm, feedback_.right_pwm, exclusive);
+    const bool accepted = storage_interlock_.begin(feedback_.armed, feedback_.left_pwm, feedback_.right_pwm, exclusive);
+    if (accepted && exclusive) { cold_start_requested_ = false; }
+    return accepted;
 }
 
 void ControlState::end_storage()
@@ -82,7 +84,31 @@ bool ControlState::storage_blocks_control() const
 void ControlState::request_control_reset()
 {
     const CriticalSection lock;
+    cold_start_requested_ = false;
     storage_interlock_.requestReset();
+}
+
+void ControlState::request_cold_start()
+{
+    const CriticalSection lock;
+    parameters_.velocity_target = parameters_.difference_target = parameters_.roll_target = 0.0F;
+    parameters_.motion_command_received = false;
+    storage_interlock_.requestReset();
+    cold_start_requested_ = true;
+}
+
+bool ControlState::cold_start_pending() const
+{
+    const CriticalSection lock;
+    return cold_start_requested_;
+}
+
+bool ControlState::consume_cold_start_request()
+{
+    const CriticalSection lock;
+    const bool requested = cold_start_requested_;
+    cold_start_requested_ = false;
+    return requested;
 }
 
 void ControlState::set_installation_mode(bool enabled)
@@ -90,6 +116,7 @@ void ControlState::set_installation_mode(bool enabled)
     const CriticalSection lock;
     if (installation_mode_ == enabled) { return; }
     installation_mode_ = enabled;
+    cold_start_requested_ = false;
     installation_ready_ = false;
     parameters_.velocity_target = parameters_.difference_target = parameters_.roll_target = 0.0F;
     parameters_.leg_height = BalanceCompensation::minimum_leg_height_mm;

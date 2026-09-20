@@ -42,6 +42,11 @@ public:
         stable_samples_ = 0;
     }
 
+    // A completed stand launch already runs the full balance controller.
+    // Transfer that state without a new 500 ms gap in wheel output. update()
+    // still applies its normal validity and fall limits on the next sample.
+    void accept_balanced_handoff() noexcept { armed_ = true; }
+
 private:
     bool armed_ = false;
     std::uint16_t stable_samples_ = 0;

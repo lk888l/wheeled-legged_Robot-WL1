@@ -367,6 +367,113 @@ void test_control_off_keeps_attitude_tracking()
     };
     f.run();
 }
+
+void test_drive_commands()
+{
+    Fixture f;
+    f.send("control off", false);
+    f.send("autoleg off", false);
+    CHECK(!f.control.parameters().auto_leg_enabled);
+    CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=0 active=0\n");
+    f.send("autoleg banana", false);
+    CHECK(!f.control.parameters().auto_leg_enabled);
+    f.send("coldstart start", false);
+    CHECK(f.control.cold_start_pending() && f.status.control_enabled());
+    CHECK(f.board.command_uart().logs.back().find("phase=waiting active=1") != std::string::npos);
+    f.send("coldstart start"); // A repeated radio command must not queue another departure.
+    f.send("coldstart stop", false);
+    CHECK(!f.control.cold_start_pending() && !f.status.control_enabled());
+    f.send("install on", false);
+    f.send("coldstart start", false);
+    CHECK(!f.control.cold_start_pending());
+    CHECK(f.board.command_uart().logs.back() == "coldstart: rejected installation\n");
+    f.send("install off", false);
+    CHECK(f.control.begin_storage(false));
+    f.send("coldstart start", false);
+    CHECK(f.board.command_uart().logs.back() == "coldstart: rejected not-ready\n");
+    f.control.end_storage();
+    f.send("R 20 30 5 60", false);
+    f.send("coldstart start", false);
+    CHECK(f.control.parameters().velocity_target == 0 && f.control.parameters().roll_target == 0);
+    CHECK(!f.control.parameters().motion_command_received);
+    f.board.imu().reading = {0, 0, 0};
+    unsigned handover = 0;
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        const auto feedback = f.control.feedback();
+        const auto legs = f.control.leg_targets();
+        f.board.left_encoder().rpm = f.board.right_encoder().rpm = feedback.velocity_target;
+        CHECK(!feedback.auto_leg_active);
+        CHECK(legs.left == legs.right);
+        if (feedback.cold_start_phase == app::ColdStartPhase::driving) { CHECK(legs.left == 69.5F); }
+        if (tick == 2000) {
+            CHECK(feedback.cold_start_phase == app::ColdStartPhase::raising);
+            f.send("coldstart start", false);
+            CHECK(!f.control.cold_start_pending());
+        }
+        if (feedback.cold_start_phase == app::ColdStartPhase::handing_over && handover == 0) handover = tick;
+        if (tick == 8500) {
+            CHECK(handover > 6000 && handover < 6500);
+            CHECK(feedback.cold_start_phase == app::ColdStartPhase::complete && feedback.armed);
+            CHECK(feedback.cold_start_distance_mm >= 120);
+            f.send("coldstart start", false);
+            CHECK(f.board.command_uart().logs.back() == "coldstart: rejected control-off-required\n");
+            f.send("coldstart stop", false);
+        }
+        if (tick == 8520) {
+            CHECK(!feedback.armed && !f.status.control_enabled());
+            f.send("coldstart start", false);
+        }
+        if (tick == 9100) {
+            CHECK(feedback.cold_start_phase == app::ColdStartPhase::raising);
+            f.send("coldstart stop", false);
+            f.send("control on", false);
+        }
+        if (tick == 9700) {
+            CHECK(feedback.cold_start_phase == app::ColdStartPhase::aborted);
+            CHECK(feedback.velocity_target == 0 && !f.control.cold_start_pending());
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
+
+void test_auto_leg_switch()
+{
+    Fixture f;
+    auto parameters = f.control.parameters();
+    parameters.angle_bias = 0;
+    parameters.leg_height = 61.5F;
+    parameters.roll = {1, 0, 0};
+    parameters.roll_target = 2;
+    f.control.set_parameters(parameters);
+    f.board.imu().reading = {0, -BalanceCompensation::pitchBias(parameters.angle_bias, parameters.leg_height), 0};
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        const auto feedback = f.control.feedback();
+        const auto legs = f.control.leg_targets();
+        if (tick == 610) {
+            CHECK(feedback.auto_leg_active && legs.left != legs.right);
+            f.send("autoleg off", false);
+            f.send("autoleg status");
+            CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=0 active=0\n");
+        }
+        if (tick == 710) {
+            CHECK(feedback.armed && !feedback.auto_leg_active);
+            CHECK(legs.left == 61.5F && legs.right == 61.5F);
+            f.send("autoleg on", false);
+        }
+        if (tick == 760) {
+            CHECK(feedback.armed && feedback.auto_leg_active);
+            CHECK(legs.left < 61.5F && legs.left > 61.0F); // Gradual re-entry, no old integral jump.
+        }
+        if (tick == 1310) {
+            CHECK(feedback.auto_leg_active && legs.left == 59.5F && legs.right == 63.5F);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -377,4 +484,6 @@ int main()
     test_recycle_at_arming_boundary();
     test_append_keeps_balancing();
     test_control_off_keeps_attitude_tracking();
+    test_drive_commands();
+    test_auto_leg_switch();
 }

@@ -55,6 +55,11 @@ add_wl1_test(pid_test)
 add_wl1_test(motion_parameters_test)
 add_wl1_test(balance_compensation_test)
 add_wl1_test(balance_startup_test)
+add_wl1_test(cold_start_launch_test)
+add_wl1_test(cold_start_task_test
+    ../Component/Application/AppTask.cpp ../Component/Application/RuntimeStatus.cpp
+    ../Component/UserApp/ControlState.cpp ../Component/UserApp/Tasks/MotionControlTask.cpp)
+target_include_directories(cold_start_task_test BEFORE PRIVATE fakes)
 add_wl1_test(uart_command_framer_test)
 add_wl1_test(uart_dma_test)
 target_include_directories(uart_dma_test BEFORE PRIVATE uart_fakes fakes)

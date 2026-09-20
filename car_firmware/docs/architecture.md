@@ -175,7 +175,12 @@ classDiagram
 
 ### MotionControl
 
-实际创建的是 `MotionControlTask`，保留原串级 PID 算法。每 10 ms：
+实际创建的是 `MotionControlTask`，默认上电使用原有普通启动与串级 PID 算法。
+显式 `coldstart start` 后，`ColdStartLaunch` 接管腿高、速度目标和输出比例，完成同步升腿至 69.5 mm、渐增平衡和
+约 12 cm 发车，再平滑交回正常控制，详见 [冷启动发车](cold-start.md)。
+该状态机不写入参数/Flash，停控与维护互锁会取消本次发车。
+
+以下为正常控制路径。每 10 ms：
 
 1. 读取 MPU6050，经 VQF 得到 Roll、Pitch、Yaw，并检查姿态和角速度有限；
 2. 按重心基准和左右腿平均目标高度计算实际偏置，检查连续 500 ms 的启动门控；

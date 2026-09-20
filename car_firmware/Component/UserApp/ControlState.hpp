@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include "CtrlAlgorithm/BalanceCompensation.hpp"
+#include "CtrlAlgorithm/ColdStartLaunch.hpp"
 #include "MotionParameters.hpp"
 #include "MotionStorageInterlock.hpp"
 
@@ -30,6 +31,7 @@ struct ControlParameters {
     // Only accepted movement commands renew this deadline; PID tuning does not.
     uint32_t motion_command_tick{};
     bool motion_command_received{};
+    bool auto_leg_enabled{true}; // Runtime preference; not part of Flash tunings.
 };
 
 struct LegTargets { float left{44.5F}; float right{44.5F}; };
@@ -51,6 +53,11 @@ struct ControlFeedback {
     float velocity_target{};
     float difference_target{};
     float roll_target{};
+    ColdStartPhase cold_start_phase{ColdStartPhase::complete};
+    ColdStartAbort cold_start_abort{ColdStartAbort::none};
+    float cold_start_distance_mm{};
+    float cold_start_gain{};
+    bool auto_leg_active{};
 };
 
 // Value types above are portable; the snapshot implementation is single-core
@@ -70,6 +77,9 @@ public:
     [[nodiscard]] bool storage_blocks_control() const;
     [[nodiscard]] bool consume_storage_reset();
     void request_control_reset();
+    void request_cold_start();
+    [[nodiscard]] bool cold_start_pending() const;
+    [[nodiscard]] bool consume_cold_start_request();
     void set_installation_mode(bool enabled);
     [[nodiscard]] bool installation_mode() const;
     void set_installation_ready(bool ready);
@@ -82,6 +92,7 @@ private:
     MotionStorageInterlock storage_interlock_{};
     bool installation_mode_{};
     bool installation_ready_{};
+    bool cold_start_requested_{};
 };
 
 } // namespace app

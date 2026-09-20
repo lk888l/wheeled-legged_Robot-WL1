@@ -16,7 +16,7 @@ app::ButtonEventQueue events;
 app::ButtonTask button(board, events);
 app::ServoControlTask servo(board, status, control);
 app::CommandServiceTask command(board, status, control, button, events);
-app::MotionControlTask motion(board, status, control, servo);
+app::MotionControlTask motion(board, status, control, servo, false);
 TaskFunction_t command_entry, servo_entry;
 void *command_arg, *servo_arg;
 unsigned writes_at_install;
