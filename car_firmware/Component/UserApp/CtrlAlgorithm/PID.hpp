@@ -12,9 +12,11 @@
 #ifndef __F411CEU6_PID_HPP
 #define __F411CEU6_PID_HPP
 
+#include <algorithm>
 
 class PID {
 public:
+    struct Terms { float p{}, i{}, d{}; };
     /**
     * @brief PID 构造函数
     * @param kp 比例系数
@@ -25,44 +27,51 @@ public:
     */
     PID(float kp, float ki, float kd, float min_out, float max_out, float min_int, float max_int)
             : kp_(kp), ki_(ki), kd_(kd), min_out_(min_out), max_out_(max_out), min_int_(min_int),max_int_(max_int),
-              integral_(0.0f), prev_error_(0.0f), prevTWO_error_(0.0f) {}
+              integral_(0.0f), prev_error_(0.0f), prevTWO_error_(0.0f),
+              anti_windup_min_(min_out), anti_windup_max_(max_out) {}
 
     /**
     * @brief 计算 PID 输出
     * @param target
     * @param measured
-    * @param dt 采样周期 (ms)
+    * Gains use per-sample integral and measurement difference, not SI time units.
     * @return
     */
-    float update(float target, float measured) {
-        // 1. 计算误差
-        float error = target - measured;
+    float update(float target, float measured, bool anti_windup = false, bool integrate = true) {
+        return updateWithMeasurementDelta(target, measured,
+            has_previous_measurement_ ? measured - prev_actual : 0.0F, anti_windup, integrate);
+    }
 
-        // 2. 积分项 (包含积分限幅防止饱和)
-        if(ki_!=0){
-            integral_ += error;
-            // 积分抗饱和 (Simple Clamping)
-            if (integral_ > max_int_) { integral_ = max_int_; }
-            else if (integral_ < min_int_) { integral_ = min_int_; }
+    // External derivative in measurement units per nominal sample. Passing a
+    // sensor rate * nominal_period retains the existing discrete Kd scale.
+    float updateWithMeasurementDelta(float target, float measured, float measurement_delta,
+                                    bool anti_windup = false, bool integrate = true) {
+        const float error = target - measured;
+        if (ki_ == 0.0F) integral_ = 0.0F;
+        float candidate = integral_;
+        if (ki_ != 0.0F && integrate) {
+            candidate = std::clamp(integral_ + error, min_int_, max_int_);
         }
-        else{
-            integral_ = 0;
+        terms_.p = kp_ * error;
+        terms_.d = -kd_ * measurement_delta;
+        const float proposed = terms_.p + ki_ * candidate + terms_.d;
+        const float integral_change = ki_ * (candidate - integral_);
+        // Reject further windup, but allow unwinding, including negative Ki.
+        if (!anti_windup || !((proposed > anti_windup_max_ && integral_change > 0.0F) ||
+                             (proposed < anti_windup_min_ && integral_change < 0.0F))) {
+            integral_ = candidate;
         }
-
-        // 3. 总输出并再次限幅
-        float total_out = kp_ * error
-                        + integral_ * ki_
-//                        + kd_ * (error - prev_error_);
-                        - (has_previous_measurement_ ? kd_ * (measured - prev_actual) : 0.0f);
-
-        if (total_out > max_out_) total_out = max_out_;
-        else if (total_out < min_out_) total_out = min_out_;
-
-        // 保存状态
+        terms_.i = ki_ * integral_;
         prev_error_ = error;
         prev_actual = measured;
         has_previous_measurement_ = true;
-        return total_out;
+        return std::clamp(terms_.p + terms_.i + terms_.d, min_out_, max_out_);
+    }
+
+    const Terms& terms() const { return terms_; }
+    // Account for downstream mixing without reducing proportional/damping authority.
+    void setAntiWindupOutputLimits(float minimum, float maximum) {
+        anti_windup_min_ = minimum; anti_windup_max_ = maximum;
     }
 
     /**
@@ -103,6 +112,7 @@ public:
         last_out_ = 0.0f;
         prev_actual = 0.0f;
         has_previous_measurement_ = false;
+        terms_ = {};
     }
 
     /**
@@ -125,6 +135,8 @@ private:
     float prev_actual{}; // Deterministic first derivative sample; never read stack garbage.
     float last_out_{};
     bool has_previous_measurement_{};
+    Terms terms_{};
+    float anti_windup_min_, anti_windup_max_;
 };
 
 

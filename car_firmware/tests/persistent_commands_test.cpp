@@ -73,6 +73,10 @@ int main()
     CHECK(!control.storage_busy() && control.consume_storage_reset());
     const auto persisted = app::MotionPersistence::snapshot(control.parameters());
     const auto writes = fake_flash::device.writes;
+    send("@balancepid -dsource diff\n");
+    send("@balancepid -converge off\n");
+    send("@balancepid -ratio 0.9\n");
+    send("@balancepid -lpf 20\n");
     send("save all", true);
     last_contains("save: unchanged");
     CHECK(fake_flash::device.writes == writes);
@@ -89,6 +93,9 @@ int main()
     CHECK(!restored.parameters().motion_command_received && restored.parameters().motion_command_tick == 0);
     CHECK(!restored.parameters().show_imu && !restored.parameters().show_rpm);
     CHECK(restored.parameters().motor_deadzone == 72U);
+    CHECK(restored.parameters().balance.gyro_damping && restored.parameters().balance.convergence);
+    CHECK(restored.parameters().balance.near_kp_ratio == 0.85F);
+    CHECK(restored.parameters().balance.rate_filter_hz == 0.0F);
     CHECK(restored.leg_targets().left == 61.5F && restored.leg_targets().right == 61.5F);
     CHECK(!restore.unsaved());
 

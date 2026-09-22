@@ -72,6 +72,8 @@ void test_each_gain()
         for (const char term : {'p', 'i', 'd'}) {
             Fixture f;
             auto parameters = f.control.parameters();
+            // Isolate each gain from the default nonlinear scheduling and I gate.
+            parameters.balance.convergence = false;
             parameters.angle = {10, 0, 0};
             parameters.angle_kp_auto = false;
             parameters.velocity = parameters.difference = parameters.roll = {0, 0, 0};
@@ -90,6 +92,8 @@ void test_each_gain()
                     if (loop == "anglepid") {
                         f.send("anglepid -p 0");
                         f.board.imu().reading.Pitch -= 1.0;
+                        // A -1 degree step in 10 ms corresponds to -100 deg/s.
+                        f.board.imu().gyro_reading[1] = -1.7453292519943295;
                     } else if (loop == "velocitypid") {
                         f.board.left_encoder().rpm = f.board.right_encoder().rpm = 1;
                     } else if (loop == "differpid") {
@@ -124,6 +128,7 @@ void test_each_gain()
 void test_calibration_and_recovery()
 {
     Fixture f;
+    f.send("balancepid -converge off", false); // Check the height-only Kp curve.
     f.send("anglepid -d 0");
     step = [&] {
         const auto tick = fake_rtos::now;
@@ -189,6 +194,97 @@ void test_calibration_and_recovery()
     };
     f.run();
 }
+void test_balance_damping_and_scheduling()
+{
+    Fixture f;
+    auto p = f.control.parameters();
+    p.angle = {100, 0, 60};
+    p.angle_kp_auto = false;
+    p.velocity = p.difference = p.roll = {0, 0, 0};
+    f.control.set_parameters(p);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick == 510U) {
+            CHECK(f.control.feedback().armed);
+            // The initial arming cycle uses the compiled convergence default.
+            CHECK(f.control.parameters().balance.convergence);
+            CHECK(std::abs(f.control.feedback().angle_kp - 85) < 0.0001F);
+            f.send("balancepid -converge off", false);
+            f.board.imu().gyro_reading[1] = 1.7453292519943295;
+        }
+        if (tick == 520U) {
+            CHECK(f.board.wheel_motor().left == -60 && f.board.wheel_motor().right == -60);
+            CHECK(f.control.feedback().angle_p == 0);
+            CHECK(std::abs(f.control.feedback().angle_d + 60) < 0.0001F);
+            f.send("balancepid -dsource diff", false);
+            f.board.imu().reading.Pitch -= 1;
+            f.board.imu().gyro_reading[1] = 0;
+        }
+        if (tick == 530U) {
+            CHECK(f.board.wheel_motor().left == 160);
+            f.send("balancepid -dsource gyro", false);
+        }
+        if (tick == 540U) {
+            CHECK(f.board.wheel_motor().left == 100 && f.control.feedback().angle_d == 0);
+            f.send("anglebias 10.5", false);
+        }
+        if (tick == 550U) {
+            CHECK(f.board.wheel_motor().left == 0 && f.control.feedback().angle_d == 0);
+            f.send("balancepid -converge on", false);
+            f.send("balancepid -ratio 0.8", false);
+            f.send("anglebias 9.5", false);
+        }
+        if (tick == 560U) {
+            CHECK(f.board.wheel_motor().left == 90);
+            CHECK(std::abs(f.control.feedback().angle_kp - 90) < 0.0001F);
+            f.board.imu().reading.Pitch = -9.5;
+            f.board.imu().gyro_reading[1] = 1.7453292519943295;
+        }
+        if (tick == 570U) {
+            CHECK(f.board.wheel_motor().left == -60);
+            CHECK(f.control.feedback().angle_kp == 100);
+            f.send("control off", false);
+            f.board.imu().gyro_reading[1] = 0;
+        }
+        if (tick == 580U) {
+            CHECK(!f.control.feedback().armed && f.board.wheel_motor().left == 0);
+            CHECK(f.control.feedback().angle_d == 0 && f.control.feedback().angle_i == 0);
+            f.send("controlstate", false);
+            bool found = false;
+            for (const auto& line : f.board.command_uart().logs)
+                found = found || line.find("pitch_rate=") != std::string::npos;
+            CHECK(found);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
+
+void test_velocity_integral_separation()
+{
+    Fixture f;
+    CHECK(f.control.parameters().balance.convergence);
+    f.send("velocitypid -p 0", false);
+    f.send("velocitypid -i 1", false);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick == 510U) {
+            CHECK(f.control.feedback().armed);
+            f.board.imu().reading.Pitch = -13.5;
+            f.board.left_encoder().rpm = f.board.right_encoder().rpm = -1;
+        }
+        if (tick == 560U) {
+            CHECK(f.control.feedback().angle_target == 0); // Freeze while inner loop is far away.
+            f.board.imu().reading.Pitch = -9.5;
+        }
+        if (tick == 610U) {
+            CHECK(f.control.feedback().angle_target == 1); // Resume inside the angle/rate window.
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
+
 void test_remote_timeout()
 {
     Fixture f;
@@ -372,6 +468,8 @@ void test_control_off_keeps_attitude_tracking()
 int main()
 {
     test_each_gain();
+    test_balance_damping_and_scheduling();
+    test_velocity_integral_separation();
     test_calibration_and_recovery();
     test_remote_timeout();
     test_recycle_at_arming_boundary();

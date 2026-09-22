@@ -21,7 +21,7 @@ void MotionControlTask::run()
     uint8_t imu_read_failures = 0U;
     bool reset_imu_fusion = false;
     //  PID
-    PID angle_pid(70.0f,0,51.0f,-1000,1000,-100,100);
+    balance_control::AngleController angle_controller;
     PID velocity_pid(0.04,0.006,0,-10,10,-100,100);
     PID difference_pid(0,0,0,-500,500,-100,100);
     PID roll_pid(0,0,0,-78,78,-100,100);
@@ -38,13 +38,15 @@ void MotionControlTask::run()
     last_wake = xTaskGetTickCount();        //get now system tick to delay a period
     TickType_t previous_sample = last_wake;
     const auto reset_controllers = [&] {
-        angle_pid.reset();
+        angle_controller.reset();
         velocity_pid.reset();
         difference_pid.reset();
         roll_pid.reset();
         angle_target = difference_pwm = 0.0F;
         feedback.armed = false;
         feedback.left_pwm = feedback.right_pwm = 0;
+        feedback.angle_target = feedback.angle_p = feedback.angle_i = feedback.angle_d = 0.0F;
+        feedback.filtered_pitch_rate_dps = 0.0F;
     };
     for (;;) {
         vTaskDelayUntil(&last_wake, period);
@@ -127,6 +129,8 @@ void MotionControlTask::run()
         feedback.euler[0] = static_cast<float>(angle.Roll);
         feedback.euler[1] = static_cast<float>(angle.Pitch);
         feedback.euler[2] = static_cast<float>(angle.Yaw);
+        feedback.pitch_rate_dps = balance_control::pitchRateDegrees(
+            static_cast<float>(angle.Roll), gyro[1], gyro[2]);
         if(parameters.show_imu) {
             board_.command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", angle.Roll, angle.Pitch, angle.Yaw);
         }
@@ -190,7 +194,13 @@ void MotionControlTask::run()
             difference_rpm = left_rpm - right_rpm;
             velocity_pid.setTunings(parameters.velocity.kp,parameters.velocity.ki,parameters.velocity.kd);
             difference_pid.setTunings(parameters.difference.kp,parameters.difference.ki,parameters.difference.kd);
-            angle_target = velocity_pid.update(parameters.velocity_target,average_rpm);
+            const float measured_pitch = static_cast<float>(angle.Pitch) +
+                BalanceCompensation::pitchBias(parameters.angle_bias,
+                    BalanceCompensation::averageLegHeight(legs.left, legs.right));
+            angle_target = velocity_pid.update(parameters.velocity_target, average_rpm,
+                parameters.balance.convergence,
+                balance_control::allowIntegration(parameters.balance,
+                    angle_target - measured_pitch, feedback.pitch_rate_dps));
             difference_pwm = difference_pid.update(parameters.difference_target,difference_rpm);
             if(parameters.show_rpm){
                 board_.command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",left_rpm,right_rpm);
@@ -229,9 +239,18 @@ void MotionControlTask::run()
         feedback.angle_bias = BalanceCompensation::pitchBias(parameters.angle_bias, average_height);
         feedback.angle_kp = parameters.angle_kp_auto
             ? MotionSettings::effectiveAngleKp(parameters.angle.kp, average_height) : parameters.angle.kp;
-        angle_pid.setTunings(feedback.angle_kp,parameters.angle.ki,parameters.angle.kd);
         feedback.pitch_error = static_cast<float>(angle.Pitch) + feedback.angle_bias;
-        float even_pwm = angle_pid.update(angle_target,angle.Pitch + feedback.angle_bias);
+        const auto angle_output = angle_controller.update(angle_target, feedback.pitch_error,
+            feedback.pitch_rate_dps, static_cast<float>(sample_gap) / configTICK_RATE_HZ,
+            feedback.angle_kp, parameters.angle.ki, parameters.angle.kd, parameters.balance,
+            1000.0F - std::abs(difference_pwm));
+        feedback.angle_kp = angle_output.effective_kp;
+        feedback.angle_target = angle_target;
+        feedback.filtered_pitch_rate_dps = angle_output.filtered_pitch_rate_dps;
+        feedback.angle_p = angle_output.terms.p;
+        feedback.angle_i = angle_output.terms.i;
+        feedback.angle_d = angle_output.terms.d;
+        const float even_pwm = angle_output.pwm;
         int left_pwm = static_cast<int>(std::round((even_pwm + difference_pwm)));
         int right_pwm = static_cast<int>(std::round((even_pwm - difference_pwm)));
         left_pwm = TB6612::clamp(left_pwm,1000,-1000);

@@ -164,6 +164,73 @@ rollpid -d <value>
 
 三项分别更新对应横滚参数；仅启用 Kd 时也参与增量式 PID 计算。
 
+## 俯仰阻尼与收敛试验
+
+默认使用经 VQF 零偏校正的陀螺仪角速度作为俯仰 D 反馈。按当前横滚角将机体
+Y/Z 轴角速度换算成俯仰角速度，避免横滚时直接取 Y 轴的误差。D 不再对腿高
+补偿角或速度环目标求差分；P/I 仍跟踪补偿后的俯仰角。零偏使用
+[VQF 的 rad/s 估计接口](https://vqf.readthedocs.io/en/latest/ref_cpp.html#_CPPv4NK3VQF15getBiasEstimateEP10vqf_real_t)。
+
+`anglepid -d` 保持原来 10 ms 差分的调参尺度，不用把已保存的 60 改成 0.6：
+
+```text
+D_PWM = -angle_kd * 0.01 * pitch_rate_deg_per_second
+```
+
+因此 Kd=60 对应角速度系数 0.6 PWM/(°/s)。0.01 是旧增益的固定换算基准，
+不随任务间隔抖动改变。这个换算保持量级，并不代表两种反馈的动态效果完全相同。
+原 PID 的 I 仍按每次采样累积：角度环 10 ms，速度环 50 ms。
+
+新增 `balancepid` 命令，直接通过小车 USART1/BLE 发送；BLE 使用 `@命令\n`。
+遥控器桥接白名单不一定转发此新命令。以下选项仅用于 RAM 中的对比试验，
+**`save` 不保存，`params unsaved` 也不包含这些选项；复位恢复表中的默认值**。
+原四组 PID、重心、腿高和死区参数继续正常保存。
+
+| 命令 | 默认值与作用 |
+| --- | --- |
+| `balancepid` | 查询全部试验选项，回包注明 `RAM only; not saved` |
+| `balancepid -dsource gyro` | 默认；用校正后的陀螺仪俯仰角速度计算 D |
+| `balancepid -dsource diff` | 对比原来的补偿后角度差分 D |
+| `balancepid -converge on` / `off` | 默认 on；打开/关闭平滑变增益、积分分离及条件积分抗饱和 |
+| `balancepid -ratio 0.85` | 中点附近 Kp 比例，默认 0.85，可设 0.5..1 |
+| `balancepid -angle 2` | 角度误差窗口，默认 2°，可设 0.1..10 |
+| `balancepid -rate 20` | 角速度窗口，默认 20°/s，可设 1..200 |
+| `balancepid -lpf 0` | 陀螺仪 D 的一阶低通频率，默认 0 为旁路，可设 0..40 Hz |
+
+试验模式只在角度误差和角速度都小时降低 P；任一达到窗口边界即恢复完整 P，
+整个过程使用平滑插值。默认中点 Kp 为腿高补偿后 Kp 的 85%，不是输出死区。
+D 不随误差缩小，因此经过中点但仍在转动时继续制动。`anglepid` / `params`
+的 `effective_p` / `p_effective` 在解锁后显示包括这一步调度的实际 Kp。
+
+角度环和速度环仅在上述两个姿态窗口内继续积分，窗口外保留已有积分。
+输出达到本环限幅时停止向饱和方向累积，允许反向消退；角度环的积分判定还计入
+差速 PWM 占用的余量，但不缩小 P/D 输出范围。此行为基于
+[条件积分抗饱和](https://www.mathworks.com/help/simulink/slref/anti-windup-control-using-a-pid-controller.html)，
+不等同于重力补偿。差速、横滚控制保持原积分方式。
+
+本分支上电默认使用 `gyro + converge on`，同时启用平滑变增益、积分分离和
+条件积分抗饱和；加载旧 Flash 参数后也保持开启，无需再发送启用命令。
+对比时保持腿高和原 PID 参数不变，发送 `balancepid -converge off` 观察仅角速度
+阻尼的效果，再用 `balancepid -converge on` 恢复。`ratio=0.85` 是试验起点，
+不能保证倒立摆仍有足够的恢复力或必然收敛；若小扰动恢复变差，先关闭试验模式。
+若新 D 有明显高频噪声，可尝试 `balancepid -lpf 20`，并观察滤波延迟是否让晃动变大。
+不建议在同一轮同时改变 Kp、Kd、滤波、死区和腿高。
+
+回到原角度差分控制：
+
+```text
+balancepid -converge off
+balancepid -dsource diff
+```
+
+`controlstate` 新增 `pitch_rate`、`filtered_rate`（均为 °/s）、`target`（速度环
+输出的俯仰目标，°）以及 `angle_p/angle_i/angle_d`（PWM）和实际 `kp`。
+`filtered_rate` 始终是滤波后的陀螺仪俯仰角速度；`diff` 模式的 D 使用角度差分。
+现有 `pitch` 是补偿后的俯仰测量值，真正误差为 `target - pitch`。
+这些是查询时的快照，默认 9600 波特率下不适合连续采集 100 Hz 波形。
+判断收敛需在轮子接地的平衡试验中比较相同小扰动后的角度峰值和角速度是否逐步
+衰减；架空车轮只能检查输出方向，不能验证平衡收敛。
+
 ## Flash 参数保存
 
 | 命令 | 作用 |
@@ -184,7 +251,8 @@ rollpid -d <value>
 开机只读取 Flash 并恢复到 RAM；遥控调参只修改 RAM，控制任务读取 RAM。
 只有明确收到 save/save all/save recycle 才执行写入，写入内容为命令处理时的整组快照。
 未保存的修改在重启或断电后丢失，没有有效 Flash 记录时使用编译默认值。
-速度和转向指令、遥控超时计时、控制开关、PID 历史、诊断与遥测开关不保存。
+速度和转向指令、遥控超时计时、控制开关、PID 历史、诊断与遥测开关及
+`balancepid` 试验选项不保存。
 上电恢复保存的姿态目标，但新的遥控帧仍会更新它们；遥控超时保护继续生效。
 
 小程序的“保存全部参数”按钮发送 ASCII **`@save\n`**（最后一个字节为 LF `0x0A`）。
@@ -289,4 +357,3 @@ receive: <original text>
 6. 在不同腿高、供电电压和地面摩擦条件下复验。
 
 确认参数后使用 `save` 保存，无需重新构建或烧录。
-

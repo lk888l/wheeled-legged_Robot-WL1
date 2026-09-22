@@ -82,6 +82,8 @@ public:
     bool getTemperature(float& _temp);
     bool getEulerAngle(EulerAngle& _angle);
     bool getEulerAngleACC(EulerAngle& _angle, double _acc[3]);
+    // Body angular velocity in rad/s with VQF bias removed; getGyro() remains
+    // a raw/calibrated register read in degrees/s.
     bool getEulerAngleGyro(EulerAngle& _angle, double _gyro[3]);
     void setGyroOffset(double&& _xg, double&& _yg, double&& _zg);
     void setGyroOffset(double _offnum[3]);

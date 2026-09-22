@@ -212,9 +212,11 @@ bool MPU6050::getEulerAngleGyro(MPU6050::EulerAngle &_angle, double *_gyro) {
         vqf.update(gyro,acc);
         vqf.getQuat6D(quat);
         QuatToEuler(quat,_angle);
-        _gyro[0] = gyro[0];
-        _gyro[1] = gyro[1];
-        _gyro[2] = gyro[2];
+        vqf_real_t bias[3]{};
+        vqf.getBiasEstimate(bias);
+        for (unsigned axis = 0U; axis < 3U; ++axis) {
+            _gyro[axis] = gyro[axis] - bias[axis];
+        }
         return true;
     }
     return false;

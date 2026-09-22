@@ -32,6 +32,43 @@ bool update_gains(etl::string_view args, PidGains& gains, bool allow_derivative)
     return true;
 }
 
+bool update_balance_options(etl::string_view args, balance_control::Options& options)
+{
+    text_command::ParsedCommand option;
+    if (!text_command::parse(args, option)) return false;
+    if (option.command == "-dsource") {
+        if (option.args != "gyro" && option.args != "diff") return false;
+        options.gyro_damping = option.args == "gyro";
+        return true;
+    }
+    if (option.command == "-converge") {
+        if (option.args != "on" && option.args != "off") return false;
+        options.convergence = option.args == "on";
+        return true;
+    }
+    float value{};
+    if (!parse_value(option.args, value)) return false;
+    if (option.command == "-ratio" && value >= 0.5F && value <= 1.0F)
+        options.near_kp_ratio = value;
+    else if (option.command == "-angle" && value >= 0.1F && value <= 10.0F)
+        options.angle_window_degrees = value;
+    else if (option.command == "-rate" && value >= 1.0F && value <= 200.0F)
+        options.rate_window_dps = value;
+    else if (option.command == "-lpf" && value >= 0.0F && value <= 40.0F)
+        options.rate_filter_hz = value;
+    else return false;
+    return true;
+}
+
+void print_balance_options(LkUart<>& uart, const balance_control::Options& options)
+{
+    uart.print("balancepid dsource={} converge={} (RAM only; not saved)\n",
+        options.gyro_damping ? "gyro" : "diff", options.convergence ? "on" : "off");
+    uart.print("balancepid ratio={:.3f} angle={:.2f}deg rate={:.2f}dps lpf={:.1f}Hz\n",
+        options.near_kp_ratio, options.angle_window_degrees,
+        options.rate_window_dps, options.rate_filter_hz);
+}
+
 } // namespace
 
 void CommandServiceTask::run()
@@ -185,6 +222,10 @@ void CommandServiceTask::process_command(etl::string_view frame)
                    f.imu_valid ? 1 : 0, f.pitch_error, f.left_pwm, f.right_pwm);
         uart.print("loops={} tick={} gap={} missed={}\n", f.loop_count, f.sample_tick,
                    f.max_sample_gap_ticks, f.deadline_misses);
+        uart.print("pitch_rate={:.3f} filtered_rate={:.3f} target={:.3f}\n",
+                   f.pitch_rate_dps, f.filtered_pitch_rate_dps, f.angle_target);
+        uart.print("angle_p={:.3f} angle_i={:.3f} angle_d={:.3f} kp={:.3f}\n",
+                   f.angle_p, f.angle_i, f.angle_d, f.angle_kp);
         uart.print("remote_timeout={} velocity={:.1f} turn={:.1f} roll={:.1f}\n",
                    f.remote_timed_out ? 1 : 0, f.velocity_target, f.difference_target, f.roll_target);
         return;
@@ -248,6 +289,10 @@ void CommandServiceTask::process_command(etl::string_view frame)
         parameters.velocity_target = parameters.difference_target = parameters.roll_target = 0.0F;
     }
     if (args.empty()) {
+        if (name == "balancepid") {
+            print_balance_options(uart, parameters.balance);
+            return;
+        }
         const PidGains* gains = name == "anglepid" ? &parameters.angle :
             name == "velocitypid" ? &parameters.velocity :
             name == "differpid" ? &parameters.difference :
@@ -275,6 +320,8 @@ void CommandServiceTask::process_command(etl::string_view frame)
         accepted = args == "-y" || args == "-n";
         if (name == "showimu") { parameters.show_imu = args == "-y"; }
         else { parameters.show_rpm = args == "-y"; }
+    } else if (name == "balancepid") {
+        accepted = update_balance_options(args, parameters.balance);
     } else if (name == "anglepid") {
         if (args == "-auto") {
             parameters.angle_kp_auto = true;
@@ -341,6 +388,7 @@ void CommandServiceTask::process_command(etl::string_view frame)
         }
         // One short, coherent publication: R cannot expose half-updated targets.
         control_.set_parameters(parameters);
+        if (name == "balancepid") print_balance_options(uart, parameters.balance);
     } else {
         uart.print("Command \"{}\": invalid parameters\n", name);
     }
@@ -381,6 +429,7 @@ void CommandServiceTask::show_parameters()
     uart.print("anglepid p_mid={:.4f} i={:.6f} d={:.4f} p_effective={:.4f} mode={}\n",
         p.angle.kp, p.angle.ki, p.angle.kd, f.angle_kp, p.angle_kp_auto ? "auto" : "manual");
     uart.print("velocitypid p={:.6f} i={:.6f} d={:.6f}\n", p.velocity.kp, p.velocity.ki, p.velocity.kd);
+    print_balance_options(uart, p.balance);
     uart.print("differpid p={:.6f} i={:.6f} d={:.6f}\n", p.difference.kp, p.difference.ki, p.difference.kd);
     uart.print("rollpid/legpid p={:.6f} i={:.6f} d={:.6f}\n", p.roll.kp, p.roll.ki, p.roll.kd);
     uart.print("legheight={:.4f} target_roll={:.4f} left={:.4f} right={:.4f}\n",

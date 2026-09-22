@@ -118,6 +118,8 @@ int main()
     harness.board.imu().reading = {
         0.0, -BalanceCompensation::default_minimum_bias_degrees, 0.0};
     auto parameters = harness.control.parameters();
+    // This regression isolates the geometric bias and height-only Kp curve.
+    parameters.balance.convergence = false;
     parameters.angle.ki = parameters.angle.kd = 0.0F;
     parameters.roll = {0.0F, 0.0F, 0.0F};
     harness.control.set_parameters(parameters);

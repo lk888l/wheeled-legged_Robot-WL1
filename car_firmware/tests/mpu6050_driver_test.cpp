@@ -93,5 +93,14 @@ int main() {
     CHECK(std::abs(angle.Roll - settled.Roll) < 0.1);
     CHECK(std::abs(angle.Pitch - settled.Pitch) < 0.05);
     CHECK(std::abs(angle.Yaw - settled.Yaw) < 0.1);
+    CHECK(imu.getEulerAngleGyro(angle, gyro));
+    for (double rate : gyro) CHECK(std::abs(rate) < 0.002); // rad/s, learned bias removed.
+    // The low-level diagnostic API still reports degrees/s before VQF correction.
+    CHECK(imu.getGyro(gyro));
+    CHECK(std::abs(gyro[2] - 112.0 / 32.8) < 1e-8);
+    // Feedback does not erase real movement together with the learned zero bias.
+    raw(0x45, 3264); // old -16 count Y bias plus +100 deg/s motion.
+    CHECK(imu.getEulerAngleGyro(angle, gyro));
+    CHECK(std::abs(gyro[1] - 1.7453292519943295) < 0.005);
     std::puts("PASS: MPU6050 clock, DLPF, divider, ranges, coherent sample and I/O failures");
 }

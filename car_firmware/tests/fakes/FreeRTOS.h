@@ -18,6 +18,7 @@ inline constexpr UBaseType_t configMAX_PRIORITIES = 56U;
 inline constexpr UBaseType_t configTIMER_TASK_PRIORITY = 2U;
 inline constexpr UBaseType_t tskIDLE_PRIORITY = 0U;
 inline constexpr TickType_t portMAX_DELAY = UINT32_MAX;
+inline constexpr TickType_t configTICK_RATE_HZ = 1000U;
 #define pdMS_TO_TICKS(ms) static_cast<TickType_t>(ms)
 #define configASSERT(condition) assert(condition)
 

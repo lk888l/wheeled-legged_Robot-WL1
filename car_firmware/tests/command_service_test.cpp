@@ -46,6 +46,33 @@ int main()
 
     CHECK(control.parameters().angle_bias == BalanceCompensation::default_minimum_bias_degrees);
     CHECK(control.parameters().motor_deadzone == MotionSettings::default_motor_deadzone);
+    CHECK(control.parameters().balance.gyro_damping && control.parameters().balance.convergence);
+    for (const bool radio : {false, true}) {
+        dispatch("balancepid -dsource diff", radio);
+        dispatch("balancepid -converge on", radio);
+        dispatch("balancepid -ratio 0.9", radio);
+        dispatch("balancepid -angle 3", radio);
+        dispatch("balancepid -rate 25", radio);
+        dispatch("balancepid -lpf 20", radio);
+        for (const char* invalid : {"balancepid -dsource invalid", "balancepid -dsource gyro junk",
+                "balancepid -converge yes", "balancepid -converge off junk",
+                "balancepid -ratio 0.49", "balancepid -ratio 1.01", "balancepid -ratio nan",
+                "balancepid -ratio 0.8 junk", "balancepid -angle 0", "balancepid -angle 11",
+                "balancepid -rate 0", "balancepid -rate 201", "balancepid -rate inf",
+                "balancepid -lpf -1", "balancepid -lpf 41", "balancepid -lpf 1e39"}) {
+            dispatch(invalid, radio);
+            const auto b = control.parameters().balance;
+            CHECK(!b.gyro_damping && b.convergence && b.near_kp_ratio == 0.9F);
+            CHECK(b.angle_window_degrees == 3 && b.rate_window_dps == 25 && b.rate_filter_hz == 20);
+        }
+        dispatch("balancepid -dsource gyro", radio);
+        dispatch("balancepid -converge off", radio);
+        dispatch("balancepid -lpf 0", radio);
+        CHECK(control.parameters().balance.gyro_damping && !control.parameters().balance.convergence);
+        CHECK(control.parameters().balance.rate_filter_hz == 0);
+        dispatch("balancepid", radio);
+        CHECK(board.command_uart().logs[board.command_uart().logs.size() - 2].find("RAM only") != std::string::npos);
+    }
     // Both command transports must preserve the last valid baseline on every
     // rejected number, including numeric overflow and extra arguments.
     for (const bool radio : {false, true}) {

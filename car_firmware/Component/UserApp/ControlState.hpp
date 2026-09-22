@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include "CtrlAlgorithm/BalanceCompensation.hpp"
+#include "CtrlAlgorithm/BalanceController.hpp"
 #include "MotionParameters.hpp"
 #include "MotionStorageInterlock.hpp"
 
@@ -30,6 +31,8 @@ struct ControlParameters {
     // Only accepted movement commands renew this deadline; PID tuning does not.
     uint32_t motion_command_tick{};
     bool motion_command_received{};
+    // Experimental options; not included in Flash save.
+    balance_control::Options balance{};
 };
 
 struct LegTargets { float left{44.5F}; float right{44.5F}; };
@@ -51,6 +54,12 @@ struct ControlFeedback {
     float velocity_target{};
     float difference_target{};
     float roll_target{};
+    float pitch_rate_dps{};
+    float filtered_pitch_rate_dps{};
+    float angle_target{};
+    float angle_p{};
+    float angle_i{};
+    float angle_d{};
 };
 
 // Value types above are portable; the snapshot implementation is single-core
