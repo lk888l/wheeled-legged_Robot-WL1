@@ -9,7 +9,7 @@ and two leg servos, and receives remote commands over a Bluetooth UART, with opt
 
 The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 
-- `save` persists all motion tunings, the shared wheel-PWM dead zone, and the angle Kp mode to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
+- `save` persists all motion tunings, the shared wheel-PWM dead zone, the angle Kp mode, and the adaptive leg-height switch to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
 - ZX-D30 BLE UART at 9600 8N1 by default; optional 32-byte nRF24L01+ commands;

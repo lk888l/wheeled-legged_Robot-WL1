@@ -30,6 +30,7 @@ struct ControlParameters {
     // Only accepted movement commands renew this deadline; PID tuning does not.
     uint32_t motion_command_tick{};
     bool motion_command_received{};
+    bool auto_leg_enabled{MotionSettings::Parameters{}.auto_leg_enabled};
 };
 
 struct LegTargets { float left{44.5F}; float right{44.5F}; };
@@ -51,6 +52,7 @@ struct ControlFeedback {
     float velocity_target{};
     float difference_target{};
     float roll_target{};
+    bool auto_leg_active{};
 };
 
 // Value types above are portable; the snapshot implementation is single-core

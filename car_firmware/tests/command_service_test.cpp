@@ -113,6 +113,14 @@ int main()
     CHECK(board.command_uart().logs.back().find("raw PWM is unavailable") != std::string::npos);
     dispatch("ping");
     CHECK(board.command_uart().logs.back().find("pong") != std::string::npos);
+    dispatch("uid");
+    CHECK(board.command_uart().logs.back() == "uid: 0123456789ABCDEF10203040\n");
+    dispatch("@uid\n");
+    CHECK(board.command_uart().logs.back() == "uid: 0123456789ABCDEF10203040\n");
+    dispatch("uid extra", true);
+    CHECK(board.command_uart().logs.back() == "uid: usage: uid\n");
+    dispatch("uid", true);
+    CHECK(board.command_uart().logs.back() == "uid: 0123456789ABCDEF10203040\n");
 
     const auto log_count = board.command_uart().logs.size();
     const auto motion_tick = control.parameters().motion_command_tick;

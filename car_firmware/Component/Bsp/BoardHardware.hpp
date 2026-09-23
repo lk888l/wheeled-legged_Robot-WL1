@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 #include "HardwareModule.hpp"
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] bool initialize_radio();
 
     void force_safe_outputs();
+    [[nodiscard]] std::array<std::uint32_t, 3U> unique_id() const;
     [[nodiscard]] bool button_pressed() const;
     void set_status_led(bool on);
 

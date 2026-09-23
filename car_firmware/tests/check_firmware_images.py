@@ -57,8 +57,8 @@ def check(build):
     assert len(seed) == RECORD_BYTES
     words = struct.unpack("<21I", seed)
     assert words[0] == 0x574C3150 and words[3] == 1, "Factory magic/sequence"
-    assert words[1] & 0xFFFF == 3 and words[1] >> 16 <= 1000, "Factory schema/dead zone"
-    assert words[2] & ~(1 << 16) == 15, "Factory field count/mode"
+    assert words[1] & 0xFFFF == 4 and words[1] >> 16 <= 1000, "Factory schema/dead zone"
+    assert words[2] == 15, "Factory field count and default automatic modes"
     values = struct.unpack('<15f', seed[16:76])
     assert all(math.isfinite(value) for value in values) and 44.5 <= values[13] <= 78.5
     assert words[19] == zlib.crc32(seed[:76]) and words[20] == 0x434F4D54, "Factory CRC/commit"

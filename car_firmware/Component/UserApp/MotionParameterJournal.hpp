@@ -16,11 +16,13 @@ public:
     // Keep the 84-byte stride so existing version-1 records remain readable.
     // Version 2 uses bit 16 of the field-count word for fixed/manual angle Kp.
     // Version 3 stores the shared motor dead zone in the high half of the
-    // version word, preserving both the 15-float payload and physical stride.
-    static constexpr std::uint32_t version = 3;
+    // version word. Version 4 adds the auto-leg switch in bit 17 of the
+    // field-count word. Both retain the 15-float payload and 84-byte stride.
+    static constexpr std::uint32_t version = 4;
     static constexpr std::uint32_t version_mask = 0xFFFFU;
     static constexpr unsigned deadzone_shift = 16U;
     static constexpr std::uint32_t manual_kp_flag = 1U << 16;
+    static constexpr std::uint32_t auto_leg_disabled_flag = 1U << 17;
     static constexpr std::uint32_t committed = 0x434F4D54U;
     static constexpr std::size_t header_words = 4;
     static constexpr std::size_t crc_index = header_words + parameter_count;
@@ -74,7 +76,8 @@ public:
         Record record{};
         record[0] = magic;
         record[1] = version | (std::uint32_t{parameters.motor_deadzone} << deadzone_shift);
-        record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag);
+        record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag) |
+            (parameters.auto_leg_enabled ? 0U : auto_leg_disabled_flag);
         record[3] = sequence;
         const auto words = encode(parameters);
         std::copy(words.begin(), words.end(), record.begin() + header_words);
@@ -123,8 +126,11 @@ private:
         auto parameters = decode(words);
         const auto schema = record[1] & version_mask;
         parameters.angle_kp_auto = schema == 1U || (record[2] & manual_kp_flag) == 0U;
-        if (schema == version) {
+        if (schema >= 3U && schema <= version) {
             parameters.motor_deadzone = static_cast<std::uint16_t>(record[1] >> deadzone_shift);
+        }
+        if (schema == version) {
+            parameters.auto_leg_enabled = (record[2] & auto_leg_disabled_flag) == 0U;
         }
         return parameters;
     }
@@ -134,7 +140,9 @@ private:
         const auto schema = record[1] & version_mask;
         const bool supported = (record[1] == 1U && record[2] == parameter_count) ||
             (record[1] == 2U && (record[2] & ~manual_kp_flag) == parameter_count) ||
-            (schema == version && (record[2] & ~manual_kp_flag) == parameter_count);
+            (schema == 3U && (record[2] & ~manual_kp_flag) == parameter_count) ||
+            (schema == version &&
+             (record[2] & ~(manual_kp_flag | auto_leg_disabled_flag)) == parameter_count);
         return record[0] == magic && supported &&
             record[commit_index] == committed && record[crc_index] == crc(record) &&
             valid(parametersFrom(record));

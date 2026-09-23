@@ -151,6 +151,8 @@ public:
     bool status_led{false};
     bool button_pressed() const { return pressed; }
     void set_status_led(bool on) { status_led = on; }
+    std::array<std::uint32_t, 3U> unique_id() const
+    { return {0x01234567U, 0x89ABCDEFU, 0x10203040U}; }
     LkUart<>& command_uart() { return uart_; }
     NRF24L01P& radio() { return radio_; }
     MPU6050& imu() { return imu_; }

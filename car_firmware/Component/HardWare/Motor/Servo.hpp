@@ -15,7 +15,7 @@
 //stm32-hal library include
 #include "main.h"
 //freeRTOS library include
-#include "freertos.h"
+#include "FreeRTOS.h"
 #include "timers.h"     // freeRTOS soft timer
 
 

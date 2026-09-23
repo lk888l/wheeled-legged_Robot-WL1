@@ -62,7 +62,7 @@ OpenOCD 的自动 `write_image erase` 还可能擦除镜像区段之间的空洞
 
 默认记录由 ARM 编译器从 `MotionSettings::Parameters{}` 生成，使用与运行时 `save`
 相同的记录编码、版本和 CRC 函数，不另外手填一份参数或 CRC。RAM 启动参数也使用
-同一份定义。当前记录为 v3、序号 1、自动角度 Kp 模式、共享电机死区 0；
+同一份定义。当前记录为 v4、序号 1、自动角度 Kp 模式、自适应腿高开启、共享电机死区 0；
 重心基准 9.5°、角度 Kp 基准 75.35、腿高 44.5 mm、横滚目标 0。
 
 factory 首次启动应显示 `flash_valid=1 unsaved=0`。未修改参数就执行 `save` 返回

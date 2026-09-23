@@ -42,6 +42,14 @@ int main()
     send("differpid -d 0.02", true);
     send("@legpid -d 0.03\n");
     send("@deadzone 72\n");
+    CHECK(control.parameters().auto_leg_enabled);
+    send("@autoleg off\n");
+    last_contains("autoleg: enabled=0 active=0");
+    send("autoleg status", true);
+    last_contains("autoleg: enabled=0 active=0");
+    send("@autoleg invalid\n");
+    last_contains("autoleg: usage");
+    CHECK(!control.parameters().auto_leg_enabled);
     send("@R 5 6 2 61.5\n");
     CHECK(control.parameters().angle.kp == 80 && control.parameters().angle_kp_auto);
     CHECK(control.parameters().roll.kd == 0.03F);
@@ -89,14 +97,18 @@ int main()
     CHECK(!restored.parameters().motion_command_received && restored.parameters().motion_command_tick == 0);
     CHECK(!restored.parameters().show_imu && !restored.parameters().show_rpm);
     CHECK(restored.parameters().motor_deadzone == 72U);
+    CHECK(!restored.parameters().auto_leg_enabled);
     CHECK(restored.leg_targets().left == 61.5F && restored.leg_targets().right == 61.5F);
     CHECK(!restore.unsaved());
 
     send("@anglepid -manual 80\n");
+    send("@autoleg on\n");
+    last_contains("autoleg: enabled=1 active=0");
     CHECK(!control.parameters().angle_kp_auto);
     send("@save\n");
     last_contains("save: ok"); // Same floats, but changed mode must be persisted.
-    CHECK(restore.load() && !restored.parameters().angle_kp_auto);
+    CHECK(restore.load() && !restored.parameters().angle_kp_auto &&
+          restored.parameters().auto_leg_enabled);
     send("@anglepid -auto\n");
     CHECK(control.parameters().angle_kp_auto && control.parameters().angle.kp == 80);
     fake_flash::device.fail_write = true;

@@ -17,6 +17,7 @@ void MotionControlTask::run()
     LegTargets legs{};
     ControlFeedback feedback{};
     BalanceStartupGate startup_gate;
+    float auto_leg_weight = 1.0F;
     uint8_t velocity_loop_count = 0;
     uint8_t imu_read_failures = 0U;
     bool reset_imu_fusion = false;
@@ -37,6 +38,11 @@ void MotionControlTask::run()
     auto& wheel_motor = board_.wheel_motor();
     last_wake = xTaskGetTickCount();        //get now system tick to delay a period
     TickType_t previous_sample = last_wake;
+    const auto publish_feedback = [&] {
+        feedback.auto_leg_active = feedback.armed && status_.control_enabled() &&
+            !control_.installation_mode() && control_.parameters().auto_leg_enabled;
+        control_.publish_feedback(feedback);
+    };
     const auto reset_controllers = [&] {
         angle_pid.reset();
         velocity_pid.reset();
@@ -73,7 +79,7 @@ void MotionControlTask::run()
                 (void)right_encoder.getRPM();
                 (void)servo_.notify_give();
             }
-            control_.publish_feedback(feedback);
+            publish_feedback();
             continue;
         }
         if (status_.state() != SystemState::ready || control_.storage_blocks_control()) {
@@ -82,7 +88,7 @@ void MotionControlTask::run()
             startup_gate.reset();
             reset_controllers();
             wheel_motor.forceStop();
-            control_.publish_feedback(feedback);
+            publish_feedback();
             last_wake = sample_tick;
             continue;
         }
@@ -120,7 +126,7 @@ void MotionControlTask::run()
                 board_.force_safe_outputs();
                 board_.command_uart().print("[runtime][FAIL] imu read; control stopped\n");
             }
-            control_.publish_feedback(feedback);
+            publish_feedback();
             continue;
         }
         imu_read_failures = 0U;
@@ -143,7 +149,7 @@ void MotionControlTask::run()
             feedback.angle_kp = parameters.angle_kp_auto
                 ? MotionSettings::effectiveAngleKp(parameters.angle.kp, common_height) : parameters.angle.kp;
             feedback.pitch_error = static_cast<float>(angle.Pitch) + feedback.angle_bias;
-            control_.publish_feedback(feedback);
+            publish_feedback();
             continue;
         }
         const float gate_height = feedback.armed
@@ -178,7 +184,7 @@ void MotionControlTask::run()
                 control_.publish_leg_targets(legs);
                 (void)servo_.notify_give();
             }
-            control_.publish_feedback(feedback);
+            publish_feedback();
             continue;
         }
         velocity_loop_count++;
@@ -195,33 +201,42 @@ void MotionControlTask::run()
             if(parameters.show_rpm){
                 board_.command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",left_rpm,right_rpm);
             }
-            //roll pid
-            roll_pid.setTunings(parameters.roll.kp,parameters.roll.ki,parameters.roll.kd);
-            float roll_error = parameters.roll_target - angle.Roll;
-            // 检测目标角度是否跨越零点（正负号改变）
-            if ((last_target_roll > 0 && parameters.roll_target < 0) || (last_target_roll < 0 && parameters.roll_target > 0)) {
-                roll_pid.reset(); // 清除旧的增量累加值 last_out_ 和积分项
+            if (!parameters.auto_leg_enabled) {
+                auto_leg_weight = 0.0F;
+                roll_pid.reset();
+                last_target_roll = 0.0F;
+                legs = {common_height, common_height};
+            } else {
+                auto_leg_weight = std::min(1.0F, auto_leg_weight + 0.1F);
+                //roll pid
+                roll_pid.setTunings(parameters.roll.kp,parameters.roll.ki,parameters.roll.kd);
+                float roll_error = parameters.roll_target - angle.Roll;
+                // 检测目标角度是否跨越零点（正负号改变）
+                if ((last_target_roll > 0 && parameters.roll_target < 0) || (last_target_roll < 0 && parameters.roll_target > 0)) {
+                    roll_pid.reset(); // 清除旧的增量累加值 last_out_ 和积分项
+                }
+                last_target_roll = parameters.roll_target;
+                float adjust_y = roll_pid.updateIncremental(parameters.roll_target,angle.Roll);
+                float geometric_comp_y;
+                const float threshold_degrees = 3.0f;      // 触发补偿的 Roll 角阈值 (度)
+                const float compensation_gain = 0.5f;             // 补偿系数 (0.0~1.0)，建议先给 0.8，避免过冲
+                // 使用平滑死区处理误差，避免补偿量突变导致舵机抽搐
+                if (roll_error > 3.0f) {
+                    // 仅对超出阈值的部分进行正弦补偿
+                    geometric_comp_y = compensation_gain * 55.0 * std::sin((roll_error - threshold_degrees) * 0.0174532925f);
+                    adjust_y += geometric_comp_y;
+                }
+                else if (roll_error < -3.0f) {
+                    geometric_comp_y = compensation_gain * 55.0 * std::sin((roll_error + threshold_degrees) * 0.0174532925f);
+                    adjust_y += geometric_comp_y;
+                }
+                adjust_y *= auto_leg_weight;
+                legs.left = common_height - adjust_y;
+                legs.right = common_height + adjust_y;
+                // Clamp before publishing; motion is the sole writer of leg targets.
+                legs.left = std::clamp(legs.left, 44.5F, 78.5F);
+                legs.right = std::clamp(legs.right, 44.5F, 78.5F);
             }
-            last_target_roll = parameters.roll_target;
-            float adjust_y = roll_pid.updateIncremental(parameters.roll_target,angle.Roll);
-            float geometric_comp_y;
-            const float threshold_degrees = 3.0f;      // 触发补偿的 Roll 角阈值 (度)
-            const float compensation_gain = 0.5f;             // 补偿系数 (0.0~1.0)，建议先给 0.8，避免过冲
-            // 使用平滑死区处理误差，避免补偿量突变导致舵机抽搐
-            if (roll_error > 3.0f) {
-                // 仅对超出阈值的部分进行正弦补偿
-                geometric_comp_y = compensation_gain * 55.0 * std::sin((roll_error - threshold_degrees) * 0.0174532925f);
-                adjust_y += geometric_comp_y;
-            }
-            else if (roll_error < -3.0f) {
-                geometric_comp_y = compensation_gain * 55.0 * std::sin((roll_error + threshold_degrees) * 0.0174532925f);
-                adjust_y += geometric_comp_y;
-            }
-            legs.left = common_height - adjust_y;
-            legs.right = common_height + adjust_y;
-            // Clamp before publishing; motion is the sole writer of leg targets.
-            legs.left = std::clamp(legs.left, 44.5F, 78.5F);
-            legs.right = std::clamp(legs.right, 44.5F, 78.5F);
             control_.publish_leg_targets(legs);
             (void)servo_.notify_give();
         }
@@ -254,7 +269,7 @@ void MotionControlTask::run()
             wheel_motor.setAVel_raw(left_pwm);
             wheel_motor.setBVel_raw(right_pwm);
         }
-        control_.publish_feedback(feedback);
+        publish_feedback();
         taskEXIT_CRITICAL();
     }
 }

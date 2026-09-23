@@ -35,6 +35,7 @@ private:
     void handle_button_event(ButtonEvent event);
     void save_parameters(etl::string_view args);
     void show_parameters();
+    void show_auto_leg();
 
     bsp::BoardHardware& board_;
     RuntimeStatus& status_;

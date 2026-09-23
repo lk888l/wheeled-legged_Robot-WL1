@@ -28,6 +28,7 @@ struct Parameters {
     float roll_target = 0.0F;
     bool angle_kp_auto = true;
     std::uint16_t motor_deadzone = default_motor_deadzone;
+    bool auto_leg_enabled = true;
 };
 
 constexpr float effectiveAngleKp(float reference_kp, float average_height) noexcept
@@ -51,7 +52,7 @@ constexpr ParameterWords encode(const Parameters& p) noexcept
 constexpr bool sameParameters(const Parameters& a, const Parameters& b) noexcept
 {
     return encode(a) == encode(b) && a.angle_kp_auto == b.angle_kp_auto &&
-        a.motor_deadzone == b.motor_deadzone;
+        a.motor_deadzone == b.motor_deadzone && a.auto_leg_enabled == b.auto_leg_enabled;
 }
 
 constexpr Parameters decode(const ParameterWords& words) noexcept

@@ -8,7 +8,7 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 
 当前运行路径使用 STM32 HAL、FreeRTOS 和 C++23：
 
-- `save` 一键将全部运动调参、双轮 PWM 死区及 Kp 模式保存到内部 Flash，断电恢复；姿态 P 按 61.5 mm 基准线性补偿腿高，见 [保存命令](docs/commands.md#flash-参数保存)；
+- `save` 一键将全部运动调参、双轮 PWM 死区、Kp 模式及自适应腿高开关保存到内部 Flash，断电恢复；姿态 P 按 61.5 mm 基准线性补偿腿高，见 [保存命令](docs/commands.md#flash-参数保存)；
 - `install on` 腿部舵机安装模式：屏蔽轮电机与自适应腿高，双腿保持 44.5 mm；`install off` 退出后控制保持关闭；
 - 10 ms 姿态环，计算左右轮 PWM；
 - 50 ms 速度、转向和横滚/腿高控制；

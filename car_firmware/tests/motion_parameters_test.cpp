@@ -68,7 +68,8 @@ static void testCommandsAndCompensation()
 {
     MS::Parameters p;
     require(p.minimum_pitch_bias == 9.5F && p.angle.kp == 75.35F &&
-            p.motor_deadzone == 0U, "preserve compiled calibration, gains and motor dead zone");
+            p.motor_deadzone == 0U && p.auto_leg_enabled,
+            "preserve compiled calibration, gains, motor dead zone and auto leg default");
     for (const auto name : {"anglepid", "velocitypid", "differpid", "rollpid", "legpid"}) {
         auto edited = p;
         require(MS::applyTuning(edited, name, "  -p   1.25\r\n"), "P accepts whitespace and CRLF");
@@ -137,10 +138,18 @@ static void testJournal()
     const auto persisted = flash;
     const int initial_writes = flash.writes;
     require(journal.save(first) == MS::SaveResult::unchanged && flash.writes == initial_writes, "unchanged settings do not wear flash");
+    auto auto_only_flash = persisted;
+    auto auto_only = first;
+    auto_only.auto_leg_enabled = false;
+    require(Journal(auto_only_flash).save(auto_only) == MS::SaveResult::saved,
+            "auto-leg switch alone appends a record");
+    require(Journal(auto_only_flash).load(restored) && same(auto_only, restored),
+            "auto-leg switch alone survives a new boot");
 
     MS::Parameters second{10.5F, {80, 0.2F, 55}, {0.04F, 0.007F, 0.001F},
         {1.5F, 0.0008F, 0.3F}, {0.2F, -0.3F, 0.01F}, 61.5F, -1.5F};
     second.motor_deadzone = 72U;
+    second.auto_leg_enabled = false;
     require(journal.save(second) == MS::SaveResult::saved, "save all command-tunable fields together");
     require(Journal(flash).load(restored) && same(second, restored), "new boot restores every saved field exactly");
     // Flip each header/payload/CRC/commit word and fall back to the prior record.
@@ -243,26 +252,43 @@ static void testLegacyJournal()
             restored.motor_deadzone == MS::default_motor_deadzone,
             "v2 restores its Kp mode and the compiled dead-zone default");
 
+    FakeFlash v3_flash;
+    auto v3 = v2;
+    v3[1] = 3U | (72U << Journal::deadzone_shift);
+    v3[Journal::crc_index] = Journal::crc(v3);
+    std::copy(v3.begin(), v3.end(), v3_flash.words.begin());
+    auto expected_v3 = expected_v2;
+    expected_v3.motor_deadzone = 72U;
+    require(Journal(v3_flash).load(restored) && same(expected_v3, restored) &&
+            restored.auto_leg_enabled, "v3 restores auto leg to the enabled default");
+    auto invalid_v3 = v3;
+    invalid_v3[2] |= Journal::auto_leg_disabled_flag;
+    invalid_v3[Journal::crc_index] = Journal::crc(invalid_v3);
+    std::copy(invalid_v3.begin(), invalid_v3.end(), v3_flash.words.begin());
+    require(!Journal(v3_flash).load(restored), "v3 rejects the v4 auto-leg flag");
+
     auto manual = original;
     manual.angle_kp_auto = false;
     manual.motor_deadzone = 72U;
+    manual.auto_leg_enabled = false;
     require(Journal(flash).save(manual) == MS::SaveResult::saved && flash.erases == 0,
-            "mode and dead-zone changes append v3 without erasing legacy record");
+            "mode, dead-zone and auto-leg changes append v4 without erasing legacy record");
     require(flash.words[21] == Journal::magic &&
             (flash.words[22] & Journal::version_mask) == Journal::version &&
-            (flash.words[22] >> Journal::deadzone_shift) == 72U,
-            "v3 keeps the v1 physical record stride and packs the motor dead zone");
+            (flash.words[22] >> Journal::deadzone_shift) == 72U &&
+            (flash.words[23] & Journal::auto_leg_disabled_flag) != 0U,
+            "v4 keeps the v1 physical record stride and packs the switch");
     require(Journal(flash).load(restored) && same(manual, restored),
-            "manual mode and motor dead zone survive a new boot");
+            "manual mode, motor dead zone and auto-leg switch survive a new boot");
     auto damaged = flash;
     damaged.words[41] = 0xFFFFFFFFU;
-    require(Journal(damaged).load(restored) && same(original, restored), "torn v3 falls back to v1");
+    require(Journal(damaged).load(restored) && same(original, restored), "torn v4 falls back to v1");
     Journal::Record invalid{};
     std::copy_n(flash.words.begin() + 21, invalid.size(), invalid.begin());
-    invalid[2] |= 1U << 17;
+    invalid[2] |= 1U << 18;
     invalid[19] = Journal::crc(invalid);
     std::copy(invalid.begin(), invalid.end(), damaged.words.begin() + 21);
-    require(Journal(damaged).load(restored) && same(original, restored), "unknown v3 flags rejected despite valid CRC");
+    require(Journal(damaged).load(restored) && same(original, restored), "unknown v4 flags rejected despite valid CRC");
     require(Journal(flash).save(original) == MS::SaveResult::saved &&
             Journal(flash).load(restored) && restored.angle_kp_auto, "returning to auto also persists");
 }

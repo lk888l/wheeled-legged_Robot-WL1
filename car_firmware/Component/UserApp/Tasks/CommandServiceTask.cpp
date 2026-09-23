@@ -113,7 +113,28 @@ void CommandServiceTask::process_command(etl::string_view frame)
                    status_.control_enabled() ? "on" : "off");
         return;
     }
+    if (name == "uid") {
+        if (!args.empty()) {
+            uart.print("uid: usage: uid\n");
+        } else {
+            const auto id = board_.unique_id();
+            uart.print("uid: {:08X}{:08X}{:08X}\n", id[0], id[1], id[2]);
+        }
+        return;
+    }
     if (name == "save") { save_parameters(args); return; }
+    if (name == "autoleg") {
+        if (args == "on" || args == "off") {
+            auto p = control_.parameters();
+            p.auto_leg_enabled = args == "on";
+            control_.set_parameters(p);
+        } else if (!args.empty() && args != "status") {
+            uart.print("autoleg: usage: autoleg on|off|status\n");
+            return;
+        }
+        show_auto_leg();
+        return;
+    }
     if (name == "install") {
         if (args == "on") {
             if (status_.state() != SystemState::ready || control_.storage_busy()) {
@@ -187,6 +208,7 @@ void CommandServiceTask::process_command(etl::string_view frame)
                    f.max_sample_gap_ticks, f.deadline_misses);
         uart.print("remote_timeout={} velocity={:.1f} turn={:.1f} roll={:.1f}\n",
                    f.remote_timed_out ? 1 : 0, f.velocity_target, f.difference_target, f.roll_target);
+        show_auto_leg();
         return;
     }
     if (name == "button") {
@@ -366,6 +388,16 @@ void CommandServiceTask::save_parameters(etl::string_view args)
     case MotionSettings::SaveResult::io_error: uart.print("save: flash error; RAM settings retained\n"); break;
     case MotionSettings::SaveResult::busy: uart.print("save: busy; recycle requires stopped control, or another save is active\n"); break;
     }
+}
+
+void CommandServiceTask::show_auto_leg()
+{
+    taskENTER_CRITICAL();
+    const bool enabled = control_.parameters().auto_leg_enabled;
+    const bool active = enabled && status_.control_enabled() && !control_.installation_mode() &&
+        control_.feedback().auto_leg_active;
+    taskEXIT_CRITICAL();
+    board_.command_uart().print("autoleg: enabled={} active={}\n", enabled ? 1 : 0, active ? 1 : 0);
 }
 
 void CommandServiceTask::show_parameters()

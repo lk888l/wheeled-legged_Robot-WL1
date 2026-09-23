@@ -367,6 +367,56 @@ void test_control_off_keeps_attitude_tracking()
     };
     f.run();
 }
+
+void test_auto_leg_switch()
+{
+    Fixture f;
+    auto parameters = f.control.parameters();
+    parameters.leg_height = 61.5F;
+    parameters.roll = {0.0F, 0.0F, 0.0F};
+    f.control.set_parameters(parameters);
+    f.board.imu().reading.Pitch = -BalanceCompensation::pitchBias(parameters.angle_bias, 61.5F);
+    float full_adjustment{};
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick == 510U) {
+            CHECK(f.control.feedback().armed && f.control.feedback().auto_leg_active);
+            f.board.imu().reading.Roll = 4.0;
+        }
+        if (tick == 560U) {
+            const auto legs = f.control.leg_targets();
+            full_adjustment = std::fabs(legs.left - legs.right);
+            CHECK(full_adjustment > 0.5F);
+            f.send("autoleg off", false);
+            CHECK(!f.control.parameters().auto_leg_enabled);
+            CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=0 active=0\n");
+        }
+        if (tick == 610U) {
+            const auto legs = f.control.leg_targets();
+            CHECK(legs.left == 61.5F && legs.right == 61.5F);
+            CHECK(!f.control.feedback().auto_leg_active);
+            f.send("autoleg on", false);
+            CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=1 active=0\n");
+        }
+        if (tick == 660U || tick == 710U) {
+            const auto legs = f.control.leg_targets();
+            const float adjustment = std::fabs(legs.left - legs.right);
+            const float fraction = tick == 660U ? 0.1F : 0.2F;
+            CHECK(std::fabs(adjustment - full_adjustment * fraction) < 0.0005F);
+            CHECK(f.control.feedback().auto_leg_active);
+            if (tick == 660U) {
+                f.send("autoleg status", false);
+                CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=1 active=1\n");
+            }
+        }
+        if (tick == 1110U) {
+            const auto legs = f.control.leg_targets();
+            CHECK(std::fabs(std::fabs(legs.left - legs.right) - full_adjustment) < 0.0005F);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -377,4 +427,5 @@ int main()
     test_recycle_at_arming_boundary();
     test_append_keeps_balancing();
     test_control_off_keeps_attitude_tracking();
+    test_auto_leg_switch();
 }

@@ -69,6 +69,11 @@ bool BoardHardware::initialize_command_uart()
     return command_uart_.Start_DMAIT_Receive();
 }
 
+std::array<std::uint32_t, 3U> BoardHardware::unique_id() const
+{
+    return {HAL_GetUIDw0(), HAL_GetUIDw1(), HAL_GetUIDw2()};
+}
+
 bool BoardHardware::initialize_imu()
 {
     return imu_.Init();
