@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include "BoardHardware.hpp"
 #include "ControlState.hpp"
@@ -45,6 +47,7 @@ int main()
     };
 
     CHECK(control.parameters().angle_bias == BalanceCompensation::default_minimum_bias_degrees);
+    CHECK(control.parameters().roll_bias == 0.0F);
     CHECK(control.parameters().motor_deadzone == MotionSettings::default_motor_deadzone);
     // Both command transports must preserve the last valid baseline on every
     // rejected number, including numeric overflow and extra arguments.
@@ -62,6 +65,57 @@ int main()
         dispatch("R 0 0 0 55", radio);
         CHECK(control.parameters().angle_bias == baseline);
     }
+
+    for (const bool radio : {false, true}) {
+        dispatch(radio ? "rollbias -3.5" : "rollbias 2.25", radio);
+        const float baseline = radio ? -3.5F : 2.25F;
+        CHECK(control.parameters().roll_bias == baseline);
+        for (const char* invalid : {"rollbias invalid", "rollbias nan", "rollbias NaN",
+                 "rollbias inf", "rollbias -inf", "rollbias Infinity", "rollbias 1e39",
+                 "rollbias -1e999", "rollbias 12junk", "rollbias 12 13", "rollbias auto"}) {
+            dispatch(invalid, radio);
+            CHECK(control.parameters().roll_bias == baseline);
+            CHECK(board.command_uart().logs.back().find("invalid parameters") != std::string::npos);
+        }
+        dispatch("R 0 0 5 55", radio);
+        dispatch("target_roll -8", radio);
+        CHECK(control.parameters().roll_bias == baseline);
+        CHECK(control.parameters().roll_target == -8.0F);
+    }
+    app::ControlFeedback roll_feedback;
+    roll_feedback.euler[0] = 5.0F;
+    roll_feedback.roll_angle = 1.5F;
+    control.publish_feedback(roll_feedback);
+    const auto check_roll_status = [](const std::string& text, float expected_base,
+                                      float expected_raw = 5.0F, float expected_effective = 1.5F) {
+        float base{}, raw{}, effective{};
+        CHECK(std::sscanf(text.c_str(), "rollbias base=%f raw=%f effective=%f",
+                          &base, &raw, &effective) == 3);
+        CHECK(base == expected_base && raw == expected_raw && effective == expected_effective);
+    };
+    dispatch("rollbias", true);
+    check_roll_status(board.command_uart().logs.back(), -3.5F);
+    // A setting change does not invent a new sensor sample for diagnostics.
+    dispatch("rollbias -4", false);
+    dispatch("rollbias", false);
+    check_roll_status(board.command_uart().logs.back(), -4.0F);
+    const std::string roll_status = board.command_uart().logs.back();
+    const auto before_params = board.command_uart().logs.size();
+    dispatch("params");
+    CHECK(std::find(board.command_uart().logs.begin() + before_params,
+                    board.command_uart().logs.end(), roll_status) != board.command_uart().logs.end());
+    // Sub-degree negative values must retain their sign in all displayed fields.
+    dispatch("rollbias -0.5");
+    roll_feedback.euler[0] = -0.25F;
+    roll_feedback.roll_angle = -0.75F;
+    control.publish_feedback(roll_feedback);
+    dispatch("rollbias");
+    check_roll_status(board.command_uart().logs.back(), -0.5F, -0.25F, -0.75F);
+    const std::string negative_roll_status = board.command_uart().logs.back();
+    const auto before_negative_params = board.command_uart().logs.size();
+    dispatch("params");
+    CHECK(std::find(board.command_uart().logs.begin() + before_negative_params,
+                    board.command_uart().logs.end(), negative_roll_status) != board.command_uart().logs.end());
 
     dispatch("R 10 20 5 60\r\n");
     auto parameters = control.parameters();

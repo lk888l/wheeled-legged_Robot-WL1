@@ -56,8 +56,8 @@ def check(build):
     assert all(update_bin[address - FLASH] == value for address, value in update.items())
     assert len(seed) == RECORD_BYTES
     words = struct.unpack("<21I", seed)
-    assert words[0] == 0x574C3150 and words[3] == 1, "Factory magic/sequence"
-    assert words[1] & 0xFFFF == 4 and words[1] >> 16 <= 1000, "Factory schema/dead zone"
+    assert words[0] == 0x574C3150 and words[3] == 0, "Factory magic/default roll bias"
+    assert words[1] & 0xFFFF == 5 and words[1] >> 16 <= 1000, "Factory schema/dead zone"
     assert words[2] == 15, "Factory field count and default automatic modes"
     values = struct.unpack('<15f', seed[16:76])
     assert all(math.isfinite(value) for value in values) and 44.5 <= values[13] <= 78.5

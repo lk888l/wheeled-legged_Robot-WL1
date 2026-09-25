@@ -287,6 +287,12 @@ void CommandServiceTask::process_command(etl::string_view frame)
                        parameters.angle_bias, control_.feedback().angle_bias);
             return;
         }
+        if (name == "rollbias") {
+            const auto f = control_.feedback();
+            uart.print("rollbias base={:.4f} raw={:.4f} effective={:.4f}\n",
+                       parameters.roll_bias, f.euler[0], f.roll_angle);
+            return;
+        }
         if (name == "deadzone") {
             uart.print("deadzone={} (left/right PWM counts)\n", parameters.motor_deadzone);
             return;
@@ -320,6 +326,8 @@ void CommandServiceTask::process_command(etl::string_view frame)
     } else if (name == "anglebias") {
         // This is the minimum-height baseline; MotionControl adds height compensation.
         accepted = parse_value(args, parameters.angle_bias);
+    } else if (name == "rollbias") {
+        accepted = parse_value(args, parameters.roll_bias);
     } else if (name == "deadzone") {
         std::uint16_t value{};
         accepted = text_command::parse_argument(args, value) && args.empty() &&
@@ -409,6 +417,8 @@ void CommandServiceTask::show_parameters()
     uart.print("params: flash_valid={} unsaved={} armed={} enabled={}\n",
         persistence_.has_saved_parameters(), persistence_.unsaved(), f.armed, status_.control_enabled());
     uart.print("anglebias min={:.4f} effective={:.4f}\n", p.angle_bias, f.angle_bias);
+    uart.print("rollbias base={:.4f} raw={:.4f} effective={:.4f}\n",
+        p.roll_bias, f.euler[0], f.roll_angle);
     uart.print("deadzone={} (left/right PWM counts)\n", p.motor_deadzone);
     uart.print("anglepid p_mid={:.4f} i={:.6f} d={:.4f} p_effective={:.4f} mode={}\n",
         p.angle.kp, p.angle.ki, p.angle.kd, f.angle_kp, p.angle_kp_auto ? "auto" : "manual");

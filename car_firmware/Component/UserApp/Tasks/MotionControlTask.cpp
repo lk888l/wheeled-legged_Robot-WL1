@@ -28,6 +28,7 @@ void MotionControlTask::run()
     PID roll_pid(0,0,0,-78,78,-100,100);
     float difference_rpm{}, angle_target{}, difference_pwm{};
     float last_target_roll{};
+    float last_roll_bias{};
     uint32_t last_motion_command_tick{};
     //sensor
     auto& imu = board_.imu();
@@ -133,6 +134,9 @@ void MotionControlTask::run()
         feedback.euler[0] = static_cast<float>(angle.Roll);
         feedback.euler[1] = static_cast<float>(angle.Pitch);
         feedback.euler[2] = static_cast<float>(angle.Yaw);
+        // Use one calibrated roll frame for arming, PID and geometric leg compensation.
+        // Keep the raw Euler angles available for IMU diagnostics and calibration.
+        feedback.roll_angle = static_cast<float>(angle.Roll) + parameters.roll_bias;
         if(parameters.show_imu) {
             board_.command_uart().print("{:07.3f},{:07.3f},{:07.3f}\n", angle.Roll, angle.Pitch, angle.Yaw);
         }
@@ -166,7 +170,7 @@ void MotionControlTask::run()
         // A missed period cannot count as continuous stable startup samples.
         if (sample_gap > period && !feedback.armed) { startup_gate.reset(); }
         feedback.armed = startup_gate.update(feedback.imu_valid, gate_pitch,
-            static_cast<float>(angle.Roll), gyro_rate, parameters.velocity_target,
+            feedback.roll_angle, gyro_rate, parameters.velocity_target,
             parameters.difference_target);
         if (!feedback.armed) {
             reset_controllers();
@@ -208,15 +212,20 @@ void MotionControlTask::run()
                 legs = {common_height, common_height};
             } else {
                 auto_leg_weight = std::min(1.0F, auto_leg_weight + 0.1F);
+                if (parameters.roll_bias != last_roll_bias) {
+                    // A new calibration must not retain leg offset accumulated at the old zero.
+                    roll_pid.reset();
+                    last_roll_bias = parameters.roll_bias;
+                }
                 //roll pid
                 roll_pid.setTunings(parameters.roll.kp,parameters.roll.ki,parameters.roll.kd);
-                float roll_error = parameters.roll_target - angle.Roll;
+                float roll_error = parameters.roll_target - feedback.roll_angle;
                 // 检测目标角度是否跨越零点（正负号改变）
                 if ((last_target_roll > 0 && parameters.roll_target < 0) || (last_target_roll < 0 && parameters.roll_target > 0)) {
                     roll_pid.reset(); // 清除旧的增量累加值 last_out_ 和积分项
                 }
                 last_target_roll = parameters.roll_target;
-                float adjust_y = roll_pid.updateIncremental(parameters.roll_target,angle.Roll);
+                float adjust_y = roll_pid.updateIncremental(parameters.roll_target,feedback.roll_angle);
                 float geometric_comp_y;
                 const float threshold_degrees = 3.0f;      // 触发补偿的 Roll 角阈值 (度)
                 const float compensation_gain = 0.5f;             // 补偿系数 (0.0~1.0)，建议先给 0.8，避免过冲

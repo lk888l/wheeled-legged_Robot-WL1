@@ -62,9 +62,10 @@ inline bool applyTuning(Parameters& p, std::string_view name, std::string_view a
         else pid->kd = value;
         return true;
     }
-    if (name != "anglebias" && name != "legheight" && name != "target_roll") return false;
+    if (name != "anglebias" && name != "rollbias" && name != "legheight" && name != "target_roll") return false;
     if (!parseFloat(args, value) || !args.empty()) return false;
     if (name == "anglebias") p.minimum_pitch_bias = value;
+    else if (name == "rollbias") p.roll_bias = value;
     else if (name == "legheight") p.leg_height = BalanceCompensation::clampLegHeight(value);
     else p.roll_target = value;
     return true;

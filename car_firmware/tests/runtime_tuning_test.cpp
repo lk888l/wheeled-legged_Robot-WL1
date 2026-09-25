@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <limits>
 #include <string>
@@ -192,6 +193,8 @@ void test_calibration_and_recovery()
 void test_remote_timeout()
 {
     Fixture f;
+    f.send("rollbias -4", false);
+    f.board.imu().reading.Roll = 4.0;
     step = [&] {
         const auto tick = fake_rtos::now;
         if (tick == 510U) {
@@ -204,6 +207,8 @@ void test_remote_timeout()
         }
         if (tick == 900U) {
             f.send("@anglepid -p 80\n", false);
+            f.send("@rollbias -5\n", false);
+            f.board.imu().reading.Roll = 5.0;
             CHECK(f.control.parameters().motion_command_tick == 510U);
         }
         if (tick == 1010U) { CHECK(!f.control.feedback().remote_timed_out); }
@@ -212,6 +217,7 @@ void test_remote_timeout()
             CHECK(feedback.remote_timed_out && feedback.armed && feedback.imu_valid);
             CHECK(feedback.velocity_target == 0 && feedback.difference_target == 0 && feedback.roll_target == 0);
             CHECK(f.control.parameters().leg_height == 61.5F);
+            CHECK(f.control.parameters().roll_bias == -5.0F && feedback.roll_angle == 0.0F);
             CHECK(feedback.angle_kp == 80 && feedback.deadline_misses == 0U);
             CHECK(f.status.control_enabled());
             // Tuning and malformed commands do not extend the motion deadline.
@@ -225,9 +231,11 @@ void test_remote_timeout()
         if (tick == 1060U) {
             CHECK(!f.control.feedback().remote_timed_out && f.control.feedback().roll_target == 6);
             CHECK(f.control.feedback().velocity_target == 0);
+            CHECK(f.control.parameters().roll_bias == -5.0F);
             f.send("@R 999 -999 -99 99\n", false);
             const auto p = f.control.parameters();
             CHECK(p.difference_target == 100 && p.velocity_target == -100 && p.roll_target == -18 && p.leg_height == 78.5F);
+            CHECK(p.roll_bias == -5.0F);
             throw fake_rtos::LoopDone{};
         }
     };
@@ -334,6 +342,8 @@ void test_append_keeps_balancing()
 void test_control_off_keeps_attitude_tracking()
 {
     Fixture f;
+    f.send("rollbias -4", false);
+    f.board.imu().reading.Roll = 4.0;
     f.send("control off", false);
     step = [&] {
         const auto tick = fake_rtos::now;
@@ -342,6 +352,8 @@ void test_control_off_keeps_attitude_tracking()
             // including the two seconds when outputs are explicitly disabled.
             CHECK(f.board.imu().samples.size() == tick / 10U - 1U);
             CHECK(f.board.imu().fusion_resets == 0U);
+            CHECK(f.control.parameters().roll_bias == -4.0F);
+            CHECK(f.control.feedback().roll_angle == 0.0F);
         }
         if (tick <= 2010U) {
             CHECK(!f.control.feedback().armed);
@@ -371,6 +383,8 @@ void test_control_off_keeps_attitude_tracking()
 void test_auto_leg_switch()
 {
     Fixture f;
+    f.send("rollbias -7", false);
+    f.board.imu().reading.Roll = 7.0;
     auto parameters = f.control.parameters();
     parameters.leg_height = 61.5F;
     parameters.roll = {0.0F, 0.0F, 0.0F};
@@ -381,7 +395,7 @@ void test_auto_leg_switch()
         const auto tick = fake_rtos::now;
         if (tick == 510U) {
             CHECK(f.control.feedback().armed && f.control.feedback().auto_leg_active);
-            f.board.imu().reading.Roll = 4.0;
+            f.board.imu().reading.Roll = 11.0;
         }
         if (tick == 560U) {
             const auto legs = f.control.leg_targets();
@@ -389,6 +403,7 @@ void test_auto_leg_switch()
             CHECK(full_adjustment > 0.5F);
             f.send("autoleg off", false);
             CHECK(!f.control.parameters().auto_leg_enabled);
+            CHECK(f.control.parameters().roll_bias == -7.0F);
             CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=0 active=0\n");
         }
         if (tick == 610U) {
@@ -396,6 +411,7 @@ void test_auto_leg_switch()
             CHECK(legs.left == 61.5F && legs.right == 61.5F);
             CHECK(!f.control.feedback().auto_leg_active);
             f.send("autoleg on", false);
+            CHECK(f.control.parameters().roll_bias == -7.0F);
             CHECK(f.board.command_uart().logs.back() == "autoleg: enabled=1 active=0\n");
         }
         if (tick == 660U || tick == 710U) {
@@ -417,6 +433,112 @@ void test_auto_leg_switch()
     };
     f.run();
 }
+
+void test_roll_calibration_controls_legs_and_gate()
+{
+    Fixture f;
+    auto parameters = f.control.parameters();
+    parameters.leg_height = 61.5F;
+    parameters.roll = {1.0F, 0.0F, 0.0F};
+    f.control.set_parameters(parameters);
+    f.board.imu().reading.Pitch = -BalanceCompensation::pitchBias(parameters.angle_bias, 61.5F);
+    f.board.imu().reading.Roll = 7.0;
+    f.send("rollbias -7", false);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick >= 510U && tick <= 760U) CHECK(f.control.feedback().armed);
+        if (tick == 510U) {
+            // Raw roll exceeds the startup limit, but its calibrated midpoint is level.
+            CHECK(f.control.feedback().euler[0] == 7.0F);
+            CHECK(f.control.feedback().roll_angle == 0.0F);
+            CHECK(f.control.leg_targets().left == 61.5F && f.control.leg_targets().right == 61.5F);
+            f.send("showimu -y", false);
+        }
+        if (tick == 520U) {
+            float raw_roll{}, raw_pitch{}, raw_yaw{};
+            CHECK(std::sscanf(f.board.command_uart().logs.back().c_str(), "%f,%f,%f",
+                              &raw_roll, &raw_pitch, &raw_yaw) == 3);
+            CHECK(raw_roll == 7.0F && raw_yaw == 0.0F);
+            CHECK(std::fabs(raw_pitch - f.control.feedback().euler[1]) < 0.0001F);
+            f.send("showimu -n", false);
+            f.board.imu().reading.Roll = 8.0;
+        }
+        if (tick == 560U) {
+            const auto legs = f.control.leg_targets();
+            CHECK(f.control.feedback().roll_angle == 1.0F);
+            CHECK(std::fabs(legs.left - 62.5F) < 0.0001F);
+            CHECK(std::fabs(legs.right - 60.5F) < 0.0001F);
+            f.board.imu().reading.Roll = 12.0;
+        }
+        if (tick == 610U) {
+            const auto legs = f.control.leg_targets();
+            // Five corrected degrees produce five PID units plus the geometry
+            // beyond the three-degree deadband, independently of raw roll=12.
+            const float adjustment = 5.0F + 27.5F * std::sin(2.0F * 0.0174532925F);
+            CHECK(std::fabs(legs.left - (61.5F + adjustment)) < 0.0001F);
+            CHECK(std::fabs(legs.right - (61.5F - adjustment)) < 0.0001F);
+            f.send("rollpid -p 0", false);
+            f.send("rollpid -i 1", false);
+        }
+        if (tick == 710U) {
+            CHECK(f.control.leg_targets().left - f.control.leg_targets().right > 20.0F);
+            // The integral has accumulated at the old midpoint. Calibration
+            // must clear that history without restarting the vehicle's gate.
+            f.send("rollbias -12", false);
+        }
+        if (tick == 760U) {
+            CHECK(f.control.feedback().roll_angle == 0.0F);
+            CHECK(f.control.feedback().euler[0] == 12.0F);
+            CHECK(f.control.leg_targets().left == 61.5F && f.control.leg_targets().right == 61.5F);
+            f.board.imu().reading.Roll = -0.25;
+            f.send("rollbias -0.5", false);
+            f.send("showimu -y", false);
+        }
+        if (tick == 770U) {
+            float raw_roll{}, raw_pitch{}, raw_yaw{};
+            CHECK(std::sscanf(f.board.command_uart().logs.back().c_str(), "%f,%f,%f",
+                              &raw_roll, &raw_pitch, &raw_yaw) == 3);
+            CHECK(raw_roll == -0.25F && raw_yaw == 0.0F);
+            CHECK(f.control.feedback().roll_angle == -0.75F);
+            CHECK(f.control.feedback().armed);
+            f.send("showimu -n", false);
+            f.board.imu().reading.Roll = 0.0;
+            f.send("rollbias -31", false);
+        }
+        if (tick == 780U) {
+            // A raw zero cannot bypass the tipping gate when calibrated roll is unsafe.
+            CHECK(f.control.feedback().roll_angle == -31.0F);
+            CHECK(!f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
+
+void test_roll_calibration_can_block_startup()
+{
+    Fixture f;
+    f.send("rollbias 7", false);
+    step = [&] {
+        const auto tick = fake_rtos::now;
+        if (tick <= 610U) {
+            CHECK(!f.control.feedback().armed);
+            CHECK(f.board.wheel_motor().left == 0 && f.board.wheel_motor().right == 0);
+        }
+        if (tick == 610U) {
+            CHECK(f.control.feedback().euler[0] == 0.0F);
+            CHECK(f.control.feedback().roll_angle == 7.0F);
+            f.send("rollbias 0", false);
+        }
+        if (tick > 610U && tick < 1110U) CHECK(!f.control.feedback().armed);
+        if (tick == 1110U) {
+            CHECK(f.control.feedback().armed && f.control.feedback().roll_angle == 0.0F);
+            throw fake_rtos::LoopDone{};
+        }
+    };
+    f.run();
+}
 } // namespace
 
 int main()
@@ -428,4 +550,6 @@ int main()
     test_append_keeps_balancing();
     test_control_off_keeps_attitude_tracking();
     test_auto_leg_switch();
+    test_roll_calibration_controls_legs_and_gate();
+    test_roll_calibration_can_block_startup();
 }

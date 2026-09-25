@@ -1049,7 +1049,8 @@ namespace etl
       bool sign;
       unsigned long long int fractional_int;
       unsigned long long int integral_int;
-      if (integral < 0.0)
+      // modf(-0.5) has integral -0.0; determine the sign from the original value.
+      if (value < 0.0)
       {
         sign = true;
         fractional_int = static_cast<unsigned long long int>(-fractional * pow(10., fractional_decimals));
@@ -1196,7 +1197,8 @@ namespace etl
       bool sign;
       unsigned long long int fractional_int;
       unsigned long long int integral_int;
-      if (integral < 0.0)
+      // Roll calibration and attitude feedback commonly contain negative fractions.
+      if (value < 0.0)
       {
         sign = true;
         fractional_int = static_cast<unsigned long long int>(-fractional * pow(10., fractional_decimals));

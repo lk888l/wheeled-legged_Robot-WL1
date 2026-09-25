@@ -48,6 +48,7 @@ void advance() {
         CHECK(board.wheel_motor().left == 0 && board.wheel_motor().right == 0);
         CHECK(control.leg_targets().left == 44.5F && control.leg_targets().right == 44.5F);
         CHECK(control.parameters().leg_height == 44.5F);
+        CHECK(control.parameters().roll_bias == -4.0F);
     }
     if (now == 700) {
         CHECK(control.installation_ready());
@@ -57,6 +58,7 @@ void advance() {
         dispatch("legheight 78.5"); dispatch("target_roll 18"); dispatch("VandD 80 80");
         dispatch("control on"); dispatch("control off"); dispatch("install on");
         CHECK(control.parameters().velocity_target == 0 && control.parameters().roll_target == 0);
+        CHECK(control.parameters().roll_bias == -4.0F);
         board.imu().healthy = false; // Assembly must remain independent of attitude/IMU.
     }
     if (now == 1600) {
@@ -73,6 +75,7 @@ void advance() {
     if (now > 1700 && now < 2290) CHECK(!control.feedback().armed);
     if (now == 2400) {
         CHECK(control.feedback().armed && board.wheel_motor().left != 0);
+        CHECK(control.parameters().roll_bias == -4.0F && control.feedback().roll_angle == 0.0F);
         status.enter_runtime_fault();
         dispatch("install on");
         CHECK(!control.installation_mode());
@@ -87,8 +90,10 @@ int main() {
     status.publish_initialization_report(report);
     status.set_state(app::SystemState::ready); status.enable_control(true);
     board.imu().reading.Pitch = -8.5;
+    board.imu().reading.Roll = 4.0;
     CHECK(servo.start()); servo_entry = fake_rtos::entry; servo_arg = fake_rtos::argument;
     CHECK(command.start()); command_entry = fake_rtos::entry; command_arg = fake_rtos::argument;
+    dispatch("rollbias -4");
     dispatch("install maybe"); CHECK(!control.installation_mode());
     CHECK(motion.start());
     fake_rtos::on_delay = advance;

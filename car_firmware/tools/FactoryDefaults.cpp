@@ -6,6 +6,7 @@ struct FactoryFlash;
 using FactoryJournal = MotionSettings::ParameterJournal<FactoryFlash>;
 static_assert(FactoryJournal::record_bytes == 84U);
 static_assert(MotionSettings::valid(MotionSettings::Parameters{}));
+static_assert(FactoryJournal::makeRecord(MotionSettings::Parameters{})[3] == 0U);
 
 [[gnu::used, gnu::section(".motion_defaults")]]
 constexpr auto factory_defaults = FactoryJournal::makeRecord(MotionSettings::Parameters{});

@@ -29,6 +29,7 @@ struct Parameters {
     bool angle_kp_auto = true;
     std::uint16_t motor_deadzone = default_motor_deadzone;
     bool auto_leg_enabled = true;
+    float roll_bias = 0.0F;
 };
 
 constexpr float effectiveAngleKp(float reference_kp, float average_height) noexcept
@@ -39,7 +40,8 @@ constexpr float effectiveAngleKp(float reference_kp, float average_height) noexc
 inline constexpr std::size_t parameter_count = 15;
 using ParameterWords = std::array<std::uint32_t, parameter_count>;
 
-// Explicit field order is the version-1 storage format, independent of padding.
+// The original 15-float payload order stays compatible with version 1. Later
+// fields, including roll_bias, are encoded separately in the journal header.
 constexpr ParameterWords encode(const Parameters& p) noexcept
 {
     const std::array values{p.minimum_pitch_bias, p.angle.kp, p.angle.ki, p.angle.kd,
@@ -52,7 +54,8 @@ constexpr ParameterWords encode(const Parameters& p) noexcept
 constexpr bool sameParameters(const Parameters& a, const Parameters& b) noexcept
 {
     return encode(a) == encode(b) && a.angle_kp_auto == b.angle_kp_auto &&
-        a.motor_deadzone == b.motor_deadzone && a.auto_leg_enabled == b.auto_leg_enabled;
+        a.motor_deadzone == b.motor_deadzone && a.auto_leg_enabled == b.auto_leg_enabled &&
+        std::bit_cast<std::uint32_t>(a.roll_bias) == std::bit_cast<std::uint32_t>(b.roll_bias);
 }
 
 constexpr Parameters decode(const ParameterWords& words) noexcept
@@ -67,7 +70,8 @@ constexpr bool valid(const Parameters& p) noexcept
     for (const auto word : encode(p)) {
         if ((word & 0x7F800000U) == 0x7F800000U) return false;
     }
-    return p.leg_height >= BalanceCompensation::minimum_leg_height_mm &&
+    return (std::bit_cast<std::uint32_t>(p.roll_bias) & 0x7F800000U) != 0x7F800000U &&
+        p.leg_height >= BalanceCompensation::minimum_leg_height_mm &&
         p.leg_height <= BalanceCompensation::maximum_leg_height_mm &&
         p.motor_deadzone <= maximum_motor_deadzone;
 }

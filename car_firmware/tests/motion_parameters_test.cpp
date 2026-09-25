@@ -68,8 +68,8 @@ static void testCommandsAndCompensation()
 {
     MS::Parameters p;
     require(p.minimum_pitch_bias == 9.5F && p.angle.kp == 75.35F &&
-            p.motor_deadzone == 0U && p.auto_leg_enabled,
-            "preserve compiled calibration, gains, motor dead zone and auto leg default");
+            p.motor_deadzone == 0U && p.auto_leg_enabled && p.roll_bias == 0.0F,
+            "preserve compiled calibration, gains, motor dead zone and auto leg defaults");
     for (const auto name : {"anglepid", "velocitypid", "differpid", "rollpid", "legpid"}) {
         auto edited = p;
         require(MS::applyTuning(edited, name, "  -p   1.25\r\n"), "P accepts whitespace and CRLF");
@@ -89,6 +89,16 @@ static void testCommandsAndCompensation()
     require(MS::applyTuning(p, "rollpid", "-p 0.3") && p.roll.ki == -0.4F, "roll P no longer overwrites I");
     require(MS::applyTuning(p, "anglebias", "10.5") && p.minimum_pitch_bias == 10.5F, "calibrate minimum-height bias");
     require(!MS::applyTuning(p, "anglebias", "nan"), "nonfinite bias is rejected");
+    require(MS::applyTuning(p, "rollbias", " -2.75\r\n") && p.roll_bias == -2.75F &&
+            p.minimum_pitch_bias == 10.5F && p.roll_target == 0.0F,
+            "roll calibration accepts a signed offset independently of pitch and posture");
+    require(MS::applyTuning(p, "rollbias", "1.25e0") && p.roll_bias == 1.25F,
+            "roll calibration accepts positive exponent notation");
+    for (const auto bad : {"", "nan", "inf", "-inf", "1e999", "-2x", "1 2", "1\nsave"}) {
+        const auto before_roll_bias = p;
+        require(!MS::applyTuning(p, "rollbias", bad), "reject malformed or nonfinite roll calibration");
+        require(same(before_roll_bias, p), "invalid roll calibration has no side effects");
+    }
     require(MS::applyTuning(p, "legheight", "99") && p.leg_height == 78.5F, "save bounded leg height");
     require(MS::applyTuning(p, "legheight", "0") && p.leg_height == 44.5F, "bound low leg height");
     require(MS::applyTuning(p, "target_roll", "-2") && p.roll_target == -2, "roll posture is tunable");
@@ -145,11 +155,27 @@ static void testJournal()
             "auto-leg switch alone appends a record");
     require(Journal(auto_only_flash).load(restored) && same(auto_only, restored),
             "auto-leg switch alone survives a new boot");
+    auto roll_only_flash = persisted;
+    auto roll_only = first;
+    roll_only.roll_bias = 2.75F;
+    require(!same(first, roll_only) && Journal(roll_only_flash).save(roll_only) == MS::SaveResult::saved,
+            "roll calibration alone appends a record");
+    require(Journal(roll_only_flash).load(restored) && same(roll_only, restored),
+            "roll calibration alone survives a new boot");
+    const auto roll_writes = roll_only_flash.writes;
+    require(Journal(roll_only_flash).save(roll_only) == MS::SaveResult::unchanged &&
+            roll_only_flash.writes == roll_writes,
+            "unchanged roll calibration does not wear flash");
+    roll_only.roll_bias = -1.25F;
+    require(Journal(roll_only_flash).save(roll_only) == MS::SaveResult::saved &&
+            Journal(roll_only_flash).load(restored) && same(roll_only, restored),
+            "physical append order selects a new roll bias independently of float bits");
 
     MS::Parameters second{10.5F, {80, 0.2F, 55}, {0.04F, 0.007F, 0.001F},
         {1.5F, 0.0008F, 0.3F}, {0.2F, -0.3F, 0.01F}, 61.5F, -1.5F};
     second.motor_deadzone = 72U;
     second.auto_leg_enabled = false;
+    second.roll_bias = -2.75F;
     require(journal.save(second) == MS::SaveResult::saved, "save all command-tunable fields together");
     require(Journal(flash).load(restored) && same(second, restored), "new boot restores every saved field exactly");
     // Flip each header/payload/CRC/commit word and fall back to the prior record.
@@ -184,6 +210,13 @@ static void testJournal()
     unsupported[Journal::crc_index] = Journal::crc(unsupported);
     std::copy(unsupported.begin(), unsupported.end(), incompatible.words.begin());
     require(!Journal(incompatible).load(restored), "CRC-valid nonfinite payload is rejected");
+    for (const auto nonfinite : {0x7FC00000U, 0x7F800000U, 0xFF800000U}) {
+        auto invalid_bias = Journal::makeRecord(second);
+        invalid_bias[3] = nonfinite;
+        invalid_bias[Journal::crc_index] = Journal::crc(invalid_bias);
+        std::copy(invalid_bias.begin(), invalid_bias.end(), incompatible.words.begin());
+        require(!Journal(incompatible).load(restored), "CRC-valid nonfinite roll calibration is rejected");
+    }
     auto invalid = second;
     invalid.velocity.kp = std::numeric_limits<float>::infinity();
     const auto before_invalid = flash.words;
@@ -194,6 +227,14 @@ static void testJournal()
     invalid = second;
     invalid.motor_deadzone = MS::maximum_motor_deadzone + 1U;
     require(journal.save(invalid) == MS::SaveResult::invalid, "out-of-bounds motor dead zone is rejected");
+    for (const auto nonfinite : {std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity(),
+                                std::numeric_limits<float>::quiet_NaN()}) {
+        invalid = second;
+        invalid.roll_bias = nonfinite;
+        require(journal.save(invalid) == MS::SaveResult::invalid && flash.words == before_invalid,
+                "nonfinite roll calibration never modifies flash");
+    }
 
     auto third = second;
     third.angle.kp = 81;
@@ -235,8 +276,8 @@ static void testLegacyJournal()
     std::copy(legacy.begin(), legacy.end(), flash.words.begin());
     MS::Parameters restored;
     require(Journal(flash).load(restored) && same(original, restored) &&
-            restored.motor_deadzone == MS::default_motor_deadzone,
-            "v1 restores midpoint mode, gains and the compiled dead-zone default");
+            restored.motor_deadzone == MS::default_motor_deadzone && restored.roll_bias == 0.0F,
+            "v1 restores midpoint mode, gains and zero roll calibration");
     require(Journal(flash).save(original) == MS::SaveResult::unchanged && flash.writes == 0,
             "reading legacy settings does not force a migration write");
 
@@ -267,28 +308,57 @@ static void testLegacyJournal()
     std::copy(invalid_v3.begin(), invalid_v3.end(), v3_flash.words.begin());
     require(!Journal(v3_flash).load(restored), "v3 rejects the v4 auto-leg flag");
 
+    FakeFlash v4_flash;
+    auto v4 = v3;
+    v4[1] = 4U | (72U << Journal::deadzone_shift);
+    v4[2] |= Journal::auto_leg_disabled_flag;
+    v4[3] = 0x7F800000U; // A valid legacy sequence must not be interpreted as a float.
+    v4[Journal::crc_index] = Journal::crc(v4);
+    std::copy(v4.begin(), v4.end(), v4_flash.words.begin());
+    auto expected_v4 = expected_v3;
+    expected_v4.auto_leg_enabled = false;
+    require(Journal(v4_flash).load(restored) && same(expected_v4, restored) && restored.roll_bias == 0.0F,
+            "v4 preserves disabled auto leg and defaults roll calibration to zero");
+    require(Journal(v4_flash).save(expected_v4) == MS::SaveResult::unchanged && v4_flash.writes == 0,
+            "unchanged v4 calibration needs no migration write");
+    auto calibrated_v5 = expected_v4;
+    calibrated_v5.roll_bias = -3.25F;
+    for (int cut = 0; cut < static_cast<int>(Journal::Record{}.size()); ++cut) {
+        auto interrupted = v4_flash;
+        interrupted.fail_after = cut;
+        require(Journal(interrupted).save(calibrated_v5) == MS::SaveResult::io_error &&
+                Journal(interrupted).load(restored) && same(expected_v4, restored),
+                "torn v5 calibration append preserves the complete v4 settings");
+        interrupted.fail_after = -1;
+        require(Journal(interrupted).save(calibrated_v5) == MS::SaveResult::saved &&
+                Journal(interrupted).load(restored) && same(calibrated_v5, restored) && interrupted.erases == 0,
+                "v4-to-v5 retry skips a torn slot without erasing legacy settings");
+    }
+
     auto manual = original;
     manual.angle_kp_auto = false;
     manual.motor_deadzone = 72U;
     manual.auto_leg_enabled = false;
+    manual.roll_bias = 2.5F;
     require(Journal(flash).save(manual) == MS::SaveResult::saved && flash.erases == 0,
-            "mode, dead-zone and auto-leg changes append v4 without erasing legacy record");
+            "mode, dead-zone, auto-leg and calibration changes append v5 without erasing legacy record");
     require(flash.words[21] == Journal::magic &&
             (flash.words[22] & Journal::version_mask) == Journal::version &&
             (flash.words[22] >> Journal::deadzone_shift) == 72U &&
-            (flash.words[23] & Journal::auto_leg_disabled_flag) != 0U,
-            "v4 keeps the v1 physical record stride and packs the switch");
+            (flash.words[23] & Journal::auto_leg_disabled_flag) != 0U &&
+            flash.words[24] == std::bit_cast<std::uint32_t>(manual.roll_bias),
+            "v5 keeps the v1 physical record stride and stores roll calibration in the header");
     require(Journal(flash).load(restored) && same(manual, restored),
-            "manual mode, motor dead zone and auto-leg switch survive a new boot");
+            "manual mode, motor dead zone, auto-leg switch and roll bias survive a new boot");
     auto damaged = flash;
     damaged.words[41] = 0xFFFFFFFFU;
-    require(Journal(damaged).load(restored) && same(original, restored), "torn v4 falls back to v1");
+    require(Journal(damaged).load(restored) && same(original, restored), "torn v5 falls back to v1");
     Journal::Record invalid{};
     std::copy_n(flash.words.begin() + 21, invalid.size(), invalid.begin());
     invalid[2] |= 1U << 18;
     invalid[19] = Journal::crc(invalid);
     std::copy(invalid.begin(), invalid.end(), damaged.words.begin() + 21);
-    require(Journal(damaged).load(restored) && same(original, restored), "unknown v4 flags rejected despite valid CRC");
+    require(Journal(damaged).load(restored) && same(original, restored), "unknown v5 flags rejected despite valid CRC");
     require(Journal(flash).save(original) == MS::SaveResult::saved &&
             Journal(flash).load(restored) && restored.angle_kp_auto, "returning to auto also persists");
 }
@@ -296,7 +366,7 @@ static void testLegacyJournal()
 static void testFactoryAndForeignFlash()
 {
     constexpr auto seed = Journal::makeRecord(MS::Parameters{});
-    static_assert(seed[0] == Journal::magic && seed[3] == 1U);
+    static_assert(seed[0] == Journal::magic && seed[3] == 0U);
     static_assert(seed[Journal::crc_index] == Journal::crc(seed));
     FakeFlash factory;
     std::copy(seed.begin(), seed.end(), factory.words.begin());
@@ -329,7 +399,7 @@ static void testFactoryAndForeignFlash()
     // A factory programmer must erase the entire sector, even when slot zero
     // is blank. Otherwise the last valid old slot overrides the default seed.
     FakeFlash stale;
-    const auto old = Journal::makeRecord(loaded, 99);
+    const auto old = Journal::makeRecord(loaded);
     std::copy(old.begin(), old.end(), stale.words.end() - old.size());
     std::copy(seed.begin(), seed.end(), stale.words.begin());
     require(Journal(stale).load(rebooted) && same(rebooted, loaded),

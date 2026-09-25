@@ -17,6 +17,8 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 - Runtime center-of-gravity pitch baseline tuning with `anglebias` over the car UART or
   the remote's serial bridge, with compensation based on the mean of both clamped leg targets
   (see the [command reference](docs/commands.md#控制命令));
+- `rollbias` calibrates the roll midpoint used by adaptive leg height over the car UART/BLE
+  or optional nRF commands; `save` retains the calibration across power cycles;
 - Fixed-capacity ETL containers for command queues and UART buffers;
 - Explicit, ordered hardware initialization calls in `main.cpp`, with a lightweight
   report that records every result without skipping later modules;

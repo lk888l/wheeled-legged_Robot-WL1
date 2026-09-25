@@ -5,6 +5,7 @@
 
 // Angles retain the MPU6050/body convention used by the balance controller.
 // Pitch is already corrected by the current, height-dependent balance bias.
+// Roll is already corrected by the independent roll midpoint calibration.
 class BalanceStartupGate {
 public:
     static constexpr std::uint16_t stable_samples_required = 50; // 500 ms at 100 Hz

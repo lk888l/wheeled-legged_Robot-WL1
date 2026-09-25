@@ -38,6 +38,7 @@ int main()
     };
     send("@anglepid -p 80\n");
     send("@anglebias 10.5\n");
+    send("@rollbias -3.25\n");
     send("velocitypid -i 0.007", true);
     send("differpid -d 0.02", true);
     send("@legpid -d 0.03\n");
@@ -54,6 +55,7 @@ int main()
     CHECK(control.parameters().angle.kp == 80 && control.parameters().angle_kp_auto);
     CHECK(control.parameters().roll.kd == 0.03F);
     CHECK(control.parameters().motor_deadzone == 72U);
+    CHECK(control.parameters().roll_bias == -3.25F);
 
     app::ControlFeedback moving;
     moving.armed = true;
@@ -98,8 +100,31 @@ int main()
     CHECK(!restored.parameters().show_imu && !restored.parameters().show_rpm);
     CHECK(restored.parameters().motor_deadzone == 72U);
     CHECK(!restored.parameters().auto_leg_enabled);
+    CHECK(restored.parameters().roll_bias == -3.25F);
     CHECK(restored.leg_targets().left == 61.5F && restored.leg_targets().right == 61.5F);
     CHECK(!restore.unsaved());
+
+    const auto expect_unsaved = [&](bool expected) {
+        const auto first_log = board.command_uart().logs.size();
+        send("@params\n");
+        CHECK(board.command_uart().logs[first_log].find(
+            expected ? "unsaved=true" : "unsaved=false") != std::string::npos);
+    };
+    expect_unsaved(false);
+    const auto before_roll_tuning = fake_flash::device.words;
+    send("@rollbias -6.5\n");
+    CHECK(control.parameters().roll_bias == -6.5F);
+    CHECK(fake_flash::device.words == before_roll_tuning);
+    expect_unsaved(true);
+    CHECK(restore.load() && restored.parameters().roll_bias == -3.25F);
+    send("@save\n");
+    last_contains("save: ok"); // Roll midpoint alone must make the snapshot dirty.
+    expect_unsaved(false);
+    CHECK(restore.load() && restored.parameters().roll_bias == -6.5F);
+    const auto after_roll_save = fake_flash::device.writes;
+    send("save all", true);
+    last_contains("save: unchanged");
+    CHECK(fake_flash::device.writes == after_roll_save);
 
     send("@anglepid -manual 80\n");
     send("@autoleg on\n");
@@ -113,10 +138,14 @@ int main()
     CHECK(control.parameters().angle_kp_auto && control.parameters().angle.kp == 80);
     fake_flash::device.fail_write = true;
     send("@anglebias 12\n");
+    send("@rollbias -2.5\n");
     send("@save\n");
     last_contains("save: flash error");
     CHECK(!control.storage_busy() && control.parameters().angle_bias == 12);
+    CHECK(control.parameters().roll_bias == -2.5F);
     CHECK(restore.load() && restored.parameters().angle_bias == 10.5F);
+    CHECK(restored.parameters().roll_bias == -6.5F);
+    expect_unsaved(true);
     send("@control on\n");
     CHECK(status.control_enabled());
     status.enter_runtime_fault();

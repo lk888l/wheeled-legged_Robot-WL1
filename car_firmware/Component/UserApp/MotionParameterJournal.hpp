@@ -17,8 +17,10 @@ public:
     // Version 2 uses bit 16 of the field-count word for fixed/manual angle Kp.
     // Version 3 stores the shared motor dead zone in the high half of the
     // version word. Version 4 adds the auto-leg switch in bit 17 of the
-    // field-count word. Both retain the 15-float payload and 84-byte stride.
-    static constexpr std::uint32_t version = 4;
+    // field-count word. Version 5 replaces the unused sequence word with the
+    // roll calibration float. Recency is always the physical append order.
+    // All versions retain the original 15-float payload and 84-byte stride.
+    static constexpr std::uint32_t version = 5;
     static constexpr std::uint32_t version_mask = 0xFFFFU;
     static constexpr unsigned deadzone_shift = 16U;
     static constexpr std::uint32_t manual_kp_flag = 1U << 16;
@@ -54,7 +56,7 @@ public:
             if (!flash_.erase()) return SaveResult::io_error;
             slot = 0;
         }
-        const auto record = makeRecord(parameters, state.latest == no_slot ? 1U : state.record[3] + 1U);
+        const auto record = makeRecord(parameters);
         const auto offset = slot * record_bytes;
         for (std::size_t i = 0; i < commit_index; ++i) {
             if (!flash_.programWord(offset + i * 4, record[i])) return SaveResult::io_error;
@@ -71,14 +73,14 @@ public:
     }
 
     // Shared by runtime saves and the factory image's compile-time default record.
-    static constexpr Record makeRecord(const Parameters& parameters, std::uint32_t sequence = 1U) noexcept
+    static constexpr Record makeRecord(const Parameters& parameters) noexcept
     {
         Record record{};
         record[0] = magic;
         record[1] = version | (std::uint32_t{parameters.motor_deadzone} << deadzone_shift);
         record[2] = parameter_count | (parameters.angle_kp_auto ? 0U : manual_kp_flag) |
             (parameters.auto_leg_enabled ? 0U : auto_leg_disabled_flag);
-        record[3] = sequence;
+        record[3] = std::bit_cast<std::uint32_t>(parameters.roll_bias);
         const auto words = encode(parameters);
         std::copy(words.begin(), words.end(), record.begin() + header_words);
         record[crc_index] = crc(record);
@@ -129,8 +131,11 @@ private:
         if (schema >= 3U && schema <= version) {
             parameters.motor_deadzone = static_cast<std::uint16_t>(record[1] >> deadzone_shift);
         }
-        if (schema == version) {
+        if (schema >= 4U && schema <= version) {
             parameters.auto_leg_enabled = (record[2] & auto_leg_disabled_flag) == 0U;
+        }
+        if (schema == version) {
+            parameters.roll_bias = std::bit_cast<float>(record[3]);
         }
         return parameters;
     }
@@ -141,7 +146,7 @@ private:
         const bool supported = (record[1] == 1U && record[2] == parameter_count) ||
             (record[1] == 2U && (record[2] & ~manual_kp_flag) == parameter_count) ||
             (schema == 3U && (record[2] & ~manual_kp_flag) == parameter_count) ||
-            (schema == version &&
+            ((schema == 4U || schema == version) &&
              (record[2] & ~(manual_kp_flag | auto_leg_disabled_flag)) == parameter_count);
         return record[0] == magic && supported &&
             record[commit_index] == committed && record[crc_index] == crc(record) &&

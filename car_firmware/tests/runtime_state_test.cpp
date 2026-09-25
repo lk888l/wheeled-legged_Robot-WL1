@@ -9,18 +9,28 @@ int main()
     app::ControlState control;
     auto parameters = control.parameters();
     CHECK(parameters.leg_height == 44.5F && parameters.angle.kp == 75.35F);
+    CHECK(parameters.roll_bias == 0.0F);
     parameters.velocity_target = 10.0F;
     parameters.difference_target = 20.0F;
     parameters.leg_height = 55.0F;
     parameters.roll_target = 5.0F;
+    parameters.roll_bias = -2.5F;
     control.set_parameters(parameters);
     auto read = control.parameters();
     CHECK(read.velocity_target == 10.0F && read.difference_target == 20.0F);
     CHECK(read.leg_height == 55.0F && read.roll_target == 5.0F);
+    CHECK(read.roll_bias == -2.5F);
     read.leg_height = 70.0F;
     CHECK(control.parameters().leg_height == 55.0F);
     control.publish_leg_targets({44.5F, 78.5F});
     CHECK(control.leg_targets().right == 78.5F);
+    control.set_installation_mode(true);
+    CHECK(control.parameters().roll_target == 0.0F && control.parameters().roll_bias == -2.5F);
+    parameters.roll_target = 7.0F;
+    control.set_parameters(parameters);
+    CHECK(control.parameters().roll_target == 0.0F && control.parameters().roll_bias == -2.5F);
+    control.set_installation_mode(false);
+    CHECK(control.parameters().roll_bias == -2.5F);
     CHECK(fake_rtos::critical_depth == 0 && fake_rtos::critical_entries > 0U);
 
     app::RuntimeStatus status;

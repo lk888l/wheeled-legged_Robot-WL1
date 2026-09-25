@@ -17,6 +17,8 @@ struct ControlParameters {
     PidGains roll{MotionSettings::Parameters{}.roll};
     // Runtime calibration at minimum leg height; the height correction is separate.
     float angle_bias{MotionSettings::Parameters{}.minimum_pitch_bias};
+    // Corrected roll = raw IMU roll + this calibration, independent of remote targets.
+    float roll_bias{MotionSettings::Parameters{}.roll_bias};
     float velocity_target{0.0F};
     float difference_target{0.0F};
     float leg_height{MotionSettings::Parameters{}.leg_height};
@@ -40,6 +42,7 @@ struct ControlFeedback {
     float angle_kp{70.0F};
     float angle_bias{BalanceCompensation::default_minimum_bias_degrees};
     float pitch_error{};
+    float roll_angle{};
     int left_pwm{};
     int right_pwm{};
     bool armed{};
