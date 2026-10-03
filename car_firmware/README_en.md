@@ -12,10 +12,10 @@ The current runtime path uses STM32 HAL, FreeRTOS, and C++23:
 - `save` persists all motion tunings, the shared wheel-PWM dead zone, the angle Kp mode, and the adaptive leg-height switch to internal Flash; automatic Kp uses a tunable 61.5 mm reference with linear height compensation (see the [save protocol](docs/commands.md#flash-参数保存));
 - A 10 ms attitude loop that calculates left and right wheel PWM;
 - A 50 ms loop for speed, steering, roll, and leg-height control;
-- ZX-D30 BLE UART at 9600 8N1 by default; optional 32-byte nRF24L01+ commands;
+- ZX-D30 BLE UART at 9600 8N1 by default; nRF24L01+ is optional and disabled by default;
 - USART1 DMA transmission and reception for online status monitoring and control-parameter updates;
 - Runtime center-of-gravity pitch baseline tuning with `anglebias` over the car UART or
-  the remote's serial bridge, with compensation based on the mean of both clamped leg targets
+  BLE, with compensation based on the mean of both clamped leg targets
   (see the [command reference](docs/commands.md#控制命令));
 - `rollbias` calibrates the roll midpoint used by adaptive leg height over the car UART/BLE
   or optional nRF commands; `save` retains the calibration across power cycles;
@@ -44,8 +44,7 @@ The car now provides PA0 onboard KEY click, double-click, and long-press events.
 event queue. All five application tasks derive from `AppTask`; the composition root
 injects their dependencies. The existing 10/50 ms control periods and priorities remain.
 Use the `button` command to inspect counts, dropped events, and the maximum sampling gap.
-See [button integration](docs/button-a0.md) and the [engineering review](docs/engineering-review-2026-09-05.md)
-for timing semantics, validation, and outstanding runtime risks (Chinese).
+See [button integration](docs/button-a0.md) for timing semantics and validation (Chinese).
 
 The Bluetooth build defaults to ZX-D30 on USART1 at 9600 8N1 and disables nRF initialization.
 UART/radio availability and command-task creation do not gate balancing. Motion commands
@@ -163,9 +162,10 @@ remaining initialization steps still run.
 
 After the scheduler starts, `AppBootstrap` calls `CPP_Main()`. The entry point in
 `Component/UserApp/main.cpp` explicitly initializes command UART, MPU6050, left
-encoder, right encoder, wheel-motor PWM, left servo, right servo, and nRF24L01+ in
-that order. Each call records and logs its result, followed by a 3 ms delay; later
-modules are still attempted after a failure.
+encoder, right encoder, wheel-motor PWM, left servo, and right servo in that
+order. The optional nRF24L01+ is initialized last only when `WL1_ENABLE_NRF24=ON`
+and is skipped by default. Each call records and logs its result, followed by a
+3 ms delay; later modules are still attempted after a failure.
 
 `InitializationReport::all_succeeded(bsp::kRequiredHardwareMask)` requires a valid
 report and successful attempts for every required module. A missing required
@@ -197,12 +197,15 @@ Use the following sequence to narrow down faults safely:
 3. Run `showimu -y` and verify that the attitude values remain stable while the robot is stationary;
 4. Run `showrpm -y`, turn each wheel by hand, and confirm that both encoders respond;
 5. Power the servos and use `legheight 44.5` to check the direction and mechanical limits on both sides;
-6. Center and power on the remote control, then confirm that wireless commands update the target values;
+6. Connect the Bluetooth client, send a motion command with zero velocity, steering, and roll, then use `controlstate` to check the targets;
 7. Finally, connect motor power and check the feedback direction using a current-limited power supply and a stand.
 
 For detailed checks, see [Debugging and troubleshooting](docs/troubleshooting.md).
 
 ## Hardware Connections
+
+See the [hardware files on the project homepage](../README_en.md#hardware-files)
+for the PCB fabrication archive and schematic PDF.
 
 ### Core and Debug Interfaces
 
@@ -232,8 +235,7 @@ range, and VQF for attitude fusion. DLPF=0 and SMPLRT_DIV=9 retain 800 Hz sensor
 register updates; the host reads and advances VQF at 100 Hz (10 ms).
 Ordinary `control off` keeps the estimator running with actuators disabled.
 `control on` retains the learned bias and still requires the 500 ms startup gate.
-Installation and exclusive maintenance can still pause sampling. See the
-[balance regression investigation](docs/balance-regression-2026-09-19.md).
+Installation and exclusive maintenance can still pause sampling.
 
 ### Motors and Encoders
 
@@ -264,7 +266,9 @@ TIM9 generates 100 Hz PWM. The software limits the target leg height to
 kinematics. Mechanical dimensions and coordinate-system definitions are in
 `Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`.
 
-### nRF24L01+
+### nRF24L01+ (Optional, Disabled by Default)
+
+This channel is enabled only when building with `-DWL1_ENABLE_NRF24=ON`.
 
 | nRF signal | MCU pin | Description |
 | --- | --- | --- |
@@ -291,11 +295,11 @@ does not initialize or refresh the OLED. CubeMX reserves these software-I²C pin
 | O_SCL | PB10 |
 | O_SDA | PB3 |
 
-## Wireless Protocol
+## Remote-Control Command Protocol
 
-The car enters nRF receive mode only after initialization and register readback
-verification succeed. A valid payload is an ASCII command padded to 32 bytes
-with `0x00`. The recommended control frame is:
+Text commands are sent over the USART1 Bluetooth UART by default. Clients
+should use `@<command>\n` framing, where `\n` represents an actual LF byte.
+The motion-command body has the following format:
 
 ```text
 R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
@@ -304,13 +308,21 @@ R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
 Example:
 
 ```text
-R 0.0 -0.0 0.0 61.5
+@R 0 0 0 61.5\n
 ```
 
 The field order must remain steering, velocity, roll, and leg height. The
-`tele_firmware` in this repository negates the remote-control velocity before
-placing it in the second field. This is the existing coordinate-system
-convention between the two devices.
+client's direction conventions must match the car's control coordinate system.
+Command bodies are limited to 32 bytes, with support for BLE fragmentation.
+See the [ZX-D30 Bluetooth documentation](docs/zx-d30.md) for wiring and BLE
+configuration and the [command reference](docs/commands.md) for framing rules
+and command limits.
+
+### Optional nRF24L01+ Channel
+
+When enabled, the car enters nRF receive mode only after initialization and
+register readback verification succeed. A valid payload uses the same command
+body, padded to 32 bytes with `0x00`. The RF settings are:
 
 | Parameter | Current setting |
 | --- | --- |
@@ -324,8 +336,8 @@ convention between the two devices.
 | Auto ACK | Enabled |
 | Auto retry | 500 μs interval, up to 15 retries |
 
-The RF parameters and `R` command format must be changed in sync with
-`tele_firmware`. For all available commands and their limits, see the
+When using this channel, the sender's RF settings and `R` command format must
+match the car. For all available commands and their limits, see the
 [command reference](docs/commands.md).
 
 ## Software Structure
@@ -389,5 +401,5 @@ does not currently run. `MainControl.*` and OLED remain outside the runtime path
 - Interrupts that call FreeRTOS ISR APIs must have an NVIC numerical priority of 5 or greater;
 - Avoid dynamic allocation, blocking I/O, and high-frequency UART output in control tasks;
 - After changing wheel direction, encoder direction, or attitude signs, raise the wheels off the ground and verify the closed-loop feedback direction;
-- When changing the wireless protocol, update `tele_firmware` and the documentation for both sides;
+- When changing the remote-control command protocol, check the Bluetooth client, car firmware, and command documentation together;
 - Before committing, complete at least Debug and Release builds and run `git diff --check`.

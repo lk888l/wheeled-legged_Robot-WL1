@@ -14,7 +14,7 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 - 50 ms 速度、转向和横滚/腿高控制；
 - 默认使用 ZX-D30 BLE 串口透传，9600 8N1；nRF24L01+ 默认关闭；
 - USART1 DMA 收发，可在线查看状态和修改控制参数；
-- `anglebias` 可经车端串口或遥控器串口桥接运行时调整最低腿高的重心基准，
+- `anglebias` 可经车端串口或 BLE 运行时调整最低腿高的重心基准，
   并按限幅后双腿平均目标高度补偿，见 [命令参考](docs/commands.md#控制命令)；
 - `rollbias` 可经车端串口/BLE 或可选 nRF 校准自适应腿高的横滚中点，使用 `save` 保存并在断电后恢复；
 - ETL 固定容量容器，用于命令队列和 UART 缓冲；
@@ -30,7 +30,6 @@ STM32F411CEU6。固件读取 MPU6050 和左右轮编码器，运行串级 PID �
 - [蓝牙串口适配与验证](docs/bluetooth-uart.md)：接线、微信 BLE/SPP 区别、分帧协议与实测范围；
 - [命令参考](docs/commands.md)：串口/无线命令、默认参数和调参顺序；
 - [PA0 按键](docs/button-a0.md)：事件时序、内存、业务接入及实时性边界；
-- [2026-09-05 工程审查](docs/engineering-review-2026-09-05.md)：已修复问题、验证结果和待整改项；
 - [调试与故障排查](docs/troubleshooting.md)：上电检查、常见故障和
   CubeMX 重新生成检查项。
 
@@ -153,7 +152,7 @@ HLA 是兼容后端，只用于已确认属于测量误报的调试器；其他 
 ## 启动、安全门控与 LED 心跳
 
 FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口 `CPP_Main()`。
-`Component/UserApp/main.cpp` 直接按以下顺序调用 8 个模块的初始化方法：
+`Component/UserApp/main.cpp` 直接按以下顺序初始化硬件模块：
 
 1. USART1 命令接收；
 2. MPU6050；
@@ -162,7 +161,7 @@ FreeRTOS 调度器启动后，`AppBootstrap` 才调用 C++ 组合入口 `CPP_Mai
 5. TB6612 轮电机 PWM；
 6. 左舵机 PWM；
 7. 右舵机 PWM；
-8. nRF24L01+。
+8. nRF24L01+（仅 `WL1_ENABLE_NRF24=ON` 时初始化，默认跳过）。
 
 每次调用后记录结果、输出日志并延时 3 ms，失败时继续初始化后续模块。
 `InitializationReport::all_succeeded(bsp::kRequiredHardwareMask)` 统一检查报告有效、
@@ -202,12 +201,14 @@ PC13 LED 按低电平点亮处理。一个“闪”表示约 120 ms 亮，模式
 3. 执行 `showimu -y`，静止时观察姿态值是否稳定；
 4. 执行 `showrpm -y`，手动转动车轮，确认左右编码器有响应；
 5. 给舵机供电，使用 `legheight 44.5` 检查两侧方向和机械限位；
-6. 遥控器置中并上电，确认无线命令可以更新目标值；
+6. 连接蓝牙客户端，先发送速度、转向和横滚归零的运动命令，再用 `controlstate` 检查目标值；
 7. 最后接通电机功率，先用限流电源和支架检查反馈方向。
 
 详细检查方法见 [调试与故障排查](docs/troubleshooting.md)。
 
 ## 硬件连接
+
+PCB 打板文件与原理图 PDF 见[项目主页的硬件资料](../README.md#硬件资料)。
 
 ### 核心与调试接口
 
@@ -240,8 +241,7 @@ PA15 不是常见的 USART1_TX 默认引脚；接串口工具时应以本表和
 I²C 超时为 5 ms。移除了固定板级零偏，使用 VQF 自带的零偏估计，
 将估计限幅设为 ±5 °/s 以覆盖本板约 3.4 °/s 的 Z 轴零偏；启动后保持静止让估计收敛。
 普通 `control off` 关闭输出时继续姿态融合，`control on` 保留已估计零偏并重新经过
-500 ms 稳定门控。安装模式及独占维护仍可暂停融合。时序回归分析及无负载复验见
-[2026-09-19 平衡回归记录](docs/balance-regression-2026-09-19.md)。
+500 ms 稳定门控。安装模式及独占维护仍可暂停融合。
 
 ### 电机与编码器
 
@@ -270,7 +270,9 @@ TIM9 产生 100 Hz PWM。软件将目标腿高限制为 `44.5..78.5 mm`，经四
 逆运动学换算为舵机角度。机械尺寸和坐标系定义位于
 `Component/UserApp/CtrlAlgorithm/LegKinematics.hpp`。
 
-### nRF24L01+
+### nRF24L01+（可选，默认关闭）
+
+仅在构建时设置 `-DWL1_ENABLE_NRF24=ON` 才启用此通道。
 
 | nRF 信号 | MCU 引脚 | 说明 |
 | --- | --- | --- |
@@ -296,10 +298,10 @@ OLED。CubeMX 保留了软件 I²C 引脚：
 | O_SCL | PB10 |
 | O_SDA | PB3 |
 
-## 无线协议
+## 遥控命令协议
 
-nRF 初始化和寄存器回读验证成功后，小车进入接收模式。有效 payload 是以
-`0x00` 补齐到 32 字节的 ASCII 命令，推荐控制帧为：
+默认通过 USART1 蓝牙串口传输文本命令，客户端推荐使用 `@<命令>\n`
+分帧，其中 `\n` 表示实际 LF 换行字节。运动命令正文格式为：
 
 ```text
 R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
@@ -308,11 +310,18 @@ R <turn_target> <velocity_target> <roll_degrees> <leg_height_mm>
 示例：
 
 ```text
-R 0.0 -0.0 0.0 61.5
+@R 0 0 0 61.5\n
 ```
 
-字段顺序必须保持为转向、速度、横滚、腿高。仓库中的 `tele_firmware`
-会把遥控器速度取反后放入第二个字段，这是两端现有坐标系约定。
+字段顺序必须保持为转向、速度、横滚、腿高，客户端方向定义应与小车控制
+坐标系一致。命令正文最多 32 字节，支持 BLE 分包；接线与 BLE 配置见
+[ZX-D30 蓝牙文档](docs/zx-d30.md)，完整分帧规则和命令范围见
+[命令参考](docs/commands.md)。
+
+### 可选 nRF24L01+ 通道
+
+启用 nRF 后，初始化和寄存器回读验证成功才进入接收模式。有效 payload
+为同一套命令正文，以 `0x00` 补齐到 32 字节。射频参数如下：
 
 | 参数 | 当前设置 |
 | --- | --- |
@@ -326,8 +335,8 @@ R 0.0 -0.0 0.0 61.5
 | Auto ACK | 开启 |
 | Auto retry | 500 μs 间隔，最多 15 次 |
 
-射频参数和 `R` 命令格式必须与 `tele_firmware` 同步修改。全部可用命令和
-限制见 [命令参考](docs/commands.md)。
+启用此通道时，发送端的射频参数和 `R` 命令格式应与小车保持一致。
+全部可用命令和限制见 [命令参考](docs/commands.md)。
 
 ## 软件结构
 
@@ -389,5 +398,5 @@ C 入口是 `Core/Src/main.c`。`MX_FREERTOS_Init()` 只创建 `AppBootstrap`；
 - 会调用 FreeRTOS ISR API 的中断，其 NVIC 数值优先级不得小于 5；
 - 控制任务中避免动态分配、阻塞式 I/O 和高频 UART 输出；
 - 修改轮向、编码器方向或姿态符号后，必须架空验证闭环反馈方向；
-- 修改无线协议时同时更新 `tele_firmware` 和两端文档；
+- 修改遥控命令协议时，同步检查蓝牙客户端、小车固件和命令文档；
 - 提交前至少完成 Debug、Release 构建和 `git diff --check`。

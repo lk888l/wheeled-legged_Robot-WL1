@@ -2,19 +2,20 @@
 
 [中文](README.md) | [English](README_en.md)
 
-Firmware documentation: [Car firmware](car_firmware/README_en.md) | [Remote-control firmware](tele_firmware/README_en.md)
+Firmware documentation: [Car firmware](car_firmware/README_en.md)
 
 WL1 is a low-cost wheeled-legged robot project based on the STM32F411CEU6. This
-repository contains firmware for both the car and handheld remote control,
-control algorithms and leg-kinematics simulations, and VOFA+ interface
-configurations for online parameter tuning.
+repository contains car firmware, PCB Gerber fabrication files and a schematic
+PDF, control algorithms and leg-kinematics simulations, and VOFA+ interface
+configurations for online parameter tuning. The car uses a ZX-D30 BLE UART
+module for remote control by default.
 
 ## Project Structure
 
 ```text
 wheeled-legged_Robot-WL1/
 ├── car_firmware/          # Car firmware
-├── tele_firmware/         # Handheld remote-control firmware
+├── hardware/              # PCB Gerber fabrication files and schematic PDF
 ├── simulation/            # LQR and leg-kinematics simulations
 ├── vofa_host_tools_cfg/   # VOFA+ command groups and tuning-panel configuration
 ├── LICENSE
@@ -24,12 +25,12 @@ wheeled-legged_Robot-WL1/
 
 | Directory | Main contents | Entry point |
 | --- | --- | --- |
-| `car_firmware/` | MPU6050, encoders, cascaded PID, motors, servos, nRF24L01+ reception, and serial-port tuning | [Car firmware README](car_firmware/README_en.md) |
-| `tele_firmware/` | Joysticks, buttons, OLED, nRF24L01+ transmission, and remote-control command encoding | [Remote-control firmware README](tele_firmware/README_en.md) |
+| `car_firmware/` | MPU6050, encoders, cascaded PID, motors, servos, Bluetooth remote control, and serial-port tuning | [Car firmware README](car_firmware/README_en.md) |
+| `hardware/` | PCB Gerber fabrication archive and hardware schematic PDF | [Hardware Files](#hardware-files) |
 | `simulation/` | Python/MATLAB LQR parameter calculation and four-bar leg-kinematics visualization | The "Simulation Tools" section below |
 | `vofa_host_tools_cfg/` | VOFA+ command group `vofa.cmds.json` and panel layout `vofa_tab.json` | The "VOFA+ Tuning Configuration" section below |
 
-The two firmware projects use similar directory conventions:
+The car firmware uses the following directory conventions:
 
 | Path | Description |
 | --- | --- |
@@ -41,12 +42,49 @@ The two firmware projects use similar directory conventions:
 | `CMakeLists.txt`, `cmake/` | Command-line build configuration for the Arm GNU Toolchain |
 
 For task organization, hardware pin assignments, flashing instructions, and
-debugging procedures, see the two firmware README files linked in the table.
+debugging procedures, see the [car firmware README](car_firmware/README_en.md).
+
+## Hardware Files
+
+Model download: [https://makerworld.com.cn/zh/models/3052437-di-cheng-ben-lun-tui-ji-qi-ren-v1-2#profileId-3589556](https://makerworld.com.cn/zh/models/3052437-di-cheng-ben-lun-tui-ji-qi-ren-v1-2#profileId-3589556)
+
+The following files are available in `hardware/`:
+
+| File | Purpose |
+| --- | --- |
+| [Gerber_PCB_wheeled-legged_Robot-WL1.zip](hardware/Gerber_PCB_wheeled-legged_Robot-WL1.zip) | PCB fabrication archive containing Gerber layers, drill files, and `PCB下单必读.txt` |
+| [wheeled-legged_Robot-WL1-schematics.pdf](hardware/wheeled-legged_Robot-WL1-schematics.pdf) | Hardware schematic PDF for reviewing the circuit and wiring |
+
+Read `PCB下单必读.txt` inside the archive and confirm the fabrication parameters
+before placing a PCB order.
+
+## Bluetooth Remote Control
+
+The default setup uses a ZX-D30 BLE module to receive remote-control and tuning
+commands through USART1 at `9600, 8-N-1`. Connect the module's TXD to MCU PA10
+(RX), RXD to PA15 (TX), and GND to the common ground. The nRF24L01+ channel is
+disabled by default (`WL1_ENABLE_NRF24=OFF`).
+
+Bluetooth clients should use `@<command>\n` framing, for example:
+
+```text
+@R 0 0 0 61.5\n
+```
+
+Here, `\n` represents an actual LF byte. The four `R` fields are steering,
+velocity, roll angle, and leg height, in that order. For continuous remote
+control, send a motion command every 100 ms. After 500 ms without an update,
+the velocity, steering, and roll targets reset to zero while leg height is
+retained and self-balancing calculations continue.
+
+See the [ZX-D30 Bluetooth documentation](car_firmware/docs/zx-d30.md) for wiring
+and BLE configuration, and the [car firmware command reference](car_firmware/docs/commands.md)
+for framing rules, command limits, and tuning instructions.
 
 ## Command-Line Builds
 
-The repository root is not an aggregate CMake project. Configure and build the
-two firmware projects separately.
+Configure and build the car firmware from the repository root using
+`-S car_firmware`.
 
 ### Prerequisites
 
@@ -66,16 +104,13 @@ arm-none-eabi-gcc --version
 
 ### Release Builds
 
-Run the following commands from the repository root:
+Run the following commands from the repository root, explicitly selecting the
+current Bluetooth settings to override any older CMake cache values:
 
 ```sh
 # Car firmware
-cmake -S car_firmware -B car_firmware/build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S car_firmware -B car_firmware/build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release -DWL1_COMMAND_UART_BAUD=9600 -DWL1_ENABLE_NRF24=OFF
 cmake --build car_firmware/build/Release --parallel
-
-# Remote-control firmware
-cmake --preset Release -S tele_firmware
-cmake --build tele_firmware/build/Release --parallel
 ```
 
 For debug builds, replace every occurrence of `Release` with `Debug`. When
@@ -87,12 +122,13 @@ The main outputs are:
 | Firmware | Output directory | ELF file |
 | --- | --- | --- |
 | Car | `car_firmware/build/<configuration>/` | `WL1_F411CEU6.elf` |
-| Remote control | `tele_firmware/build/<configuration>/` | `WL1_F411CEU6_Tele.elf` |
 
-The same directories also contain `.hex` and `.bin` files for flashing or
-distribution and `.map` files for memory analysis. For OpenOCD flashing
-commands, see the [car firmware README](car_firmware/README_en.md#3-flash-with-st-link)
-and the [remote-control firmware README](tele_firmware/README_en.md#2-flash-with-st-link).
+The same directory also contains `.hex` and `.bin` files for flashing or
+distribution and `.map` files for memory analysis. Use
+`WL1_F411CEU6_update.hex/.bin` for routine updates that preserve saved parameters,
+and `WL1_F411CEU6_factory.hex/.bin` for initial installation or factory resets.
+For flashing commands and erase policies, see the
+[car firmware README](car_firmware/README_en.md#3-flash-with-st-link).
 
 ## Simulation Tools
 
@@ -122,8 +158,9 @@ Import the two JSON files in `vofa_host_tools_cfg/` separately into VOFA+:
 - `vofa.cmds.json`: command groups for PID gains, attitude offsets, leg height, and other parameters;
 - `vofa_tab.json`: panel layout for sliders, waveforms, attitude blocks, joysticks, and other controls.
 
-USART1 on the car uses `115200, 8-N-1` by default. After connecting the serial
-port, the configured controls can send parameter-tuning commands. For specific
+USART1 on the car uses `9600, 8-N-1` by default. Set the VOFA+ serial baud rate
+to match the firmware. After connecting the serial port, the configured controls
+can send parameter-tuning commands. For specific
 commands, valid ranges, and the recommended tuning sequence, see the
 [car firmware command reference](car_firmware/docs/commands.md).
 
@@ -135,10 +172,10 @@ commands, valid ranges, and the recommended tuning sequence, see the
 
 ## Cross-Project Change Guidelines
 
-- Both sides use the same 32-byte nRF24L01+ protocol. When changing the address, channel, data rate, payload length, or `R` command fields, update both firmware projects;
+- When changing Bluetooth framing rules or `R` command fields, check the car firmware, Bluetooth client, and command documentation together;
 - After changing the CubeMX configuration, verify that the `USER CODE` sections and CMake source lists remain complete;
-- When changing leg dimensions, control signs, or mechanical directions, check the simulation, remote-control display, and car control together;
-- Before committing, build at least the Debug and Release configurations for both projects and confirm that local build directories are not included.
+- When changing leg dimensions, control signs, or mechanical directions, check the simulation, Bluetooth control directions, and car control together;
+- Before committing firmware changes, build at least the Debug and Release configurations for the car and confirm that local build directories are not included.
 
 ## License
 
