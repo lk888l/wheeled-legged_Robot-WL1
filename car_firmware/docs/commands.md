@@ -267,6 +267,7 @@ v1 自动解释为中间腿高基准模式。`save recycle` 擦除窗口内掉�
 | `uid` | 返回 `uid: <24 位大写十六进制>`，依次拼接 STM32 的 UID word 0、1、2（地址 `0x1FFF7A10` 起），只读、不占用 Flash |
 | `status` | 返回状态、控制开关、硬件失败位图和任务失败位图 |
 | `controlstate` | 返回平衡解锁、IMU 有效性、补偿后俯仰、左右 PWM、循环次数及采样间隔 |
+| `wheelstate` | 返回有效运动命令计数、转向峰值、编码器速度、差速输出及历史峰值 |
 | `button` | 返回 PA0 任务状态、click/double/long 计数、丢事件数和最大扫描间隔 |
 | `showimu -y` | 以约 100 Hz 输出 `Roll,Pitch,Yaw` |
 | `showimu -n` | 停止 IMU 连续输出 |
@@ -303,6 +304,26 @@ Heartbeat、CommandService、ServoControl、MotionControl、ButtonA0。ButtonA0
 
 `controlstate` 的 `gap` 是历史最大采样间隔（tick，当前 1 tick=1 ms），`missed`
 统计间隔超过 10 tick 的次数；这些统计会受调试器暂停影响，不代表纯计算耗时或包含暂停时长的墙上时间。
+
+### 轮子差速诊断
+
+发送 `@wheelstate\n` 可查询最近的编码器采样和差速控制结果：
+
+- `motion_rx`：本次启动后接受的有效 `R` / `VandD` / `target_roll` 命令数；
+  `last_tick` 是最后一条的时刻，`requested_turn` 是保存的转向请求，`peak_turn` 是接受过的最大转向绝对值。
+- `wheel_tick`、`rpm=左,右`：运动任务最近一次读取编码器的时刻及速度；查询本身不会消耗编码器增量。
+- `turn`、`differ_pwm`：实际生效的转向目标及差速 PID 输出；`pwm=左,右` 为合成后的有符号 PWM 请求。
+- `peak_rpm_diff`、`peak_differ_pwm`：本次启动后最大速度差和差速输出的绝对值，便于查看历史峰值。
+- `armed`、`remote_timeout`：控制门控及遥控超时状态。
+
+计数和峰值在 MCU 复位后清零。差速 PID 同时受转向目标和编码器速度差影响，
+即使 `motion_rx=0` / `peak_turn=0`，差速输出也不一定为零。
+`requested_turn` 保留最近请求，超时后应以 `turn` 判断实际目标；查询不刷新 500 ms 遥控期限。
+
+TIM2/TIM3 的四路编码器输入已启用上拉及 `IC1Filter=IC2Filter=15`；当前 100 MHz 定时器时钟下，
+使用约 2.56 us 的稳定电平窗口滤除短毛刺。配置依据
+[STM32F411 RM0383 的 TIMx_CCMR1 输入滤波表](https://www.st.com/resource/en/reference_manual/rm0383-stm32f411xce-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)。
+该滤波不能解决持续的电源跌落、地线干扰或过长的错误脉冲。
 
 ## 兼容/实验命令
 

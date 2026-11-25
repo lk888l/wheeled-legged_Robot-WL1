@@ -1,6 +1,7 @@
 #include "CommandServiceTask.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include "BoardHardware.hpp"
 #include "ButtonTask.hpp"
 #include "ControlState.hpp"
@@ -200,6 +201,20 @@ void CommandServiceTask::process_command(etl::string_view frame)
                    control_.installation_mode() ? 1 : 0);
         return;
     }
+    if (name == "wheelstate") {
+        if (!args.empty()) { uart.print("wheelstate: usage: wheelstate\n"); return; }
+        const auto p = control_.parameters();
+        const auto f = control_.feedback();
+        uart.print("motion_rx={} last_tick={} requested_turn={:.2f} peak_turn={:.2f}\n",
+                   motion_command_count_, p.motion_command_tick, p.difference_target, peak_requested_turn_);
+        uart.print("wheel_tick={} rpm={:.2f},{:.2f} turn={:.2f} differ_pwm={:.2f}\n",
+                   f.wheel_sample_tick, f.left_rpm, f.right_rpm, f.difference_target, f.difference_pwm);
+        uart.print("peak_rpm_diff={:.2f} peak_differ_pwm={:.2f}\n",
+                   f.peak_difference_rpm, f.peak_difference_pwm);
+        uart.print("pwm={},{} armed={} remote_timeout={}\n", f.left_pwm, f.right_pwm,
+                   f.armed ? 1 : 0, f.remote_timed_out ? 1 : 0);
+        return;
+    }
     if (name == "controlstate") {
         const auto f = control_.feedback();
         uart.print("armed={} imu={} pitch={:.3f} pwm={},{}\n", f.armed ? 1 : 0,
@@ -365,6 +380,8 @@ void CommandServiceTask::process_command(etl::string_view frame)
             parameters.velocity_target = std::clamp(parameters.velocity_target, -100.0F, 100.0F);
             parameters.difference_target = std::clamp(parameters.difference_target, -100.0F, 100.0F);
             parameters.roll_target = std::clamp(parameters.roll_target, -18.0F, 18.0F);
+            ++motion_command_count_;
+            peak_requested_turn_ = std::max(peak_requested_turn_, std::fabs(parameters.difference_target));
         }
         if (name == "R" || name == "legheight") {
             parameters.leg_height = BalanceCompensation::clampLegHeight(parameters.leg_height);

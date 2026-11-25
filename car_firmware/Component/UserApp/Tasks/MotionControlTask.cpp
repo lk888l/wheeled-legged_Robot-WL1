@@ -44,12 +44,23 @@ void MotionControlTask::run()
             !control_.installation_mode() && control_.parameters().auto_leg_enabled;
         control_.publish_feedback(feedback);
     };
+    const auto sample_wheels = [&] {
+        const double left = left_encoder.getRPM();
+        const double right = right_encoder.getRPM();
+        feedback.left_rpm = static_cast<float>(left);
+        feedback.right_rpm = static_cast<float>(right);
+        feedback.peak_difference_rpm = std::max(feedback.peak_difference_rpm,
+            static_cast<float>(std::fabs(left - right)));
+        feedback.wheel_sample_tick = feedback.sample_tick;
+        return std::array<double, 2U>{left, right};
+    };
     const auto reset_controllers = [&] {
         angle_pid.reset();
         velocity_pid.reset();
         difference_pid.reset();
         roll_pid.reset();
         angle_target = difference_pwm = 0.0F;
+        feedback.difference_pwm = 0.0F;
         feedback.armed = false;
         feedback.left_pwm = feedback.right_pwm = 0;
     };
@@ -76,8 +87,7 @@ void MotionControlTask::run()
             control_.publish_leg_targets(legs);
             if (++velocity_loop_count >= 5U) {
                 velocity_loop_count = 0U;
-                (void)left_encoder.getRPM();
-                (void)right_encoder.getRPM();
+                (void)sample_wheels();
                 (void)servo_.notify_give();
             }
             publish_feedback();
@@ -183,8 +193,7 @@ void MotionControlTask::run()
             wheel_motor.forceStop();
             if (++velocity_loop_count >= 5U) {
                 velocity_loop_count = 0U;
-                (void)left_encoder.getRPM();
-                (void)right_encoder.getRPM();
+                (void)sample_wheels();
                 control_.publish_leg_targets(legs);
                 (void)servo_.notify_give();
             }
@@ -194,14 +203,18 @@ void MotionControlTask::run()
         velocity_loop_count++;
         if(velocity_loop_count >= 5){
             velocity_loop_count = 0;
-            double left_rpm = left_encoder.getRPM();
-            double right_rpm = right_encoder.getRPM();
+            const auto wheel_rpm = sample_wheels();
+            const double left_rpm = wheel_rpm[0];
+            const double right_rpm = wheel_rpm[1];
             double average_rpm = (left_rpm+right_rpm)/2;
             difference_rpm = left_rpm - right_rpm;
             velocity_pid.setTunings(parameters.velocity.kp,parameters.velocity.ki,parameters.velocity.kd);
             difference_pid.setTunings(parameters.difference.kp,parameters.difference.ki,parameters.difference.kd);
             angle_target = velocity_pid.update(parameters.velocity_target,average_rpm);
             difference_pwm = difference_pid.update(parameters.difference_target,difference_rpm);
+            feedback.difference_pwm = difference_pwm;
+            feedback.peak_difference_pwm = std::max(feedback.peak_difference_pwm,
+                std::fabs(difference_pwm));
             if(parameters.show_rpm){
                 board_.command_uart().print("A: {:07.3f}\tB: {:07.3f}\n",left_rpm,right_rpm);
             }

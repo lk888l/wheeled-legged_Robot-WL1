@@ -285,7 +285,8 @@ PA0 必须保留 `KEY_A0` 上拉输入及低有效配置，不开启 EXTI；PC13
 5. SPI2 仍映射 PB13/PB14/PB15，DMA 分别为 Stream 3/4；
 6. PA12 仍为上拉输入、下降沿 EXTI，优先级为 6；
 7. SPI/UART DMA 中断优先级仍为 5；
-8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；
+8. TIM1/TIM2/TIM3/TIM9 的引脚、prescaler 和 period 未改变；TIM2/TIM3 的四路编码器
+   输入保留上拉，两个定时器的 IC1Filter/IC2Filter 均为 15；
 9. I2C1 仍为 PB6/PB7、400 kHz；
 10. CMake 中 `Component/Application`、`Component/Bsp` 和 UserApp 的 include/source
     glob 仍完整；

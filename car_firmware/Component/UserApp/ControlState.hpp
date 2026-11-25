@@ -56,6 +56,14 @@ struct ControlFeedback {
     float difference_target{};
     float roll_target{};
     bool auto_leg_active{};
+    // Captured by the motion task, including while unarmed. Diagnostics must
+    // never call getRPM() themselves: it consumes the encoder counter delta.
+    float left_rpm{};
+    float right_rpm{};
+    float difference_pwm{};
+    float peak_difference_rpm{};
+    float peak_difference_pwm{};
+    uint32_t wheel_sample_tick{};
 };
 
 // Value types above are portable; the snapshot implementation is single-core

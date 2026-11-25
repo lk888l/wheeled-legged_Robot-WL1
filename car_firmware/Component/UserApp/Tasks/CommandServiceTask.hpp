@@ -51,6 +51,8 @@ private:
     std::array<uint32_t, 3U> button_counts_{};
     ButtonEvent last_button_{};
     bool telemetry_enabled_{false};
+    uint32_t motion_command_count_{};
+    float peak_requested_turn_{};
 };
 
 } // namespace app
